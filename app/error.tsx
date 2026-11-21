@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
@@ -13,65 +14,25 @@ export default function AppError({ error, reset }: ErrorBoundaryProps) {
   }, [error]);
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "2rem",
-        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        backgroundColor: "#faf9f7",
-        color: "#18181b",
-      }}
-    >
+    <main className="min-h-screen grid place-items-center p-6 bg-[var(--neutral-50)]">
       <section
         role="alert"
-        style={{
-          maxWidth: "32rem",
-          width: "100%",
-          background: "#ffffff",
-          border: "1px solid #e4e4e7",
-          borderRadius: "12px",
-          padding: "2rem",
-        }}
+        className="w-full max-w-[480px] bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-8 space-y-4"
       >
-        <p
-          style={{
-            fontSize: "0.75rem",
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            color: "#71717a",
-            margin: 0,
-          }}
-        >
-          Collate
-        </p>
-        <h1 style={{ fontSize: "1.375rem", margin: "0.5rem 0 0.75rem" }}>Something went wrong</h1>
-        <p style={{ color: "#52525b", lineHeight: 1.6, margin: "0 0 1.25rem" }}>
-          An unexpected error occurred while rendering this page. Your work is safe—please try
-          again.
+        <p className="text-sm font-medium text-[var(--neutral-500)]">Collate</p>
+        <h1 className="text-2xl font-medium">Something went wrong</h1>
+        <p className="text-[var(--neutral-600)] leading-relaxed">
+          An unexpected error interrupted this page. Your saved work is unaffected—try loading the
+          page again.
         </p>
         {error.digest ? (
-          <p style={{ fontSize: "0.75rem", color: "#71717a", margin: "0 0 1.25rem" }}>
+          <p className="text-xs text-[var(--neutral-500)]">
             Reference ID: <code>{error.digest}</code>
           </p>
         ) : null}
-        <button
-          type="button"
-          onClick={reset}
-          style={{
-            backgroundColor: "#18181b",
-            color: "#ffffff",
-            border: "none",
-            borderRadius: "8px",
-            padding: "0.625rem 1.125rem",
-            fontSize: "0.875rem",
-            fontWeight: 500,
-            cursor: "pointer",
-          }}
-        >
+        <Button type="button" onClick={reset}>
           Try again
-        </button>
+        </Button>
       </section>
     </main>
   );

@@ -1,23 +1,101 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
-  background: #f8fafc;
-  color: #111827;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  /* Warm archival paper neutral ramp (10 steps) */
+  --neutral-50: #faf9f7;
+  --neutral-100: #f3f1ec;
+  --neutral-200: #e6e2da;
+  --neutral-300: #d2ccc0;
+  --neutral-400: #a69f92;
+  --neutral-500: #756f64;
+  --neutral-600: #575249;
+  --neutral-700: #3d3932;
+  --neutral-800: #26231f;
+  --neutral-900: #171614;
+
+  /* Single accent: Oxford Slate Blue */
+  --accent-100: #eaf0f6;
+  --accent-600: #1e3a5f;
+  --accent-700: #162c49;
+
+  /* Semantic feedback tokens */
+  --success-text: #166534;
+  --success-bg: #ecfdf3;
+  --success-border: #bbf7d0;
+
+  --warning-text: #92400e;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+
+  --error-text: #991b1b;
+  --error-bg: #fef2f2;
+  --error-border: #fecaca;
+
+  --info-text: #1e40af;
+  --info-bg: #eff6ff;
+  --info-border: #bfdbfe;
+
+  /* Radius & elevation */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-subtle: 0 1px 2px rgba(23, 22, 20, 0.05);
+  --shadow-raised: 0 6px 20px rgba(23, 22, 20, 0.08);
+
+  /* Typography */
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  color: var(--neutral-900);
+  background-color: var(--neutral-50);
 }
 
 body {
   margin: 0;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--neutral-900);
+  background-color: var(--neutral-50);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-a {
-  color: inherit;
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  color: var(--neutral-900);
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-600);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
