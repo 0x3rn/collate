@@ -1,6 +1,6 @@
 # Template of local Workers environment variables (tracked in Git with blank values).
 # Local development uses .dev.vars (automatically created and git-ignored).
-# Staging/prod secrets are set via: wrangler secret put <NAME> --env <staging|prod>
+# Production secrets are set via: wrangler secret put <NAME>
 
 # Local runtime override (keeps local wrangler dev in 'dev' mode while live Worker runs 'prod')
 APP_ENV=
@@ -18,6 +18,18 @@ EMAIL_PROVIDER=
 EMAIL_FROM=
 # Optional Resend API key when EMAIL_PROVIDER=resend
 RESEND_API_KEY=
+
+# Phase 3 — Web Search & Scholarly Source APIs
+# Tavily web search API key
+TAVILY_API_KEY=
+# Brave Search API subscription token
+BRAVE_SEARCH_API_KEY=
+# Optional Semantic Scholar key for higher rate limits
+SEMANTIC_SCHOLAR_API_KEY=
+# Optional CORE open-access scholarly API key
+CORE_API_KEY=
+# Polite-pool email sent to Crossref, OpenAlex, and Unpaywall
+SCHOLARLY_CONTACT_EMAIL=
 
 # Cloudflare AI Gateway (required in prod)
 # Found on your Cloudflare dashboard sidebar

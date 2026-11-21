@@ -49,6 +49,38 @@ export type SpellingVariant = (typeof SPELLING_VARIANTS)[number];
 export const FEASIBILITY_VERDICTS = ["feasible", "not_feasible", "needs_refinement"] as const;
 export type FeasibilityVerdict = (typeof FEASIBILITY_VERDICTS)[number];
 
+export const RESEARCH_RUN_STATUSES = [
+  "queued",
+  "planning",
+  "searching",
+  "fetching",
+  "scoring",
+  "completed",
+  "failed",
+] as const;
+export type ResearchRunStatus = (typeof RESEARCH_RUN_STATUSES)[number];
+
+export const SOURCE_TYPES = [
+  "peer_reviewed",
+  "preprint",
+  "institutional",
+  "book",
+  "dataset",
+  "web",
+] as const;
+export type SourceType = (typeof SOURCE_TYPES)[number];
+
+export const SOURCE_ACCESS_STATUSES = [
+  "full_text",
+  "abstract_only",
+  "metadata_only",
+  "fetch_failed",
+] as const;
+export type SourceAccessStatus = (typeof SOURCE_ACCESS_STATUSES)[number];
+
+export const SOURCE_FETCH_STATUSES = ["pending", "fetched", "failed", "skipped"] as const;
+export type SourceFetchStatus = (typeof SOURCE_FETCH_STATUSES)[number];
+
 export const CHAPTER_STATUSES = [
   "not_started",
   "queued",
@@ -333,7 +365,119 @@ export const authRateLimits = sqliteTable(
   (table) => [check("auth_rate_limits_count_non_negative", sql`${table.count} >= 0`)]
 );
 
+export const researchRuns = sqliteTable(
+  "research_runs",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    questionId: text("question_id").references(() => questions.id, { onDelete: "cascade" }),
+    workflowInstanceId: text("workflow_instance_id"),
+    status: text("status", { enum: RESEARCH_RUN_STATUSES }).notNull().default("queued"),
+    subtopicsJson: text("subtopics_json").notNull().default("[]"),
+    queriesJson: text("queries_json").notNull().default("[]"),
+    sourcesFound: integer("sources_found").notNull().default(0),
+    sourcesFetched: integer("sources_fetched").notNull().default(0),
+    subtopicsCovered: integer("subtopics_covered").notNull().default(0),
+    spendCapUsd: real("spend_cap_usd").notNull().default(2.0),
+    costUsd: real("cost_usd").notNull().default(0),
+    error: text("error"),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+    finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("research_runs_project_idx").on(table.projectId, table.startedAt),
+    check(
+      "research_runs_counts_non_negative",
+      sql`${table.sourcesFound} >= 0 AND ${table.sourcesFetched} >= 0`
+    ),
+    check(
+      "research_runs_cost_non_negative",
+      sql`${table.costUsd} >= 0 AND ${table.spendCapUsd} > 0`
+    ),
+  ]
+);
+
+export const sources = sqliteTable(
+  "sources",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    questionId: text("question_id").references(() => questions.id, { onDelete: "cascade" }),
+    researchRunId: text("research_run_id").references(() => researchRuns.id, {
+      onDelete: "set null",
+    }),
+    url: text("url").notNull(),
+    canonicalUrl: text("canonical_url").notNull(),
+    doi: text("doi"),
+    title: text("title").notNull(),
+    normalizedTitle: text("normalized_title").notNull(),
+    authorsJson: text("authors_json").notNull().default("[]"),
+    year: integer("year"),
+    publisher: text("publisher"),
+    venue: text("venue"),
+    sourceType: text("source_type", { enum: SOURCE_TYPES }).notNull().default("web"),
+    connectorName: text("connector_name").notNull(),
+    citationCount: integer("citation_count"),
+    credibilityScore: real("credibility_score").notNull().default(0),
+    relevanceScore: real("relevance_score").notNull().default(0),
+    accessStatus: text("access_status", { enum: SOURCE_ACCESS_STATUSES })
+      .notNull()
+      .default("metadata_only"),
+    fetchStatus: text("fetch_status", { enum: SOURCE_FETCH_STATUSES }).notNull().default("pending"),
+    abstractText: text("abstract_text"),
+    snapshotR2Key: text("snapshot_r2_key"),
+    retrievedAt: integer("retrieved_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("sources_project_idx").on(table.projectId),
+    index("sources_project_doi_idx").on(table.projectId, table.doi),
+    index("sources_project_canonical_url_idx").on(table.projectId, table.canonicalUrl),
+    check(
+      "sources_credibility_range",
+      sql`${table.credibilityScore} >= 0 AND ${table.credibilityScore} <= 100`
+    ),
+    check(
+      "sources_relevance_range",
+      sql`${table.relevanceScore} >= 0 AND ${table.relevanceScore} <= 100`
+    ),
+  ]
+);
+
+export const sourcePassages = sqliteTable(
+  "source_passages",
+  {
+    id: text("id").primaryKey(),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    passageIndex: integer("passage_index").notNull(),
+    text: text("text").notNull(),
+    location: text("location").notNull().default("body"),
+    tokenCount: integer("token_count").notNull().default(0),
+    vectorId: text("vector_id"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("source_passages_source_idx_unique").on(table.sourceId, table.passageIndex),
+    index("source_passages_project_idx").on(table.projectId),
+    check("source_passages_index_non_negative", sql`${table.passageIndex} >= 0`),
+    check("source_passages_tokens_non_negative", sql`${table.tokenCount} >= 0`),
+  ]
+);
+
 export type UserRecord = typeof users.$inferSelect;
+export type ResearchRunRecord = typeof researchRuns.$inferSelect;
+export type SourceRecord = typeof sources.$inferSelect;
+export type SourcePassageRecord = typeof sourcePassages.$inferSelect;
 export type NewUserRecord = typeof users.$inferInsert;
 export type ProjectRecord = typeof projects.$inferSelect;
 export type NewProjectRecord = typeof projects.$inferInsert;
