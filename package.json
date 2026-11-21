@@ -5,6 +5,7 @@
   "packageManager": "pnpm",
   "dependencies": {
     "@vinext/cloudflare": "latest",
+    "drizzle-orm": "^0.45.4",
     "react": "latest",
     "react-dom": "latest",
     "react-server-dom-webpack": "latest",
@@ -20,6 +21,7 @@
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
     "@vitejs/plugin-rsc": "latest",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^10.15.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.10.1",
@@ -43,6 +45,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "cf-typegen": "wrangler types",
-    "verify": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm run test && pnpm run build"
+    "verify": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm run test && pnpm run build",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:staging": "wrangler d1 migrations apply DB --env staging --remote",
+    "db:migrate:prod": "wrangler d1 migrations apply DB --env prod --remote",
+    "db:seed:local": "wrangler d1 execute DB --local --file=scripts/seed.sql"
   }
 }

@@ -7,3 +7,5 @@ pnpm-lock.yaml
 pnpm-workspace.yaml
 scripts/bootstrap
 PROGRESS.md
+drizzle
+worker-configuration.d.ts

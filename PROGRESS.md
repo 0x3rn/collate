@@ -6,7 +6,7 @@ Track progress strictly one phase at a time. Do not begin the next phase until t
 - [x] Step 0.1: Create repo (TypeScript, pnpm, ESLint, Prettier, Vitest, `PROGRESS.md`)
 - [x] Step 0.1: Scaffold Next.js for Cloudflare Workers (`vinext` + `wrangler.jsonc`) with error boundaries and `/api/health`
 - [ ] Step 0.2: Create environments (`dev`, `staging`, `prod`) with D1, R2, Queues, Vectorize, Workflows
-- [ ] Step 0.2: Drizzle + D1 migrations + seed script
+- [x] Step 0.2: Drizzle + D1 migrations + seed script (verified locally with Wrangler D1 + Vitest)
 - [ ] Step 0.3: AI Gateway configured + `callLLM()` helper logging tokens and cost to `jobs_log`
 - [ ] Step 0.4: Domain on Cloudflare DNS + secrets via `wrangler secret`
 - [ ] Step 0.4: Observability (Workers Logs, Sentry, error boundary) + GitHub Actions CI
