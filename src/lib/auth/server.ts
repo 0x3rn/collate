@@ -5,15 +5,12 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createDb } from "@/db/client";
 import { listProjectsForUser } from "@/db/queries/projects";
+import { getWizardStateForUser, type HydratedWizardState } from "@/db/queries/wizard";
 import type { ProjectRecord } from "@/db/schema";
 import { DEV_SESSION_COOKIE, PROD_SESSION_COOKIE } from "./cookies";
 import { getSessionFromToken, type PublicUser } from "./service";
 import { sanitizeRedirectPath } from "./tokens";
 
-/**
- * Server-only Data Access Layer (security-nextjs Rule 2.2).
- * Every protected page and server data read verifies the session directly here.
- */
 export const getCurrentSession = cache(
   async (): Promise<{ sessionId: string; user: PublicUser } | null> => {
     const cookieStore = await cookies();
@@ -49,4 +46,14 @@ export async function listCurrentUserProjects(): Promise<ProjectRecord[]> {
   const user = await requireUser("/dashboard");
   const db = createDb(env.DB);
   return listProjectsForUser(db, user.id);
+}
+
+export async function getCurrentUserWizardState(
+  projectId: string,
+  returnTo?: string
+): Promise<{ user: PublicUser; state: HydratedWizardState | null }> {
+  const user = await requireUser(returnTo ?? `/projects/${projectId}/setup`);
+  const db = createDb(env.DB);
+  const state = await getWizardStateForUser(db, user.id, projectId);
+  return { user, state };
 }
