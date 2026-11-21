@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { LinkButton } from "@/components/ui/button";
@@ -19,6 +20,14 @@ const BADGE_CLASSES = {
   warning: "bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]",
   error: "bg-[var(--error-bg)] text-[var(--error-text)] border-[var(--error-border)]",
 } as const;
+
+const SETUP_STATUSES = new Set([
+  "draft",
+  "researching",
+  "feasible",
+  "not_feasible",
+  "needs_refinement",
+]);
 
 export default async function DashboardPage() {
   const user = await requireUser("/dashboard");
@@ -62,27 +71,52 @@ export default async function DashboardPage() {
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 list-none p-0 m-0">
             {projects.map((project) => {
               const status = formatProjectStatus(project.status);
+              const needsSetup = SETUP_STATUSES.has(project.status);
+              const targetHref = needsSetup
+                ? `/projects/${project.id}/setup`
+                : `/projects/${project.id}`;
+
               return (
                 <li
                   key={project.id}
-                  className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4"
+                  className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 flex flex-col justify-between gap-4"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-medium text-[var(--neutral-600)]">
-                      {formatProjectType(project.type)}
-                    </span>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 text-xs font-medium border rounded-[var(--radius-sm)] ${BADGE_CLASSES[status.tone]}`}
-                    >
-                      {status.label}
-                    </span>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-[var(--neutral-600)]">
+                        {formatProjectType(project.type)}
+                      </span>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 text-xs font-medium border rounded-[var(--radius-sm)] ${BADGE_CLASSES[status.tone]}`}
+                      >
+                        {status.label}
+                      </span>
+                    </div>
+
+                    <h2 className="text-xl font-medium text-[var(--neutral-900)] m-0">
+                      <Link
+                        href={targetHref}
+                        className="hover:text-[var(--accent-600)] transition-colors"
+                      >
+                        {project.title}
+                      </Link>
+                    </h2>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--neutral-600)] tabular-nums">
+                      {project.targetPages ? (
+                        <span>Target: {project.targetPages} pages</span>
+                      ) : null}
+                      <span>Updated {formatShortDate(project.updatedAt)}</span>
+                    </div>
                   </div>
 
-                  <h2 className="text-xl font-medium text-[var(--neutral-900)]">{project.title}</h2>
-
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--neutral-600)] tabular-nums">
-                    {project.targetPages ? <span>Target: {project.targetPages} pages</span> : null}
-                    <span>Updated {formatShortDate(project.updatedAt)}</span>
+                  <div className="pt-2 border-t border-[var(--neutral-200)] flex items-center justify-between">
+                    <Link
+                      href={targetHref}
+                      className="text-sm font-medium text-[var(--accent-600)] hover:underline underline-offset-4"
+                    >
+                      {needsSetup ? `Resume setup (Step ${project.wizardStep})` : "Open project"}
+                    </Link>
                   </div>
                 </li>
               );
