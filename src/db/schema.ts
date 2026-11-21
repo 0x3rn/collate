@@ -34,6 +34,31 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export const JOB_STATUSES = ["started", "succeeded", "failed", "retrying"] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
+export const CITATION_STYLES = ["harvard", "apa7", "mla9", "chicago", "ieee", "vancouver"] as const;
+export type CitationStyle = (typeof CITATION_STYLES)[number];
+
+export const CITATION_INLINE_MODES = ["inline_and_list", "list_only"] as const;
+export type CitationInlineMode = (typeof CITATION_INLINE_MODES)[number];
+
+export const LINE_SPACINGS = ["single", "one_half", "double"] as const;
+export type LineSpacing = (typeof LINE_SPACINGS)[number];
+
+export const SPELLING_VARIANTS = ["uk", "us"] as const;
+export type SpellingVariant = (typeof SPELLING_VARIANTS)[number];
+
+export const FEASIBILITY_VERDICTS = ["feasible", "not_feasible", "needs_refinement"] as const;
+export type FeasibilityVerdict = (typeof FEASIBILITY_VERDICTS)[number];
+
+export const CHAPTER_STATUSES = [
+  "not_started",
+  "queued",
+  "writing",
+  "ready",
+  "approved",
+  "needs_attention",
+] as const;
+export type ChapterStatus = (typeof CHAPTER_STATUSES)[number];
+
 export const users = sqliteTable(
   "users",
   {
@@ -122,7 +147,9 @@ export const projects = sqliteTable(
     level: text("level"),
     field: text("field"),
     institution: text("institution"),
+    supervisorNotes: text("supervisor_notes"),
     status: text("status", { enum: PROJECT_STATUSES }).notNull().default("draft"),
+    wizardStep: integer("wizard_step").notNull().default(1),
     targetPages: integer("target_pages"),
     idealPages: integer("ideal_pages"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
@@ -146,6 +173,106 @@ export const projects = sqliteTable(
       "projects_ideal_pages_positive",
       sql`${table.idealPages} IS NULL OR ${table.idealPages} > 0`
     ),
+  ]
+);
+
+export const projectSettings = sqliteTable(
+  "project_settings",
+  {
+    projectId: text("project_id")
+      .primaryKey()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    citationStyle: text("citation_style", { enum: CITATION_STYLES }).notNull().default("apa7"),
+    inlineMode: text("inline_mode", { enum: CITATION_INLINE_MODES })
+      .notNull()
+      .default("inline_and_list"),
+    font: text("font").notNull().default("Times New Roman"),
+    fontSizePt: integer("font_size_pt").notNull().default(12),
+    lineSpacing: text("line_spacing", { enum: LINE_SPACINGS }).notNull().default("double"),
+    marginsMm: integer("margins_mm").notNull().default(25),
+    pageNumbering: integer("page_numbering", { mode: "boolean" }).notNull().default(true),
+    spelling: text("spelling", { enum: SPELLING_VARIANTS }).notNull().default("uk"),
+    frontMatterJson: text("front_matter_json").notNull(),
+    coverJson: text("cover_json").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    check(
+      "project_settings_font_size_valid",
+      sql`${table.fontSizePt} >= 10 AND ${table.fontSizePt} <= 14`
+    ),
+    check(
+      "project_settings_margins_valid",
+      sql`${table.marginsMm} >= 15 AND ${table.marginsMm} <= 40`
+    ),
+  ]
+);
+
+export const questions = sqliteTable(
+  "questions",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    orderIndex: integer("order_index").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("questions_project_order_unique").on(table.projectId, table.orderIndex),
+    index("questions_project_idx").on(table.projectId),
+    check("questions_order_positive", sql`${table.orderIndex} >= 1`),
+  ]
+);
+
+export const chapters = sqliteTable(
+  "chapters",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    title: text("title").notNull(),
+    chapterType: text("chapter_type").notNull().default("custom"),
+    brief: text("brief"),
+    pageBudget: integer("page_budget"),
+    wordBudget: integer("word_budget"),
+    isAutoReferences: integer("is_auto_references", { mode: "boolean" }).notNull().default(false),
+    status: text("status", { enum: CHAPTER_STATUSES }).notNull().default("not_started"),
+    workflowInstanceId: text("workflow_instance_id"),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }),
+    finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("chapters_project_number_unique").on(table.projectId, table.number),
+    index("chapters_project_idx").on(table.projectId),
+    check("chapters_number_positive", sql`${table.number} >= 1`),
+  ]
+);
+
+export const feasibilityReports = sqliteTable(
+  "feasibility_reports",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    questionId: text("question_id").references(() => questions.id, { onDelete: "cascade" }),
+    verdict: text("verdict", { enum: FEASIBILITY_VERDICTS }).notNull(),
+    score: real("score").notNull(),
+    reasonsJson: text("reasons_json").notNull(),
+    coverageJson: text("coverage_json").notNull(),
+    isMocked: integer("is_mocked", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("feasibility_project_idx").on(table.projectId),
+    index("feasibility_question_idx").on(table.questionId),
+    check("feasibility_score_range", sql`${table.score} >= 0 AND ${table.score} <= 100`),
   ]
 );
 
@@ -210,5 +337,9 @@ export type UserRecord = typeof users.$inferSelect;
 export type NewUserRecord = typeof users.$inferInsert;
 export type ProjectRecord = typeof projects.$inferSelect;
 export type NewProjectRecord = typeof projects.$inferInsert;
+export type ProjectSettingsRecord = typeof projectSettings.$inferSelect;
+export type QuestionRecord = typeof questions.$inferSelect;
+export type ChapterRecord = typeof chapters.$inferSelect;
+export type FeasibilityReportRecord = typeof feasibilityReports.$inferSelect;
 export type JobLogRecord = typeof jobsLog.$inferSelect;
 export type NewJobLogRecord = typeof jobsLog.$inferInsert;
