@@ -2,7 +2,7 @@
   "name": "collate",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm",
+  "packageManager": "pnpm@12.21.0",
   "dependencies": {
     "@vinext/cloudflare": "latest",
     "drizzle-orm": "^0.45.4",
