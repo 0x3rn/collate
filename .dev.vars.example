@@ -4,6 +4,20 @@
 
 # Local runtime override (keeps local wrangler dev in 'dev' mode while live Worker runs 'prod')
 APP_ENV=
+# Base URL used in email verification & password reset links
+APP_URL=
+
+# Cloudflare Turnstile (bot protection on sign-up and sign-in)
+# Public Turnstile site key (safe for browser)
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+# Secret Turnstile key (server-side only)
+TURNSTILE_SECRET_KEY=
+
+# Email Delivery (swappable transport: 'console' in dev, 'resend' when configured)
+EMAIL_PROVIDER=
+EMAIL_FROM=
+# Optional Resend API key when EMAIL_PROVIDER=resend
+RESEND_API_KEY=
 
 # Cloudflare AI Gateway (required in prod)
 # Found on your Cloudflare dashboard sidebar

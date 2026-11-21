@@ -195,6 +195,17 @@ export const auditLog = sqliteTable(
   ]
 );
 
+export const authRateLimits = sqliteTable(
+  "auth_rate_limits",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull().default(0),
+    windowStartMs: integer("window_start_ms").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [check("auth_rate_limits_count_non_negative", sql`${table.count} >= 0`)]
+);
+
 export type UserRecord = typeof users.$inferSelect;
 export type NewUserRecord = typeof users.$inferInsert;
 export type ProjectRecord = typeof projects.$inferSelect;

@@ -12,3 +12,7 @@ worker-configuration.d.ts
 last-run-output.txt
 BUILD_NOTES.md
 .dev.vars
+DESIGN_BRIEF.md
+DESIGN_DIRECTION.md
+COPY_BRIEF.md
+COPY_MAP.md
