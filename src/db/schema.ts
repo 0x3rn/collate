@@ -81,6 +81,9 @@ export type SourceAccessStatus = (typeof SOURCE_ACCESS_STATUSES)[number];
 export const SOURCE_FETCH_STATUSES = ["pending", "fetched", "failed", "skipped"] as const;
 export type SourceFetchStatus = (typeof SOURCE_FETCH_STATUSES)[number];
 
+export const SECTION_STATUSES = ["not_started", "drafting", "verified", "needs_revision"] as const;
+export type SectionStatus = (typeof SECTION_STATUSES)[number];
+
 export const CHAPTER_STATUSES = [
   "not_started",
   "queued",
@@ -474,7 +477,43 @@ export const sourcePassages = sqliteTable(
   ]
 );
 
+export const sections = sqliteTable(
+  "sections",
+  {
+    id: text("id").primaryKey(),
+    chapterId: text("chapter_id")
+      .notNull()
+      .references(() => chapters.id, { onDelete: "cascade" }),
+    orderIndex: integer("order_index").notNull(),
+    heading: text("heading").notNull(),
+    wordBudget: integer("word_budget").notNull().default(0),
+    status: text("status", { enum: SECTION_STATUSES }).notNull().default("not_started"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("sections_chapter_order_unique").on(table.chapterId, table.orderIndex),
+    index("sections_chapter_idx").on(table.chapterId),
+    check("sections_order_positive", sql`${table.orderIndex} >= 1`),
+    check("sections_word_budget_non_negative", sql`${table.wordBudget} >= 0`),
+  ]
+);
+
+export const projectMemory = sqliteTable("project_memory", {
+  projectId: text("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  outlineJson: text("outline_json").notNull().default("{}"),
+  outlineLocked: integer("outline_locked", { mode: "boolean" }).notNull().default(false),
+  chapterSummariesJson: text("chapter_summaries_json").notNull().default("[]"),
+  glossaryJson: text("glossary_json").notNull().default("[]"),
+  styleNotes: text("style_notes"),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export type UserRecord = typeof users.$inferSelect;
+export type SectionRecord = typeof sections.$inferSelect;
+export type ProjectMemoryRecord = typeof projectMemory.$inferSelect;
 export type ResearchRunRecord = typeof researchRuns.$inferSelect;
 export type SourceRecord = typeof sources.$inferSelect;
 export type SourcePassageRecord = typeof sourcePassages.$inferSelect;
