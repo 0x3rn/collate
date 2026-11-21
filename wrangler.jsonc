@@ -1,0 +1,49 @@
+// Collate — Cloudflare Workers configuration
+// Environments: default (dev), staging (--env staging), prod (--env prod)
+// Step 0.2 will wire real D1, R2, Queues, Vectorize, Workflows, and Browser Run bindings.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "collate-dev",
+  "main": "vinext/server/fetch-handler",
+  "compatibility_date": "2026-11-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "dist/client",
+    "html_handling": "none",
+    "not_found_handling": "none",
+    "binding": "ASSETS",
+    "run_worker_first": ["/*", "!/_next/static/*", "!/*/_next/static/*"],
+  },
+  "images": {
+    "binding": "IMAGES",
+  },
+  "observability": {
+    "enabled": true,
+  },
+  "vars": {
+    "APP_NAME": "Collate",
+    "APP_ENV": "dev",
+  },
+  "env": {
+    "staging": {
+      "name": "collate-staging",
+      "observability": {
+        "enabled": true,
+      },
+      "vars": {
+        "APP_NAME": "Collate",
+        "APP_ENV": "staging",
+      },
+    },
+    "prod": {
+      "name": "collate-prod",
+      "observability": {
+        "enabled": true,
+      },
+      "vars": {
+        "APP_NAME": "Collate",
+        "APP_ENV": "prod",
+      },
+    },
+  },
+}

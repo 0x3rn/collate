@@ -1,0 +1,4 @@
+# pnpm v12 workspace & build-script policy
+allowBuilds:
+  esbuild: true
+  workerd: true
