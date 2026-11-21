@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDb } from "../client";
 import { JOB_STATUSES, jobsLog, type JobLogRecord } from "../schema";
@@ -58,4 +58,15 @@ export async function listJobLogsByWorkflow(
     .from(jobsLog)
     .where(eq(jobsLog.workflowId, workflowId))
     .orderBy(desc(jobsLog.createdAt));
+}
+
+export async function sumWorkflowCostUsd(db: AppDb, workflowId: string): Promise<number> {
+  const rows = await db
+    .select({
+      total: sql<number>`coalesce(sum(${jobsLog.costEstimateUsd}), 0)`,
+    })
+    .from(jobsLog)
+    .where(eq(jobsLog.workflowId, workflowId));
+
+  return Number(rows[0]?.total ?? 0);
 }

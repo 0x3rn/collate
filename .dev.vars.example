@@ -1,5 +1,22 @@
 # Copy to .dev.vars for local Workers development. Never commit .dev.vars.
-# Production and staging secrets are set via: wrangler secret put <NAME> --env <staging|prod>
-ANTHROPIC_API_KEY=
+# Set staging/prod secrets via: wrangler secret put <NAME> --env <staging|prod>
+
+# Cloudflare AI Gateway (required in staging/prod)
+CLOUDFLARE_ACCOUNT_ID=
 CLOUDFLARE_AI_GATEWAY_ID=
+CLOUDFLARE_AI_GATEWAY_TOKEN=
+
+# Anthropic API key (sent via x-api-key unless using AI Gateway BYOK / Unified Billing)
+ANTHROPIC_API_KEY=
+
+# Optional local-only escape hatch if AI Gateway is not configured yet (dev only)
+# ALLOW_DIRECT_ANTHROPIC=true
+
+# Optional model ID overrides (never hard-coded in callers)
+# LLM_MODEL_DRAFT=claude-sonnet-4-5
+# LLM_MODEL_VERIFY=claude-sonnet-4-5
+# LLM_MODEL_EXTRACT=claude-haiku-4-5
+# LLM_MODEL_CLASSIFY=claude-haiku-4-5
+
+# Observability (Step 0.4)
 SENTRY_DSN=

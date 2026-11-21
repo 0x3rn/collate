@@ -7,7 +7,7 @@ Track progress strictly one phase at a time. Do not begin the next phase until t
 - [x] Step 0.1: Scaffold Next.js for Cloudflare Workers (`vinext` + `wrangler.jsonc`) with error boundaries and `/api/health`
 - [ ] Step 0.2: Create environments (`dev`, `staging`, `prod`) with D1, R2, Queues, Vectorize, Workflows
 - [x] Step 0.2: Drizzle + D1 migrations + seed script (verified locally with Wrangler D1 + Vitest)
-- [ ] Step 0.3: AI Gateway configured + `callLLM()` helper logging tokens and cost to `jobs_log`
+- [x] Step 0.3: AI Gateway configured + `callLLM()` helper logging tokens and cost to `jobs_log` (verified with Vitest + D1 integration tests)
 - [ ] Step 0.4: Domain on Cloudflare DNS + secrets via `wrangler secret`
 - [ ] Step 0.4: Observability (Workers Logs, Sentry, error boundary) + GitHub Actions CI
 - [ ] Step 0.4: Hello-world Workflow (1-min sleep & resume) + hello-world Browser Run `/pdf` → R2
