@@ -2,6 +2,7 @@ import handler from "vinext/server/app-router-entry";
 import { applySecurityHeaders, sanitizeIncomingRequest } from "@/lib/security/headers";
 
 export { HelloSleepWorkflow } from "./workflows/hello-sleep";
+export { ResearchSweepWorkflow } from "./workflows/research-sweep";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {

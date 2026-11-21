@@ -1,5 +1,5 @@
 // Collate — Cloudflare Workers configuration (pre-launch: main deploys directly to 'collate')
-// D1 (DB) and R2 (FILES) omit manual IDs so Cloudflare auto-provisions them cleanly on deploy.
+// D1 (DB), R2 (FILES), Browser Run (BROWSER), Workers AI (AI), and Workflows.
 // Local dev overrides APP_ENV=dev via git-ignored .dev.vars.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -46,5 +46,13 @@
       "binding": "HELLO_SLEEP_WORKFLOW",
       "class_name": "HelloSleepWorkflow",
     },
+    {
+      "name": "collate-research-sweep",
+      "binding": "RESEARCH_SWEEP_WORKFLOW",
+      "class_name": "ResearchSweepWorkflow",
+    },
   ],
+  "ai": {
+    "binding": "AI",
+  },
 }
