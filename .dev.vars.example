@@ -2,7 +2,10 @@
 # Local development uses .dev.vars (automatically created and git-ignored).
 # Staging/prod secrets are set via: wrangler secret put <NAME> --env <staging|prod>
 
-# Cloudflare AI Gateway (required in staging/prod)
+# Local runtime override (keeps local wrangler dev in 'dev' mode while live Worker runs 'prod')
+APP_ENV=
+
+# Cloudflare AI Gateway (required in prod)
 # Found on your Cloudflare dashboard sidebar
 CLOUDFLARE_ACCOUNT_ID=
 # Name of your AI Gateway in Cloudflare
@@ -23,7 +26,7 @@ LLM_MODEL_EXTRACT=
 LLM_MODEL_CLASSIFY=
 
 # Internal Smoke Routes & Observability
-# Random bearer secret protecting /api/internal/* in staging/prod
+# Random bearer secret protecting /api/internal/* in production
 INTERNAL_SMOKE_TOKEN=
 # Optional Sentry DSN for error tracking
 SENTRY_DSN=

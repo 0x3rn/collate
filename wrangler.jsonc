@@ -1,9 +1,9 @@
-// Collate — Cloudflare Workers configuration
-// Default = dev. Use --env staging or --env prod for remote environments.
-// Includes D1 (DB), R2 (FILES), Browser Run (BROWSER), and Workflows (HELLO_SLEEP_WORKFLOW).
+// Collate — Cloudflare Workers configuration (pre-launch: main deploys directly to 'collate')
+// D1 (DB) and R2 (FILES) omit manual IDs so Cloudflare auto-provisions them cleanly on deploy.
+// Local dev overrides APP_ENV=dev via git-ignored .dev.vars.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "collate-dev",
+  "name": "collate",
   "main": "./worker/index.ts",
   "compatibility_date": "2026-11-21",
   "compatibility_flags": ["nodejs_compat"],
@@ -22,90 +22,19 @@
   },
   "vars": {
     "APP_NAME": "Collate",
-    "APP_ENV": "dev",
-  },
-  "env": {
-    "staging": {
-      "name": "collate-staging",
-      "observability": {
-        "enabled": true,
-      },
-      "vars": {
-        "APP_NAME": "Collate",
-        "APP_ENV": "staging",
-      },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "collate-staging",
-          "database_id": "00000000-0000-0000-0000-000000000002",
-          "migrations_dir": "drizzle",
-        },
-      ],
-      "r2_buckets": [
-        {
-          "binding": "FILES",
-          "bucket_name": "collate-files-staging",
-        },
-      ],
-      "browser": {
-        "binding": "BROWSER",
-      },
-      "workflows": [
-        {
-          "name": "collate-hello-sleep-staging",
-          "binding": "HELLO_SLEEP_WORKFLOW",
-          "class_name": "HelloSleepWorkflow",
-        },
-      ],
-    },
-    "prod": {
-      "name": "collate-prod",
-      "observability": {
-        "enabled": true,
-      },
-      "vars": {
-        "APP_NAME": "Collate",
-        "APP_ENV": "prod",
-      },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "collate-prod",
-          "database_id": "00000000-0000-0000-0000-000000000003",
-          "migrations_dir": "drizzle",
-        },
-      ],
-      "r2_buckets": [
-        {
-          "binding": "FILES",
-          "bucket_name": "collate-files-prod",
-        },
-      ],
-      "browser": {
-        "binding": "BROWSER",
-      },
-      "workflows": [
-        {
-          "name": "collate-hello-sleep-prod",
-          "binding": "HELLO_SLEEP_WORKFLOW",
-          "class_name": "HelloSleepWorkflow",
-        },
-      ],
-    },
+    "APP_ENV": "prod",
   },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "collate-dev",
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_name": "collate-db",
       "migrations_dir": "drizzle",
     },
   ],
   "r2_buckets": [
     {
       "binding": "FILES",
-      "bucket_name": "collate-files-dev",
+      "bucket_name": "collate-files",
     },
   ],
   "browser": {
@@ -113,7 +42,7 @@
   },
   "workflows": [
     {
-      "name": "collate-hello-sleep-dev",
+      "name": "collate-hello-sleep",
       "binding": "HELLO_SLEEP_WORKFLOW",
       "class_name": "HelloSleepWorkflow",
     },
