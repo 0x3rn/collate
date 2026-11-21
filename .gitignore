@@ -21,3 +21,4 @@ coverage/
 # OS & editor
 .DS_Store
 Thumbs.db
+last-run-output.txt

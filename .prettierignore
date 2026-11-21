@@ -9,3 +9,4 @@ scripts/bootstrap
 PROGRESS.md
 drizzle
 worker-configuration.d.ts
+last-run-output.txt
