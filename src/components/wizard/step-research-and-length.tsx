@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
@@ -36,8 +36,8 @@ const RUN_STAGE_LABELS: Record<ResearchRunStatus, string> = {
   planning: "Planning subtopics and scholarly queries",
   searching: "Searching scholarly databases and web sources",
   fetching: "Fetching pages, extracting passages, and saving snapshots",
-  scoring: "Scoring credibility, relevance, and subtopic coverage",
-  completed: "Source sweep completed",
+  scoring: "Evaluating credibility, coverage, and feasibility verdict",
+  completed: "Source sweep and feasibility check completed",
   failed: "Sweep interrupted — ready to resume without losing progress",
 };
 
@@ -62,12 +62,14 @@ export function StepResearchSweep({
   wizard,
   saving,
   onSave,
+  onRefreshWizard,
   onBackToTopic,
   onContinueToLength,
 }: {
   wizard: SerializedWizardState;
   saving: boolean;
   onSave: (payload: Record<string, unknown>) => Promise<void>;
+  onRefreshWizard?: () => Promise<void>;
   onBackToTopic: () => void;
   onContinueToLength: () => void;
 }) {
@@ -75,6 +77,7 @@ export function StepResearchSweep({
   const [liveSummary, setLiveSummary] = useState<LiveResearchSummary | null>(null);
   const [startingLive, setStartingLive] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const lastCompletedRunIdRef = useRef<string | null>(null);
 
   const reports = wizard.feasibilityReports;
   const primaryReport = reports[0];
@@ -94,9 +97,15 @@ export function StepResearchSweep({
         const data = (await res.json()) as { ok: boolean } & LiveResearchSummary;
         if (!cancelled && data.ok) {
           setLiveSummary({ run: data.run, topSources: data.topSources });
+          if (data.run?.status === "completed" && data.run.id !== lastCompletedRunIdRef.current) {
+            lastCompletedRunIdRef.current = data.run.id;
+            if (onRefreshWizard) {
+              await onRefreshWizard();
+            }
+          }
         }
       } catch {
-        // Keep current UI state on transient poll hiccup
+        // Keep current state on transient poll error
       }
     }
 
@@ -115,7 +124,7 @@ export function StepResearchSweep({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [wizard.project.id, isRunning]);
+  }, [wizard.project.id, isRunning, onRefreshWizard]);
 
   async function startLiveSweep(resumeRunId?: string) {
     setLiveError(null);
@@ -146,13 +155,22 @@ export function StepResearchSweep({
     }
   }
 
+  const primaryDataNotice = primaryReport?.coverage.primaryDataNotice ?? null;
+  const subtopicBreakdown = primaryReport?.coverage.subtopicBreakdown ?? [];
+  const suggestedRefinements = primaryReport?.coverage.suggestedRefinements ?? [];
+  const canProceed =
+    primaryReport !== undefined &&
+    (wizard.project.type === "assignment"
+      ? reports.some((r) => r.verdict === "feasible")
+      : primaryReport.verdict === "feasible");
+
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h2 className="text-2xl font-medium">Source sweep and feasibility check</h2>
+        <h2 className="text-2xl font-medium">Source sweep and feasibility gate</h2>
         <p className="text-sm text-[var(--neutral-600)]">
-          Collate searches scholarly databases and web sources first to verify your topic can be
-          written without guessing.
+          Collate searches scholarly and web sources first to verify your topic can be written
+          without guessing (Rule NN-1).
         </p>
       </div>
 
@@ -213,6 +231,96 @@ export function StepResearchSweep({
         {activeRun?.error ? <FormAlert tone="warning">{activeRun.error}</FormAlert> : null}
       </div>
 
+      {primaryReport ? (
+        <div className="space-y-4">
+          <FormAlert tone={VERDICT_META[primaryReport.verdict].tone}>
+            <span className="font-semibold">{VERDICT_META[primaryReport.verdict].title}</span> —
+            Evidence score {primaryReport.score}/100 (
+            {primaryReport.coverage.credibleRelevantSources ?? primaryReport.coverage.sourcesFound}{" "}
+            credible sources, {primaryReport.coverage.subtopicsCovered} subtopics covered
+            {primaryReport.isMocked ? ", preview mode" : ""}).
+          </FormAlert>
+
+          {primaryDataNotice ? <FormAlert tone="warning">{primaryDataNotice}</FormAlert> : null}
+
+          <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-3">
+            <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">Evidence summary</p>
+            <ul className="list-disc pl-5 space-y-1.5 text-sm text-[var(--neutral-700)] m-0">
+              {primaryReport.reasons.map((reason, idx) => (
+                <li key={idx}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+
+          {subtopicBreakdown.length > 0 ? (
+            <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-3">
+              <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
+                Subtopic coverage
+              </p>
+              <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+                {subtopicBreakdown.map((item) => (
+                  <li
+                    key={item.subtopic}
+                    className="py-2.5 flex items-center justify-between gap-3 text-sm"
+                  >
+                    <span className="text-[var(--neutral-800)]">{item.subtopic}</span>
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-[var(--radius-sm)] tabular-nums ${
+                        item.covered
+                          ? "bg-[var(--success-bg)] text-[var(--success-text)]"
+                          : "bg-[var(--warning-bg)] text-[var(--warning-text)]"
+                      }`}
+                    >
+                      {item.covered ? `Covered (${item.credibleSources})` : "Gap (0)"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {suggestedRefinements.length > 0 ? (
+            <div className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-2">
+              <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
+                Suggested topic refinements
+              </p>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm text-[var(--neutral-700)] m-0">
+                {suggestedRefinements.map((s, idx) => (
+                  <li key={idx}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {wizard.project.type === "assignment" && wizard.questions.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-[var(--neutral-900)]">
+                Per-question verdicts ({wizard.questions.length})
+              </p>
+              <ul className="space-y-2 list-none p-0 m-0">
+                {wizard.questions.map((q) => {
+                  const rep = reports.find((r) => r.questionId === q.id) ?? primaryReport;
+                  return (
+                    <li
+                      key={q.id}
+                      className="p-4 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                    >
+                      <span className="text-sm text-[var(--neutral-800)]">
+                        <strong className="tabular-nums mr-1.5">Q{q.orderIndex}.</strong>
+                        {q.text}
+                      </span>
+                      <span className="text-xs font-medium px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--neutral-100)] text-[var(--neutral-800)] w-fit">
+                        {VERDICT_META[rep.verdict].badge}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {liveSummary && liveSummary.topSources.length > 0 ? (
         <div className="space-y-3">
           <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
@@ -236,7 +344,7 @@ export function StepResearchSweep({
 
       <details className="border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-4 bg-white">
         <summary className="text-sm font-medium text-[var(--neutral-700)] cursor-pointer">
-          Offline verdict preview (mock mode until Phase 4 feasibility gate)
+          Local dev verdict preview (offline test helper)
         </summary>
         <div className="pt-4 space-y-4">
           <div className="space-y-1.5">
@@ -244,7 +352,7 @@ export function StepResearchSweep({
               htmlFor="mock-verdict"
               className="block text-sm font-medium text-[var(--neutral-800)]"
             >
-              Preview verdict outcome
+              Simulate verdict outcome
             </label>
             <select
               id="mock-verdict"
@@ -264,42 +372,26 @@ export function StepResearchSweep({
             loadingLabel="Saving verdict preview..."
             onClick={() => onSave({ step: 3, simulateVerdict })}
           >
-            Save mock verdict preview
+            Save offline preview verdict
           </Button>
         </div>
       </details>
 
-      {primaryReport ? (
-        <div className="space-y-4">
-          <FormAlert tone={VERDICT_META[primaryReport.verdict].tone}>
-            <span className="font-semibold">{VERDICT_META[primaryReport.verdict].title}</span> —
-            Evidence score {primaryReport.score}/100 ({primaryReport.coverage.sourcesFound} sources,{" "}
-            {primaryReport.coverage.subtopicsCovered} subtopics covered).
-          </FormAlert>
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <Button type="button" variant="secondary" onClick={onBackToTopic}>
+          Edit topic
+        </Button>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={onBackToTopic}>
-              Edit topic
-            </Button>
-            {primaryReport.verdict === "feasible" ? (
-              <Button type="button" onClick={onContinueToLength}>
-                Continue to page length
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <Button type="button" variant="secondary" onClick={onBackToTopic}>
-            Edit topic
+        {canProceed ? (
+          <Button type="button" onClick={onContinueToLength}>
+            Continue to page length
           </Button>
-          {activeRun?.status === "completed" && activeRun.sourcesFound > 0 ? (
-            <Button type="button" onClick={onContinueToLength}>
-              Continue to page length
-            </Button>
-          ) : null}
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-[var(--neutral-600)] m-0">
+            Run a source sweep and pass the feasibility gate to continue.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

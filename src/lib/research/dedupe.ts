@@ -171,11 +171,15 @@ export function deduplicateSources(candidates: RawSourceCandidate[]): Deduplicat
       match = byUrl.get(canonicalUrl);
     }
     if (!match && normalizedTitle.length >= 12) {
-      match = results.find(
-        (existing) =>
+      match = results.find((existing) => {
+        if (doi && existing.doi && existing.doi !== doi) {
+          return false;
+        }
+        return (
           computeTitleSimilarity(existing.normalizedTitle, normalizedTitle) >=
           RESEARCH_CONFIG.dedupe.titleSimilarityThreshold
-      );
+        );
+      });
     }
 
     if (match) {

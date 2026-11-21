@@ -1,9 +1,22 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { RESEARCH_CONFIG } from "@/config/research";
 import type { AppDb } from "@/db/client";
-import { projects, questions, researchRuns, sourcePassages, sources } from "@/db/schema";
+import {
+  feasibilityReports,
+  projects,
+  questions,
+  researchRuns,
+  sourcePassages,
+  sources,
+  type FeasibilityVerdict,
+} from "@/db/schema";
 import type { CallLLMContext } from "@/lib/ai/call-llm";
+import {
+  evaluateAssignmentFeasibility,
+  evaluateFeasibility,
+  type FeasibilitySourceInput,
+} from "@/lib/feasibility/evaluator";
 import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
 import { chunkSourceText } from "./chunker";
 import { runConnectorsForQueries } from "./connectors/registry";
@@ -59,6 +72,10 @@ export interface ScoreStepOutput {
   totalSources: number;
   fetchedSources: number;
   subtopicsCovered: number;
+  verdict: FeasibilityVerdict;
+  feasibilityScore: number;
+  idealPages: number;
+  requiresPrimaryData: boolean;
   status: "completed";
 }
 
@@ -427,6 +444,15 @@ export async function runResearchSweepOrchestration(
         .set({ status: "scoring", updatedAt: nowFn() })
         .where(eq(researchRuns.id, payload.runId));
 
+      const [project] = await deps.db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, payload.projectId))
+        .limit(1);
+      if (!project) {
+        throw new Error(`Project ${payload.projectId} not found during scoring`);
+      }
+
       const stored = await deps.db
         .select()
         .from(sources)
@@ -441,6 +467,7 @@ export async function runResearchSweepOrchestration(
         }
         return {
           id: row.id,
+          questionId: row.questionId,
           url: row.url,
           canonicalUrl: row.canonicalUrl,
           doi: row.doi,
@@ -461,11 +488,12 @@ export async function runResearchSweepOrchestration(
         };
       });
 
+      const refYear = nowFn().getUTCFullYear();
       const ranked = scoreAndRankSources(
         normalizedForScoring,
         planOutput.topic,
         planOutput.subtopics,
-        nowFn().getUTCFullYear()
+        refYear
       );
 
       for (const item of ranked) {
@@ -482,9 +510,185 @@ export async function runResearchSweepOrchestration(
           .where(eq(sources.id, match.id));
       }
 
+      const feasibilitySources: FeasibilitySourceInput[] = ranked.map((r) => ({
+        url: r.url,
+        doi: r.doi,
+        title: r.title,
+        year: r.year,
+        publisher: r.publisher,
+        sourceType: r.sourceType,
+        credibilityScore: r.credibilityScore,
+        relevanceScore: r.relevanceScore,
+        accessStatus: r.accessStatus,
+        matchedSubtopics: r.matchedSubtopics,
+      }));
+
+      const doneAt = nowFn();
+      await deps.db
+        .delete(feasibilityReports)
+        .where(eq(feasibilityReports.projectId, payload.projectId));
+
+      let finalVerdict: FeasibilityVerdict;
+      let finalScore: number;
+      let finalIdealPages: number;
+      let requiresPrimaryData: boolean;
+
+      if (project.type === "assignment") {
+        const questionRows = await deps.db
+          .select()
+          .from(questions)
+          .where(eq(questions.projectId, payload.projectId))
+          .orderBy(asc(questions.orderIndex));
+
+        if (questionRows.length > 0) {
+          const assignmentEval = evaluateAssignmentFeasibility(
+            questionRows.map((q) => ({
+              questionId: q.id,
+              questionText: q.text,
+              subtopics: planOutput.subtopics,
+              sources: feasibilitySources,
+            })),
+            refYear
+          );
+
+          finalVerdict = assignmentEval.overallVerdict;
+          finalIdealPages = assignmentEval.totalIdealPages;
+          finalScore = Math.round(
+            assignmentEval.perQuestion.reduce((s, q) => s + q.evaluation.score, 0) /
+              assignmentEval.perQuestion.length
+          );
+          requiresPrimaryData = assignmentEval.perQuestion.some(
+            (q) => q.evaluation.requiresPrimaryData
+          );
+
+          for (const pq of assignmentEval.perQuestion) {
+            await deps.db.insert(feasibilityReports).values({
+              id: `fsr_${crypto.randomUUID()}`,
+              projectId: payload.projectId,
+              questionId: pq.questionId,
+              verdict: pq.evaluation.verdict,
+              score: pq.evaluation.score,
+              reasonsJson: JSON.stringify(pq.evaluation.reasons),
+              coverageJson: JSON.stringify({
+                sourcesFound: pq.evaluation.coverage.totalSources,
+                credibleRelevantSources: pq.evaluation.coverage.credibleRelevantSources,
+                accessibleSources: pq.evaluation.coverage.accessibleSources,
+                distinctDomains: pq.evaluation.coverage.distinctDomains,
+                subtopicsCovered: pq.evaluation.coverage.subtopicsCovered,
+                totalSubtopics: pq.evaluation.coverage.totalSubtopics,
+                recentShare: pq.evaluation.coverage.recentShare,
+                subtopicBreakdown: pq.evaluation.coverage.subtopicBreakdown,
+                idealPagesReason: assignmentEval.idealPagesReason,
+                idealPagesRange: pq.evaluation.idealPagesRange,
+                complexityScore: pq.evaluation.complexityScore,
+                requiresPrimaryData: pq.evaluation.requiresPrimaryData,
+                primaryDataNotice: pq.evaluation.primaryDataNotice,
+                suggestedRefinements: pq.evaluation.suggestedRefinements,
+              }),
+              isMocked: false,
+              createdAt: doneAt,
+            });
+          }
+        } else {
+          const singleEval = evaluateFeasibility({
+            topic: planOutput.topic,
+            projectType: "assignment",
+            level: project.level,
+            supervisorNotes: project.supervisorNotes,
+            subtopics: planOutput.subtopics,
+            sources: feasibilitySources,
+            referenceYear: refYear,
+          });
+          finalVerdict = singleEval.verdict;
+          finalScore = singleEval.score;
+          finalIdealPages = singleEval.idealPages;
+          requiresPrimaryData = singleEval.requiresPrimaryData;
+
+          await deps.db.insert(feasibilityReports).values({
+            id: `fsr_${crypto.randomUUID()}`,
+            projectId: payload.projectId,
+            questionId: null,
+            verdict: singleEval.verdict,
+            score: singleEval.score,
+            reasonsJson: JSON.stringify(singleEval.reasons),
+            coverageJson: JSON.stringify({
+              sourcesFound: singleEval.coverage.totalSources,
+              credibleRelevantSources: singleEval.coverage.credibleRelevantSources,
+              accessibleSources: singleEval.coverage.accessibleSources,
+              distinctDomains: singleEval.coverage.distinctDomains,
+              subtopicsCovered: singleEval.coverage.subtopicsCovered,
+              totalSubtopics: singleEval.coverage.totalSubtopics,
+              recentShare: singleEval.coverage.recentShare,
+              subtopicBreakdown: singleEval.coverage.subtopicBreakdown,
+              idealPagesReason: singleEval.idealPagesReason,
+              idealPagesRange: singleEval.idealPagesRange,
+              complexityScore: singleEval.complexityScore,
+              requiresPrimaryData: singleEval.requiresPrimaryData,
+              primaryDataNotice: singleEval.primaryDataNotice,
+              suggestedRefinements: singleEval.suggestedRefinements,
+            }),
+            isMocked: false,
+            createdAt: doneAt,
+          });
+        }
+      } else {
+        const evalResult = evaluateFeasibility({
+          topic: planOutput.topic,
+          projectType: project.type,
+          level: project.level,
+          supervisorNotes: project.supervisorNotes,
+          subtopics: planOutput.subtopics,
+          sources: feasibilitySources,
+          referenceYear: refYear,
+        });
+
+        finalVerdict = evalResult.verdict;
+        finalScore = evalResult.score;
+        finalIdealPages = evalResult.idealPages;
+        requiresPrimaryData = evalResult.requiresPrimaryData;
+
+        await deps.db.insert(feasibilityReports).values({
+          id: `fsr_${crypto.randomUUID()}`,
+          projectId: payload.projectId,
+          questionId: null,
+          verdict: evalResult.verdict,
+          score: evalResult.score,
+          reasonsJson: JSON.stringify(evalResult.reasons),
+          coverageJson: JSON.stringify({
+            sourcesFound: evalResult.coverage.totalSources,
+            credibleRelevantSources: evalResult.coverage.credibleRelevantSources,
+            accessibleSources: evalResult.coverage.accessibleSources,
+            distinctDomains: evalResult.coverage.distinctDomains,
+            subtopicsCovered: evalResult.coverage.subtopicsCovered,
+            totalSubtopics: evalResult.coverage.totalSubtopics,
+            recentShare: evalResult.coverage.recentShare,
+            subtopicBreakdown: evalResult.coverage.subtopicBreakdown,
+            idealPagesReason: evalResult.idealPagesReason,
+            idealPagesRange: evalResult.idealPagesRange,
+            complexityScore: evalResult.complexityScore,
+            requiresPrimaryData: evalResult.requiresPrimaryData,
+            primaryDataNotice: evalResult.primaryDataNotice,
+            suggestedRefinements: evalResult.suggestedRefinements,
+          }),
+          isMocked: false,
+          createdAt: doneAt,
+        });
+      }
+
+      // Enforce NN-1: only feasible topics unlock Step 4 (Page Length)
+      await deps.db
+        .update(projects)
+        .set({
+          status: finalVerdict,
+          idealPages: finalIdealPages,
+          targetPages: project.targetPages ?? finalIdealPages,
+          wizardStep: finalVerdict === "feasible" ? Math.max(project.wizardStep, 4) : 3,
+          updatedAt: doneAt,
+        })
+        .where(eq(projects.id, payload.projectId));
+
       const subtopicsCovered = countCoveredSubtopics(ranked);
       const fetchedSources = stored.filter((s) => s.fetchStatus === "fetched").length;
-      const doneAt = nowFn();
 
       await deps.db
         .update(researchRuns)
@@ -504,6 +708,10 @@ export async function runResearchSweepOrchestration(
         totalSources: stored.length,
         fetchedSources,
         subtopicsCovered,
+        verdict: finalVerdict,
+        feasibilityScore: finalScore,
+        idealPages: finalIdealPages,
+        requiresPrimaryData,
         status: "completed",
       };
     });

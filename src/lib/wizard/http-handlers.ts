@@ -66,8 +66,16 @@ export interface SerializedWizardState {
     reasons: string[];
     coverage: {
       sourcesFound: number;
+      credibleRelevantSources?: number;
+      accessibleSources?: number;
+      distinctDomains?: number;
       subtopicsCovered: number;
+      totalSubtopics?: number;
       idealPagesReason: string;
+      requiresPrimaryData?: boolean;
+      primaryDataNotice?: string | null;
+      suggestedRefinements?: string[];
+      subtopicBreakdown?: Array<{ subtopic: string; credibleSources: number; covered: boolean }>;
     };
     createdAt: string;
   }>;

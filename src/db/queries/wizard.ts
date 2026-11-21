@@ -49,7 +49,19 @@ export interface HydratedWizardState {
   feasibilityReports: Array<
     Omit<FeasibilityReportRecord, "reasonsJson" | "coverageJson"> & {
       reasons: string[];
-      coverage: { sourcesFound: number; subtopicsCovered: number; idealPagesReason: string };
+      coverage: {
+        sourcesFound: number;
+        credibleRelevantSources?: number;
+        accessibleSources?: number;
+        distinctDomains?: number;
+        subtopicsCovered: number;
+        totalSubtopics?: number;
+        idealPagesReason: string;
+        requiresPrimaryData?: boolean;
+        primaryDataNotice?: string | null;
+        suggestedRefinements?: string[];
+        subtopicBreakdown?: Array<{ subtopic: string; credibleSources: number; covered: boolean }>;
+      };
     }
   >;
 }

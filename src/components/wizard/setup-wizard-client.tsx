@@ -19,6 +19,19 @@ export function SetupWizardClient({ initialWizard }: { initialWizard: Serialized
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  async function refreshWizardState() {
+    try {
+      const res = await fetch(`/api/projects/${wizard.project.id}/wizard`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { ok: boolean; wizard?: SerializedWizardState };
+      if (data.ok && data.wizard) {
+        setWizard(data.wizard);
+      }
+    } catch {
+      // Keep current state on transient error
+    }
+  }
+
   async function saveStep(payload: Record<string, unknown>, advanceTo?: number) {
     setApiError(null);
     setSaving(true);
@@ -104,6 +117,7 @@ export function SetupWizardClient({ initialWizard }: { initialWizard: Serialized
             wizard={wizard}
             saving={saving}
             onSave={(payload) => saveStep(payload)}
+            onRefreshWizard={refreshWizardState}
             onBackToTopic={() => setCurrentStep(2)}
             onContinueToLength={() => setCurrentStep(4)}
           />
