@@ -10,3 +10,5 @@ PROGRESS.md
 drizzle
 worker-configuration.d.ts
 last-run-output.txt
+BUILD_NOTES.md
+.dev.vars

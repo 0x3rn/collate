@@ -1,10 +1,10 @@
 // Collate — Cloudflare Workers configuration
 // Default = dev. Use --env staging or --env prod for remote environments.
-// Run scripts/bootstrap/provision-cloudflare.mjs after 'wrangler login' to populate real remote IDs.
+// Includes D1 (DB), R2 (FILES), Browser Run (BROWSER), and Workflows (HELLO_SLEEP_WORKFLOW).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "collate-dev",
-  "main": "vinext/server/fetch-handler",
+  "main": "./worker/index.ts",
   "compatibility_date": "2026-11-21",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
@@ -48,6 +48,16 @@
           "bucket_name": "collate-files-staging",
         },
       ],
+      "browser": {
+        "binding": "BROWSER",
+      },
+      "workflows": [
+        {
+          "name": "collate-hello-sleep-staging",
+          "binding": "HELLO_SLEEP_WORKFLOW",
+          "class_name": "HelloSleepWorkflow",
+        },
+      ],
     },
     "prod": {
       "name": "collate-prod",
@@ -72,6 +82,16 @@
           "bucket_name": "collate-files-prod",
         },
       ],
+      "browser": {
+        "binding": "BROWSER",
+      },
+      "workflows": [
+        {
+          "name": "collate-hello-sleep-prod",
+          "binding": "HELLO_SLEEP_WORKFLOW",
+          "class_name": "HelloSleepWorkflow",
+        },
+      ],
     },
   },
   "d1_databases": [
@@ -86,6 +106,16 @@
     {
       "binding": "FILES",
       "bucket_name": "collate-files-dev",
+    },
+  ],
+  "browser": {
+    "binding": "BROWSER",
+  },
+  "workflows": [
+    {
+      "name": "collate-hello-sleep-dev",
+      "binding": "HELLO_SLEEP_WORKFLOW",
+      "class_name": "HelloSleepWorkflow",
     },
   ],
 }

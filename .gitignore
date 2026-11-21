@@ -22,3 +22,5 @@ coverage/
 .DS_Store
 Thumbs.db
 last-run-output.txt
+scripts/bootstrap/
+BUILD_NOTES.md

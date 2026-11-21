@@ -27,7 +27,8 @@
     "src/**/*.tsx",
     "tests/**/*.ts",
     "worker-configuration.d.ts",
-    "drizzle.config.ts"
+    "drizzle.config.ts",
+    "worker/**/*.ts"
   ],
   "exclude": ["node_modules", "dist", ".vinext", ".wrangler", "scripts/bootstrap"]
 }
