@@ -51,6 +51,11 @@
       "binding": "RESEARCH_SWEEP_WORKFLOW",
       "class_name": "ResearchSweepWorkflow",
     },
+    {
+      "name": "collate-write-chapter",
+      "binding": "WRITE_CHAPTER_WORKFLOW",
+      "class_name": "WriteChapterWorkflow",
+    },
   ],
   "ai": {
     "binding": "AI",

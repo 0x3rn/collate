@@ -3,6 +3,7 @@ import { applySecurityHeaders, sanitizeIncomingRequest } from "@/lib/security/he
 
 export { HelloSleepWorkflow } from "./workflows/hello-sleep";
 export { ResearchSweepWorkflow } from "./workflows/research-sweep";
+export { WriteChapterWorkflow } from "./workflows/write-chapter";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
