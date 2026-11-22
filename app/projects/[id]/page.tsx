@@ -12,7 +12,9 @@ import {
 import { ReviseOutlineButton } from "@/components/wizard/revise-outline-button";
 import { createDb } from "@/db/client";
 import { getProjectOutlineForUser } from "@/db/queries/outline";
-import { projectDatasets, sections } from "@/db/schema";
+import { citations, originalityReports, projectDatasets, sections } from "@/db/schema";
+import { IntegrityPanel } from "@/components/project/integrity-panel";
+import { generateAiDisclosureStatement } from "@/lib/originality/integrity-exports";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
 import { formatProjectStatus, formatProjectType, formatShortDate } from "@/lib/ui/formatters";
 
@@ -39,6 +41,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     .where(eq(projectDatasets.projectId, id))
     .orderBy(desc(projectDatasets.createdAt));
 
+  const reportRows = await db
+    .select()
+    .from(originalityReports)
+    .where(eq(originalityReports.projectId, id))
+    .orderBy(desc(originalityReports.createdAt));
+
+  const latestReportByChapter = new Map<string, (typeof reportRows)[number]>();
+  for (const rep of reportRows) {
+    if (!latestReportByChapter.has(rep.chapterId)) {
+      latestReportByChapter.set(rep.chapterId, rep);
+    }
+  }
+
+  const citationRows = await db.select().from(citations).where(eq(citations.projectId, id));
+
   const chapterPanelItems: ChapterPanelItem[] = [];
   for (const ch of state.chapters) {
     const secRows = await db
@@ -56,6 +73,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       isAutoReferences: ch.isAutoReferences,
       status: ch.status,
       sectionHeadings: secRows.map((s) => s.heading),
+      originalityReport: latestReportByChapter.has(ch.id)
+        ? {
+            passed: latestReportByChapter.get(ch.id)!.passed,
+            overlapScore: latestReportByChapter.get(ch.id)!.overlapScore,
+            quoteSharePct: latestReportByChapter.get(ch.id)!.quoteSharePct,
+            crossUserScore: latestReportByChapter.get(ch.id)!.crossUserScore,
+          }
+        : null,
     });
   }
 
@@ -155,6 +180,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             }))}
           />
         )}
+        <IntegrityPanel
+          projectId={project.id}
+          disclosureStatement={generateAiDisclosureStatement({
+            authorName: settings.cover.authorName || user.name,
+            institution: project.institution,
+            projectTitle: project.title,
+            citationStyle: settings.citationStyle,
+            verifiedSourceCount: citationRows.length,
+          })}
+        />
       </main>
       <SiteFooter />
     </>

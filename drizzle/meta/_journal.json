@@ -50,6 +50,13 @@
       "when": 1795336994488,
       "tag": "0006_add_writing_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795339113771,
+      "tag": "0007_add_originality_tables",
+      "breakpoints": true
     }
   ]
 }

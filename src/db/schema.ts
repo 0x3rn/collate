@@ -647,7 +647,67 @@ export const projectDatasets = sqliteTable(
   ]
 );
 
+export const originalityReports = sqliteTable(
+  "originality_reports",
+  {
+    id: text("id").primaryKey(),
+    chapterVersionId: text("chapter_version_id")
+      .notNull()
+      .references(() => chapterVersions.id, { onDelete: "cascade" }),
+    chapterId: text("chapter_id")
+      .notNull()
+      .references(() => chapters.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    overlapScore: real("overlap_score").notNull().default(0),
+    semanticScore: real("semantic_score").notNull().default(0),
+    quoteSharePct: real("quote_share_pct").notNull().default(0),
+    crossUserScore: real("cross_user_score").notNull().default(0),
+    flaggedSpansJson: text("flagged_spans_json").notNull().default("[]"),
+    externalReportJson: text("external_report_json"),
+    passed: integer("passed", { mode: "boolean" }).notNull().default(false),
+    waived: integer("waived", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("originality_reports_version_unique").on(table.chapterVersionId),
+    index("originality_reports_chapter_idx").on(table.chapterId),
+    index("originality_reports_project_idx").on(table.projectId),
+    check(
+      "originality_scores_range",
+      sql`${table.overlapScore} >= 0 AND ${table.overlapScore} <= 100`
+    ),
+  ]
+);
+
+export const chapterFingerprints = sqliteTable(
+  "chapter_fingerprints",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    chapterVersionId: text("chapter_version_id")
+      .notNull()
+      .references(() => chapterVersions.id, { onDelete: "cascade" }),
+    topicNormalized: text("topic_normalized").notNull(),
+    shingleHashesJson: text("shingle_hashes_json").notNull().default("[]"),
+    embeddingJson: text("embedding_json"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("chapter_fingerprints_topic_idx").on(table.topicNormalized),
+    index("chapter_fingerprints_user_idx").on(table.userId),
+  ]
+);
+
 export type UserRecord = typeof users.$inferSelect;
+export type OriginalityReportRecord = typeof originalityReports.$inferSelect;
+export type ChapterFingerprintRecord = typeof chapterFingerprints.$inferSelect;
 export type ChapterVersionRecord = typeof chapterVersions.$inferSelect;
 export type SectionDraftRecord = typeof sectionDrafts.$inferSelect;
 export type ClaimRecord = typeof claims.$inferSelect;

@@ -1,12 +1,14 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { WRITING_CONFIG } from "@/config/writing";
 import type { AppDb } from "@/db/client";
 import { syncCitationRegistryForProject } from "@/db/queries/citations";
 import {
+  chapterFingerprints,
   chapters,
   chapterVersions,
   claims,
+  originalityReports,
   projectDatasets,
   projectMemory,
   projects,
@@ -14,6 +16,7 @@ import {
   questions,
   sectionDrafts,
   sections,
+  sourcePassages,
   type ChapterVersionCreator,
   type SpellingVariant,
 } from "@/db/schema";
@@ -21,6 +24,11 @@ import type { CallLLMContext } from "@/lib/ai/call-llm";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
 import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { EmbeddingProvider, VectorStore } from "@/lib/research/embeddings";
+import {
+  runOriginalityGateWithRewrite,
+  type ExternalPlagiarismProvider,
+} from "@/lib/originality/checker";
+import { normalizeTitle } from "@/lib/research/dedupe";
 import { buildLabelledResultsFramework, type DatasetAnalysisResult } from "./results-data";
 import { retrieveEvidencePassages, type RetrievedEvidencePassage } from "./retrieval";
 import {
@@ -44,6 +52,7 @@ export const WriteChapterPayloadSchema = z.object({
 export type WriteChapterPayload = z.input<typeof WriteChapterPayloadSchema>;
 
 export interface LoadedChapterContext {
+  userId: string;
   projectId: string;
   chapterId: string;
   chapterNumber: number;
@@ -101,6 +110,8 @@ export interface WriteChapterDeps {
   embedder?: EmbeddingProvider;
   vectorStore?: VectorStore;
   measurePagesFn?: MeasurePagesFn;
+  externalPlagiarismProvider?: ExternalPlagiarismProvider;
+  waiveOriginalityGate?: boolean;
   nowFn?: () => Date;
   onChapterReady?: (info: {
     projectId: string;
@@ -267,6 +278,7 @@ export async function runWriteChapterOrchestration(
       }
 
       return {
+        userId: project.userId,
         projectId: project.id,
         chapterId: chapter.id,
         chapterNumber: chapter.number,
@@ -510,6 +522,58 @@ export async function runWriteChapterOrchestration(
         deps.llmCtx
       );
 
+      const allProjectPassages = await deps.db
+        .select()
+        .from(sourcePassages)
+        .where(eq(sourcePassages.projectId, context.projectId));
+
+      const normalizedTopic = normalizeTitle(context.topic);
+      const otherFingerprintsRaw = await deps.db
+        .select()
+        .from(chapterFingerprints)
+        .where(
+          and(
+            eq(chapterFingerprints.topicNormalized, normalizedTopic),
+            ne(chapterFingerprints.userId, context.userId)
+          )
+        )
+        .limit(30);
+
+      const otherUserFingerprints = otherFingerprintsRaw.map((fp) => {
+        let hashes: string[];
+        try {
+          hashes = JSON.parse(fp.shingleHashesJson) as string[];
+        } catch {
+          hashes = [];
+        }
+        return { chapterVersionId: fp.chapterVersionId, shingleHashes: hashes };
+      });
+
+      const originalityOutcome = await runOriginalityGateWithRewrite({
+        workflowId: payload.runId,
+        projectId: context.projectId,
+        chapterTitle: context.chapterTitle,
+        draftMarkdown: calibrated.markdown,
+        sourcePassages: allProjectPassages.map((p) => ({
+          passageId: p.id,
+          sourceId: p.sourceId,
+          text: p.text,
+        })),
+        otherUserFingerprints,
+        embedder: deps.embedder,
+        externalProvider: deps.externalPlagiarismProvider,
+        llmCtx: deps.llmCtx,
+        spendCapUsd: payload.spendCapUsd,
+        waiveGate: deps.waiveOriginalityGate,
+      });
+
+      const finalMarkdown = originalityOutcome.markdown;
+      const finalWordCount = countWords(finalMarkdown);
+      const finalPageCount = Math.max(1, Math.round(finalWordCount / context.wordsPerPage));
+      const finalStatus: "ready" | "needs_attention" = originalityOutcome.evaluation.passed
+        ? "ready"
+        : "needs_attention";
+
       const existingVersions = await deps.db
         .select()
         .from(chapterVersions)
@@ -521,7 +585,7 @@ export async function runWriteChapterOrchestration(
       const versionId = `ver_${crypto.randomUUID()}`;
       const contentR2Key = `chapters/${context.projectId}/${context.chapterId}/v${nextVersion}.md`;
 
-      await deps.bucket.put(contentR2Key, calibrated.markdown, {
+      await deps.bucket.put(contentR2Key, finalMarkdown, {
         httpMetadata: { contentType: "text/markdown; charset=utf-8" },
         customMetadata: {
           projectId: context.projectId,
@@ -536,8 +600,8 @@ export async function runWriteChapterOrchestration(
         chapterId: context.chapterId,
         version: nextVersion,
         contentR2Key,
-        wordCount: calibrated.wordCount,
-        pageCount: calibrated.pageCount,
+        wordCount: finalWordCount,
+        pageCount: finalPageCount,
         promptVersion: WRITING_CONFIG.promptVersion,
         createdBy: payload.createdBy as ChapterVersionCreator,
         revisionNotes: payload.revisionNotes ?? null,
@@ -550,7 +614,7 @@ export async function runWriteChapterOrchestration(
           projectId: context.projectId,
           chapterNumber: context.chapterNumber,
           chapterTitle: context.chapterTitle,
-          chapterMarkdown: calibrated.markdown,
+          chapterMarkdown: finalMarkdown,
           spendCapUsd: payload.spendCapUsd,
         },
         deps.llmCtx
@@ -603,9 +667,41 @@ export async function runWriteChapterOrchestration(
         })
         .where(eq(projectMemory.projectId, context.projectId));
 
+      await deps.db.insert(originalityReports).values({
+        id: `org_${crypto.randomUUID()}`,
+        chapterVersionId: versionId,
+        chapterId: context.chapterId,
+        projectId: context.projectId,
+        overlapScore: originalityOutcome.evaluation.overlapScore,
+        semanticScore: originalityOutcome.evaluation.semanticScore,
+        quoteSharePct: originalityOutcome.evaluation.quoteSharePct,
+        crossUserScore: originalityOutcome.evaluation.crossUserScore,
+        flaggedSpansJson: JSON.stringify(originalityOutcome.evaluation.flaggedSpans),
+        externalReportJson: originalityOutcome.evaluation.externalReport
+          ? JSON.stringify(originalityOutcome.evaluation.externalReport)
+          : null,
+        passed: originalityOutcome.evaluation.passed,
+        waived: originalityOutcome.evaluation.waived,
+        createdAt: now,
+      });
+
+      await deps.db.insert(chapterFingerprints).values({
+        id: `cfp_${crypto.randomUUID()}`,
+        projectId: context.projectId,
+        userId: context.userId,
+        chapterVersionId: versionId,
+        topicNormalized: normalizedTopic,
+        shingleHashesJson: JSON.stringify(originalityOutcome.evaluation.shingleHashes),
+        createdAt: now,
+      });
+
       await deps.db
         .update(chapters)
-        .set({ status: "ready", finishedAt: now, updatedAt: now })
+        .set({
+          status: finalStatus,
+          finishedAt: finalStatus === "ready" ? now : null,
+          updatedAt: now,
+        })
         .where(eq(chapters.id, context.chapterId));
 
       const chapterClaims = await deps.db
@@ -613,7 +709,7 @@ export async function runWriteChapterOrchestration(
         .from(claims)
         .where(and(eq(claims.chapterId, context.chapterId), eq(claims.verified, true)));
 
-      if (deps.onChapterReady) {
+      if (finalStatus === "ready" && deps.onChapterReady) {
         await deps.onChapterReady({
           projectId: context.projectId,
           chapterId: context.chapterId,
@@ -628,10 +724,10 @@ export async function runWriteChapterOrchestration(
         versionId,
         version: nextVersion,
         contentR2Key,
-        wordCount: calibrated.wordCount,
-        pageCount: calibrated.pageCount,
+        wordCount: finalWordCount,
+        pageCount: finalPageCount,
         totalVerifiedClaims: chapterClaims.length,
-        status: "ready",
+        status: finalStatus,
       };
     });
   } catch (err) {

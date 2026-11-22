@@ -17,6 +17,12 @@ export interface ChapterPanelItem {
   isAutoReferences: boolean;
   status: ChapterStatus;
   sectionHeadings: string[];
+  originalityReport?: {
+    passed: boolean;
+    overlapScore: number;
+    quoteSharePct: number;
+    crossUserScore: number;
+  } | null;
 }
 
 export interface DatasetPanelItem {
@@ -260,6 +266,23 @@ export function ChapterPipelinePanel({
                     {ch.sectionHeadings.length > 0 ? (
                       <p className="text-xs text-[var(--neutral-500)] m-0">
                         Sections: {ch.sectionHeadings.join(" · ")}
+                      </p>
+                    ) : null}
+                    {ch.originalityReport ? (
+                      <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] m-0">
+                        Similarity report:{" "}
+                        <span
+                          className={
+                            ch.originalityReport.passed
+                              ? "text-[var(--success-text)]"
+                              : "text-[var(--error-text)]"
+                          }
+                        >
+                          {ch.originalityReport.passed ? "Passed" : "Flagged"}
+                        </span>{" "}
+                        · Source overlap {ch.originalityReport.overlapScore}% · Quotes{" "}
+                        {ch.originalityReport.quoteSharePct}% · Cross-user{" "}
+                        {ch.originalityReport.crossUserScore}%
                       </p>
                     ) : null}
                   </div>
