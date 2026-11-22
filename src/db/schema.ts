@@ -81,6 +81,15 @@ export type SourceAccessStatus = (typeof SOURCE_ACCESS_STATUSES)[number];
 export const SOURCE_FETCH_STATUSES = ["pending", "fetched", "failed", "skipped"] as const;
 export type SourceFetchStatus = (typeof SOURCE_FETCH_STATUSES)[number];
 
+export const CITATION_VERIFICATION_STATUSES = [
+  "unverified",
+  "verified",
+  "fake_or_not_found",
+  "title_mismatch",
+  "dead_url",
+] as const;
+export type CitationVerificationStatus = (typeof CITATION_VERIFICATION_STATUSES)[number];
+
 export const SECTION_STATUSES = ["not_started", "drafting", "verified", "needs_revision"] as const;
 export type SectionStatus = (typeof SECTION_STATUSES)[number];
 
@@ -511,7 +520,36 @@ export const projectMemory = sqliteTable("project_memory", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 
+export const citations = sqliteTable(
+  "citations",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    sourceId: text("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    citeKey: text("cite_key").notNull(),
+    cslJson: text("csl_json").notNull(),
+    verificationStatus: text("verification_status", {
+      enum: CITATION_VERIFICATION_STATUSES,
+    })
+      .notNull()
+      .default("unverified"),
+    verificationNotes: text("verification_notes"),
+    verifiedAt: integer("verified_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("citations_project_key_unique").on(table.projectId, table.citeKey),
+    uniqueIndex("citations_project_source_unique").on(table.projectId, table.sourceId),
+    index("citations_project_idx").on(table.projectId),
+  ]
+);
+
 export type UserRecord = typeof users.$inferSelect;
+export type CitationRecord = typeof citations.$inferSelect;
 export type SectionRecord = typeof sections.$inferSelect;
 export type ProjectMemoryRecord = typeof projectMemory.$inferSelect;
 export type ResearchRunRecord = typeof researchRuns.$inferSelect;
