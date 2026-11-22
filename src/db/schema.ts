@@ -733,7 +733,23 @@ export const exportsTable = sqliteTable(
   ]
 );
 
+export const notificationPreferences = sqliteTable("notification_preferences", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  emailChapterReady: integer("email_chapter_ready", { mode: "boolean" }).notNull().default(true),
+  emailNeedsAttention: integer("email_needs_attention", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  emailProjectComplete: integer("email_project_complete", { mode: "boolean" })
+    .notNull()
+    .default(true),
+  emailReceipts: integer("email_receipts", { mode: "boolean" }).notNull().default(true),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export type UserRecord = typeof users.$inferSelect;
+export type NotificationPreferencesRecord = typeof notificationPreferences.$inferSelect;
 export type ExportRecord = typeof exportsTable.$inferSelect;
 export type OriginalityReportRecord = typeof originalityReports.$inferSelect;
 export type ChapterFingerprintRecord = typeof chapterFingerprints.$inferSelect;

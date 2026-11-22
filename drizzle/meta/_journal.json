@@ -64,6 +64,13 @@
       "when": 1795340961880,
       "tag": "0008_add_exports_table",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795341937223,
+      "tag": "0009_add_notification_prefs",
+      "breakpoints": true
     }
   ]
 }
