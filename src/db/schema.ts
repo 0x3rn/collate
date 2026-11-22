@@ -84,6 +84,12 @@ export type SourceFetchStatus = (typeof SOURCE_FETCH_STATUSES)[number];
 export const CHAPTER_VERSION_CREATORS = ["ai", "user", "revision"] as const;
 export type ChapterVersionCreator = (typeof CHAPTER_VERSION_CREATORS)[number];
 
+export const EXPORT_SCOPES = ["chapter", "combined", "full"] as const;
+export type ExportScope = (typeof EXPORT_SCOPES)[number];
+
+export const EXPORT_FORMATS = ["pdf", "docx"] as const;
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
 export const CLAIM_VERDICTS = ["supported", "partly_supported", "unsupported"] as const;
 export type ClaimVerdict = (typeof CLAIM_VERDICTS)[number];
 
@@ -705,7 +711,30 @@ export const chapterFingerprints = sqliteTable(
   ]
 );
 
+export const exportsTable = sqliteTable(
+  "exports",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
+    scope: text("scope", { enum: EXPORT_SCOPES }).notNull(),
+    format: text("format", { enum: EXPORT_FORMATS }).notNull(),
+    r2Key: text("r2_key").notNull(),
+    pageCount: integer("page_count").notNull().default(0),
+    sizeBytes: integer("size_bytes").notNull().default(0),
+    sha256: text("sha256").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("exports_project_idx").on(table.projectId, table.createdAt),
+    check("exports_counts_non_negative", sql`${table.pageCount} >= 0 AND ${table.sizeBytes} >= 0`),
+  ]
+);
+
 export type UserRecord = typeof users.$inferSelect;
+export type ExportRecord = typeof exportsTable.$inferSelect;
 export type OriginalityReportRecord = typeof originalityReports.$inferSelect;
 export type ChapterFingerprintRecord = typeof chapterFingerprints.$inferSelect;
 export type ChapterVersionRecord = typeof chapterVersions.$inferSelect;

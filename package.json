@@ -5,7 +5,9 @@
   "packageManager": "pnpm@12.21.0",
   "dependencies": {
     "@vinext/cloudflare": "latest",
+    "docx": "^9.16.0",
     "drizzle-orm": "^0.45.4",
+    "pdf-lib": "^1.17.1",
     "react": "latest",
     "react-dom": "latest",
     "react-server-dom-webpack": "latest",
@@ -31,7 +33,7 @@
     "typescript-eslint": "^8.73.0",
     "vite": "latest",
     "vitest": "^5.1.1",
-    "wrangler": "latest"
+    "wrangler": "4.165.0"
   },
   "type": "module",
   "scripts": {
