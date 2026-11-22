@@ -13,6 +13,7 @@ import { ReviseOutlineButton } from "@/components/wizard/revise-outline-button";
 import { createDb } from "@/db/client";
 import { getProjectOutlineForUser } from "@/db/queries/outline";
 import { citations, originalityReports, projectDatasets, sections } from "@/db/schema";
+import { ExportControls } from "@/components/project/export-controls";
 import { IntegrityPanel } from "@/components/project/integrity-panel";
 import { generateAiDisclosureStatement } from "@/lib/originality/integrity-exports";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
@@ -180,6 +181,19 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             }))}
           />
         )}
+        <ExportControls
+          projectId={project.id}
+          hasCompletedChapters={chapterPanelItems.some(
+            (c) => !c.isAutoReferences && (c.status === "ready" || c.status === "approved")
+          )}
+          allChaptersReady={
+            chapterPanelItems.filter((c) => !c.isAutoReferences).length > 0 &&
+            chapterPanelItems
+              .filter((c) => !c.isAutoReferences)
+              .every((c) => c.status === "ready" || c.status === "approved")
+          }
+        />
+
         <IntegrityPanel
           projectId={project.id}
           disclosureStatement={generateAiDisclosureStatement({

@@ -101,6 +101,32 @@ export function ChapterPipelinePanel({
     }
   }
 
+  async function triggerChapterPdfDownload(chapterId: string) {
+    setError(null);
+    setBusyChapterId(chapterId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/exports`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope: "chapter", format: "pdf", chapterId }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        export?: { downloadUrl: string };
+        error?: string;
+      };
+      if (!res.ok || !data.ok || !data.export?.downloadUrl) {
+        setError(data.error ?? "Could not build chapter PDF.");
+        return;
+      }
+      window.location.href = data.export.downloadUrl;
+    } catch {
+      setError("Network error while building chapter PDF.");
+    } finally {
+      setBusyChapterId(null);
+    }
+  }
+
   async function triggerApprove(chapterId: string) {
     setError(null);
     setNotice(null);
@@ -302,6 +328,17 @@ export function ChapterPipelinePanel({
                           {ch.status === "needs_attention"
                             ? `Resume chapter ${ch.number}`
                             : `Start chapter ${ch.number}`}
+                        </Button>
+                      ) : null}
+
+                      {ch.status === "ready" || ch.status === "approved" ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={isBusy}
+                          onClick={() => triggerChapterPdfDownload(ch.id)}
+                        >
+                          Download PDF
                         </Button>
                       ) : null}
 

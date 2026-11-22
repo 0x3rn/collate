@@ -2,57 +2,39 @@
 # Local development uses .dev.vars (automatically created and git-ignored).
 # Production secrets are set via: wrangler secret put <NAME>
 
-# Local runtime override (keeps local wrangler dev in 'dev' mode while live Worker runs 'prod')
+# Local runtime override
 APP_ENV=
-# Base URL used in email verification & password reset links
 APP_URL=
+# HMAC secret signing short-lived PDF/DOCX download URLs
+EXPORT_SIGNING_SECRET=
 
-# Cloudflare Turnstile (bot protection on sign-up and sign-in)
-# Public Turnstile site key (safe for browser)
+# Cloudflare Turnstile
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
-# Secret Turnstile key (server-side only)
 TURNSTILE_SECRET_KEY=
 
-# Email Delivery (swappable transport: 'console' in dev, 'resend' when configured)
+# Email Delivery
 EMAIL_PROVIDER=
 EMAIL_FROM=
-# Optional Resend API key when EMAIL_PROVIDER=resend
 RESEND_API_KEY=
 
-# Phase 3 — Web Search & Scholarly Source APIs
-# Tavily web search API key
+# Web Search & Scholarly Source APIs
 TAVILY_API_KEY=
-# Brave Search API subscription token
 BRAVE_SEARCH_API_KEY=
-# Optional Semantic Scholar key for higher rate limits
 SEMANTIC_SCHOLAR_API_KEY=
-# Optional CORE open-access scholarly API key
 CORE_API_KEY=
-# Polite-pool email sent to Crossref, OpenAlex, and Unpaywall
 SCHOLARLY_CONTACT_EMAIL=
 
-# Cloudflare AI Gateway (required in prod)
-# Found on your Cloudflare dashboard sidebar
+# Cloudflare AI Gateway & Anthropic
 CLOUDFLARE_ACCOUNT_ID=
-# Name of your AI Gateway in Cloudflare
 CLOUDFLARE_AI_GATEWAY_ID=
-# Optional unless Authenticated Gateway or BYOK is enabled
 CLOUDFLARE_AI_GATEWAY_TOKEN=
-
-# Anthropic Claude API
-# Your Anthropic API key (sk-ant-...)
 ANTHROPIC_API_KEY=
-# Optional local dev fallback ('true') if AI Gateway is not configured yet
 ALLOW_DIRECT_ANTHROPIC=
-
-# Configurable Model IDs (optional overrides — defaults live in src/config/ai-models.ts)
 LLM_MODEL_DRAFT=
 LLM_MODEL_VERIFY=
 LLM_MODEL_EXTRACT=
 LLM_MODEL_CLASSIFY=
 
 # Internal Smoke Routes & Observability
-# Random bearer secret protecting /api/internal/* in production
 INTERNAL_SMOKE_TOKEN=
-# Optional Sentry DSN for error tracking
 SENTRY_DSN=
