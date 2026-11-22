@@ -43,6 +43,13 @@
       "when": 1795290099396,
       "tag": "0005_add_citations_table",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795336994488,
+      "tag": "0006_add_writing_tables",
+      "breakpoints": true
     }
   ]
 }

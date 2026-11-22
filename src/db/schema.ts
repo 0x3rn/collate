@@ -81,6 +81,12 @@ export type SourceAccessStatus = (typeof SOURCE_ACCESS_STATUSES)[number];
 export const SOURCE_FETCH_STATUSES = ["pending", "fetched", "failed", "skipped"] as const;
 export type SourceFetchStatus = (typeof SOURCE_FETCH_STATUSES)[number];
 
+export const CHAPTER_VERSION_CREATORS = ["ai", "user", "revision"] as const;
+export type ChapterVersionCreator = (typeof CHAPTER_VERSION_CREATORS)[number];
+
+export const CLAIM_VERDICTS = ["supported", "partly_supported", "unsupported"] as const;
+export type ClaimVerdict = (typeof CLAIM_VERDICTS)[number];
+
 export const CITATION_VERIFICATION_STATUSES = [
   "unverified",
   "verified",
@@ -548,7 +554,104 @@ export const citations = sqliteTable(
   ]
 );
 
+export const chapterVersions = sqliteTable(
+  "chapter_versions",
+  {
+    id: text("id").primaryKey(),
+    chapterId: text("chapter_id")
+      .notNull()
+      .references(() => chapters.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    contentR2Key: text("content_r2_key").notNull(),
+    wordCount: integer("word_count").notNull().default(0),
+    pageCount: integer("page_count").notNull().default(0),
+    promptVersion: text("prompt_version").notNull().default("v1.0"),
+    createdBy: text("created_by", { enum: CHAPTER_VERSION_CREATORS }).notNull().default("ai"),
+    revisionNotes: text("revision_notes"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("chapter_versions_chapter_version_unique").on(table.chapterId, table.version),
+    index("chapter_versions_chapter_idx").on(table.chapterId),
+    check("chapter_versions_version_positive", sql`${table.version} >= 1`),
+    check(
+      "chapter_versions_counts_non_negative",
+      sql`${table.wordCount} >= 0 AND ${table.pageCount} >= 0`
+    ),
+  ]
+);
+
+export const sectionDrafts = sqliteTable(
+  "section_drafts",
+  {
+    id: text("id").primaryKey(),
+    sectionId: text("section_id")
+      .notNull()
+      .references(() => sections.id, { onDelete: "cascade" }),
+    chapterId: text("chapter_id")
+      .notNull()
+      .references(() => chapters.id, { onDelete: "cascade" }),
+    runId: text("run_id").notNull(),
+    draftText: text("draft_text").notNull(),
+    wordCount: integer("word_count").notNull().default(0),
+    status: text("status", { enum: SECTION_STATUSES }).notNull().default("verified"),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("section_drafts_section_run_unique").on(table.sectionId, table.runId),
+    index("section_drafts_chapter_run_idx").on(table.chapterId, table.runId),
+  ]
+);
+
+export const claims = sqliteTable(
+  "claims",
+  {
+    id: text("id").primaryKey(),
+    sectionId: text("section_id")
+      .notNull()
+      .references(() => sections.id, { onDelete: "cascade" }),
+    chapterId: text("chapter_id")
+      .notNull()
+      .references(() => chapters.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    citationId: text("citation_id").references(() => citations.id, { onDelete: "set null" }),
+    passageId: text("passage_id").references(() => sourcePassages.id, { onDelete: "set null" }),
+    verdict: text("verdict", { enum: CLAIM_VERDICTS }).notNull().default("unsupported"),
+    verified: integer("verified", { mode: "boolean" }).notNull().default(false),
+    verifierNotes: text("verifier_notes"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("claims_chapter_idx").on(table.chapterId),
+    index("claims_section_idx").on(table.sectionId),
+  ]
+);
+
+export const projectDatasets = sqliteTable(
+  "project_datasets",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    r2Key: text("r2_key").notNull(),
+    rowCount: integer("row_count").notNull().default(0),
+    columnsJson: text("columns_json").notNull().default("[]"),
+    summaryJson: text("summary_json").notNull().default("{}"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("project_datasets_project_idx").on(table.projectId),
+    check("project_datasets_rows_non_negative", sql`${table.rowCount} >= 0`),
+  ]
+);
+
 export type UserRecord = typeof users.$inferSelect;
+export type ChapterVersionRecord = typeof chapterVersions.$inferSelect;
+export type SectionDraftRecord = typeof sectionDrafts.$inferSelect;
+export type ClaimRecord = typeof claims.$inferSelect;
+export type ProjectDatasetRecord = typeof projectDatasets.$inferSelect;
 export type CitationRecord = typeof citations.$inferSelect;
 export type SectionRecord = typeof sections.$inferSelect;
 export type ProjectMemoryRecord = typeof projectMemory.$inferSelect;
