@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CREDIT_PACKS } from "@/config/pricing";
 import {
-  DELIVERABLES_LIST,
+  CITATION_SPECIMENS,
   getPublicPricingSummary,
   LANDING_FAQS,
   REFUSAL_RULES,
@@ -33,12 +33,23 @@ const BANNED_BUZZWORDS = [
   "all-in-one",
 ];
 
-describe("Landing page copy quality & config consistency", () => {
-  it("contains zero banned marketing buzzwords across all public landing sections", () => {
-    const allStrings = [
+const INTERNAL_TECH_JARGON = [
+  "paystack",
+  "stripe",
+  "cloudflare",
+  "n-gram",
+  "two-pass",
+  "backend",
+  "json",
+  "workers",
+];
+
+describe("Landing page copy quality, non-technical language & config sync", () => {
+  it("contains zero banned marketing buzzwords and zero leaked internal tech jargon", () => {
+    const allText = [
       ...WORK_TYPE_OVERVIEWS.flatMap((w) => [w.title, w.pageRange, w.bestFor, w.structureNote]),
       ...WORKFLOW_STEPS.flatMap((s) => [s.title, s.body]),
-      ...DELIVERABLES_LIST.flatMap((d) => [d.title, d.detail]),
+      ...CITATION_SPECIMENS.map((c) => c.label),
       ...REFUSAL_RULES.flatMap((r) => [r.willDo, r.wontDo]),
       ...LANDING_FAQS.flatMap((f) => [f.question, f.answer]),
     ]
@@ -46,7 +57,11 @@ describe("Landing page copy quality & config consistency", () => {
       .toLowerCase();
 
     for (const buzz of BANNED_BUZZWORDS) {
-      expect(allStrings, `Found banned buzzword: ${buzz}`).not.toContain(buzz);
+      expect(allText, `Banned buzzword found: ${buzz}`).not.toContain(buzz);
+    }
+
+    for (const tech of INTERNAL_TECH_JARGON) {
+      expect(allText, `Leaked technical jargon found: ${tech}`).not.toContain(tech);
     }
   });
 
@@ -54,7 +69,8 @@ describe("Landing page copy quality & config consistency", () => {
     const summary = getPublicPricingSummary();
     expect(summary.packs).toHaveLength(CREDIT_PACKS.length);
     expect(summary.packs[0]?.credits).toBe(CREDIT_PACKS[0]?.credits);
+    expect(summary.packs[1]?.featured).toBe(true);
     expect(summary.packs[1]?.ngnFormatted).toContain("16,500");
-    expect(summary.packs[2]?.usdFormatted).toBe("$32 USD");
+    expect(summary.packs[2]?.usdFormatted).toBe("$32");
   });
 });
