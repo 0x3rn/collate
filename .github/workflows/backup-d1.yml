@@ -1,0 +1,56 @@
+name: Scheduled D1 Database Backup
+
+on:
+  schedule:
+    - cron: "0 3 * * *" # Daily at 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Export Remote D1 SQL Snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Cloudflare backup credentials
+        id: cf_check
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CF_TOKEN" ] && [ -n "$CF_ACCOUNT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipped D1 backup because CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID are not set in GitHub Secrets."
+          fi
+
+      - name: Export D1 database snapshot
+        if: steps.cf_check.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          mkdir -p backups
+          pnpm exec wrangler d1 export DB --remote --output=backups/collate-d1-${{ github.run_id }}.sql
+
+      - name: Upload private backup artifact (30-day retention)
+        if: steps.cf_check.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: collate-d1-backup-${{ github.run_id }}
+          path: backups/*.sql
+          retention-days: 30

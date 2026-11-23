@@ -63,7 +63,7 @@ export const DISALLOWED_TOPIC_PATTERNS: ReadonlyArray<{
   {
     category: "explosives_or_weapons",
     pattern:
-      /\b(how to (make|build|manufacture|assemble) (a )?(bomb|explosive|ied|pipe bomb|chemical weapon|biological weapon))\b/i,
+      /\b((how to|instructions on how to|guide to) (make|build|manufacture|assemble) (an? )?(\w+\s+){0,2}(bomb|explosive|ied|pipe bomb|chemical weapon|biological weapon))\b/i,
   },
   {
     category: "self_harm",
@@ -72,7 +72,7 @@ export const DISALLOWED_TOPIC_PATTERNS: ReadonlyArray<{
   {
     category: "cyber_exploitation",
     pattern:
-      /\b(write|create|build|deploy) (ransomware|keylogger|trojan|malware|phishing kit|zero[- ]day exploit)\b/i,
+      /\b((how to )?(write|create|build|deploy) (an? )?(ransomware|keylogger|trojan|malware|phishing kit|zero[- ]?day exploit))\b/i,
   },
   {
     category: "illicit_drug_synthesis",
@@ -82,7 +82,7 @@ export const DISALLOWED_TOPIC_PATTERNS: ReadonlyArray<{
   {
     category: "fraud_instruction",
     pattern:
-      /\b(how to (forge|counterfeit|launder money|commit credit card fraud|steal identities))\b/i,
+      /\b((how to|manual on how to|guide to) (forge|counterfeit|launder money|commit credit card fraud|steal identities))\b/i,
   },
 ];
 
