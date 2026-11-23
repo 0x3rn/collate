@@ -84,6 +84,25 @@ export type SourceFetchStatus = (typeof SOURCE_FETCH_STATUSES)[number];
 export const CHAPTER_VERSION_CREATORS = ["ai", "user", "revision"] as const;
 export type ChapterVersionCreator = (typeof CHAPTER_VERSION_CREATORS)[number];
 
+export const PAYMENT_PROVIDERS = ["paystack", "stripe"] as const;
+export type PaymentProvider = (typeof PAYMENT_PROVIDERS)[number];
+
+export const PAYMENT_STATUSES = ["pending", "succeeded", "failed", "refunded"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const CREDIT_LEDGER_TYPES = [
+  "purchase",
+  "reserve",
+  "capture",
+  "refund",
+  "manual_adjustment",
+  "sweep_fee",
+] as const;
+export type CreditLedgerType = (typeof CREDIT_LEDGER_TYPES)[number];
+
+export const RESERVATION_STATUSES = ["held", "captured", "refunded"] as const;
+export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
+
 export const EXPORT_SCOPES = ["chapter", "combined", "full"] as const;
 export type ExportScope = (typeof EXPORT_SCOPES)[number];
 
@@ -748,7 +767,91 @@ export const notificationPreferences = sqliteTable("notification_preferences", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 
+export const payments = sqliteTable(
+  "payments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: PAYMENT_PROVIDERS }).notNull(),
+    providerReference: text("provider_reference").notNull(),
+    currency: text("currency").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    creditsGranted: integer("credits_granted").notNull(),
+    status: text("status", { enum: PAYMENT_STATUSES }).notNull().default("pending"),
+    rawEventJson: text("raw_event_json"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("payments_provider_ref_unique").on(table.provider, table.providerReference),
+    index("payments_user_idx").on(table.userId, table.createdAt),
+    check(
+      "payments_amount_positive",
+      sql`${table.amountMinor} > 0 AND ${table.creditsGranted} > 0`
+    ),
+  ]
+);
+
+export const creditLedger = sqliteTable(
+  "credit_ledger",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }),
+    chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
+    paymentId: text("payment_id").references(() => payments.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    entryType: text("entry_type", { enum: CREDIT_LEDGER_TYPES }).notNull(),
+    creditsDelta: integer("credits_delta").notNull(),
+    balanceAfter: integer("balance_after").notNull(),
+    note: text("note"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("credit_ledger_idempotency_unique").on(table.idempotencyKey),
+    index("credit_ledger_user_idx").on(table.userId, table.createdAt),
+    check("credit_ledger_balance_non_negative", sql`${table.balanceAfter} >= 0`),
+  ]
+);
+
+export const creditReservations = sqliteTable(
+  "credit_reservations",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    chapterId: text("chapter_id").references(() => chapters.id, { onDelete: "set null" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    creditsReserved: integer("credits_reserved").notNull(),
+    status: text("status", { enum: RESERVATION_STATUSES }).notNull().default("held"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    settledAt: integer("settled_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    uniqueIndex("credit_reservations_idempotency_unique").on(table.idempotencyKey),
+    index("credit_reservations_user_idx").on(table.userId, table.createdAt),
+    check("credit_reservations_positive", sql`${table.creditsReserved} > 0`),
+  ]
+);
+
+export const systemControls = sqliteTable("system_controls", {
+  key: text("key").primaryKey(),
+  valueJson: text("value_json").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export type UserRecord = typeof users.$inferSelect;
+export type PaymentRecord = typeof payments.$inferSelect;
+export type CreditLedgerRecord = typeof creditLedger.$inferSelect;
+export type CreditReservationRecord = typeof creditReservations.$inferSelect;
 export type NotificationPreferencesRecord = typeof notificationPreferences.$inferSelect;
 export type ExportRecord = typeof exportsTable.$inferSelect;
 export type OriginalityReportRecord = typeof originalityReports.$inferSelect;
