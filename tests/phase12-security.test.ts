@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type AppDb } from "@/db/client";
 import { createWizardDraftProject } from "@/db/queries/wizard";
-import { chapterVersions, projects, sources, users } from "@/db/schema";
+import { authRateLimits, chapters, chapterVersions, projects, sources, users } from "@/db/schema";
 import { CONFIRMATION_PHRASE, handleDeleteAccount } from "@/lib/account/delete-account";
 import {
   handleGetMe,
@@ -11,11 +11,13 @@ import {
   handleVerifyEmail,
   type HttpAuthDeps,
 } from "@/lib/auth/http-handlers";
+import { AUTH_RATE_LIMITS } from "@/lib/auth/rate-limit";
 import { setGlobalCircuitBreaker } from "@/lib/billing/ledger";
 import type { EmailMessage, EmailSender } from "@/lib/email/mailer";
+import { handleCreateExport, type R2ReadWriteBucket } from "@/lib/export/http-handlers";
 import { extractCleanTextFromHtml, sanitizeUntrustedSourceText } from "@/lib/research/extractor";
 import { handleStartResearchSweep } from "@/lib/research/http-handlers";
-import { handleStartChapter } from "@/lib/writing/http-handlers";
+import { handleRequestChapterChanges, handleStartChapter } from "@/lib/writing/http-handlers";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
 
 function createTestMailer() {
@@ -131,7 +133,7 @@ describe("Phase 12 — Security Hardening, Abuse Controls, Prompt-Injection & Ac
     );
     expect(blockedRes.status).toBe(400);
 
-    // Circuit breaker paused -> chapter start returns 503
+    // Circuit breaker paused -> chapter start & revision both return 503
     await setGlobalCircuitBreaker(db, true, "Emergency spend freeze", now);
     const ch1 = draft.chapters.find((c) => c.number === 1)!;
     const pausedCh = await handleStartChapter(
@@ -144,6 +146,89 @@ describe("Phase 12 — Security Hardening, Abuse Controls, Prompt-Injection & Ac
       authDeps
     );
     expect(pausedCh.status).toBe(503);
+
+    await db.update(chapters).set({ status: "ready" }).where(eq(chapters.id, ch1.id));
+    const pausedRevise = await handleRequestChapterChanges(
+      new Request(
+        `https://collate.app/api/projects/${draft.project.id}/chapters/${ch1.id}/revise`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "https://collate.app",
+            cookie: user.cookie,
+          },
+          body: JSON.stringify({
+            instructions: "Expand section 2 with verified empirical citations.",
+          }),
+        }
+      ),
+      draft.project.id,
+      ch1.id,
+      authDeps
+    );
+    expect(pausedRevise.status).toBe(503);
+
+    // Unpause circuit breaker and verify rate limits on both revision and export generation
+    await setGlobalCircuitBreaker(db, false, "Resumed", now);
+    const testIp = "203.0.113.10";
+    await db.insert(authRateLimits).values({
+      key: `chapterStart:${user.userId.toLowerCase()}:${testIp}`,
+      count: AUTH_RATE_LIMITS.chapterStart.maxAttempts,
+      windowStartMs: now.getTime(),
+      updatedAt: now,
+    });
+    const rateLimitedRevise = await handleRequestChapterChanges(
+      new Request(
+        `https://collate.app/api/projects/${draft.project.id}/chapters/${ch1.id}/revise`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "https://collate.app",
+            cookie: user.cookie,
+            "cf-connecting-ip": testIp,
+          },
+          body: JSON.stringify({
+            instructions: "Expand section 2 with verified empirical citations.",
+          }),
+        }
+      ),
+      draft.project.id,
+      ch1.id,
+      authDeps
+    );
+    expect(rateLimitedRevise.status).toBe(429);
+    expect(Number(rateLimitedRevise.headers.get("retry-after"))).toBeGreaterThan(0);
+
+    await db.insert(authRateLimits).values({
+      key: `exportGenerate:${user.userId.toLowerCase()}:${testIp}`,
+      count: AUTH_RATE_LIMITS.exportGenerate.maxAttempts,
+      windowStartMs: now.getTime(),
+      updatedAt: now,
+    });
+    const noopBucket: R2ReadWriteBucket = {
+      async put() {},
+      async get() {
+        return null;
+      },
+    };
+    const rateLimitedExport = await handleCreateExport(
+      new Request(`https://collate.app/api/projects/${draft.project.id}/exports`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: user.cookie,
+          "cf-connecting-ip": testIp,
+        },
+        body: JSON.stringify({ scope: "full", format: "docx" }),
+      }),
+      draft.project.id,
+      { ...authDeps, bucket: noopBucket, signingSecret: "test-secret" }
+    );
+    expect(rateLimitedExport.status).toBe(429);
+    expect(Number(rateLimitedExport.headers.get("retry-after"))).toBeGreaterThan(0);
   });
 
   it("erases account, cascades D1 projects, deletes R2 objects, and revokes session on valid re-auth", async () => {

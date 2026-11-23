@@ -10,8 +10,14 @@ import {
   exportsTable,
   projectMemory,
 } from "@/db/schema";
-import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
+import {
+  extractClientIp,
+  isAllowedOrigin,
+  jsonNoStore,
+  readSessionTokenFromRequest,
+} from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
+import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
 import { renderDraftWithCitations } from "@/lib/citations/formatter";
 import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pdf";
@@ -87,6 +93,24 @@ export async function handleCreateExport(
   const signingSecret = resolveSigningSecret(deps);
   if (!signingSecret) {
     return jsonNoStore({ ok: false, error: "Export signing secret is not configured." }, 503);
+  }
+
+  const now = (deps.nowFn ?? (() => new Date()))();
+  const rl = await consumeAuthRateLimit(
+    deps.db,
+    "exportGenerate",
+    `${session.user.id}:${extractClientIp(request)}`,
+    now.getTime()
+  );
+  if (!rl.allowed) {
+    return jsonNoStore(
+      {
+        ok: false,
+        error: "Hourly export limit reached. Please wait before generating another file.",
+      },
+      429,
+      { "retry-after": String(rl.retryAfterSeconds) }
+    );
   }
 
   let rawBody: unknown;
@@ -241,7 +265,6 @@ export async function handleCreateExport(
     contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   }
 
-  const now = (deps.nowFn ?? (() => new Date()))();
   const exportId = `exp_${crypto.randomUUID()}`;
   const r2Key = `exports/${projectId}/${exportId}.${format}`;
   const sha256 = await sha256Hex(bytes);

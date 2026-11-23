@@ -62,13 +62,24 @@ describe("Phase 2 Setup Wizard — D1 persistence, validation, and isolation", (
     expect(s2.project.title).toContain("Battery Storage");
     expect(s2.project.wizardStep).toBe(3);
 
-    // Step 3: Mocked research sweep
+    // Step 3: Mocked research sweep fails closed by default, succeeds only when dev mock is explicitly allowed
+    await expect(
+      saveWizardStepForUser(
+        db,
+        "usr_alice",
+        projectId,
+        { step: 3, simulateVerdict: "feasible" },
+        fixedNow
+      )
+    ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+
     const s3 = await saveWizardStepForUser(
       db,
       "usr_alice",
       projectId,
       { step: 3, simulateVerdict: "feasible" },
-      fixedNow
+      fixedNow,
+      { allowMockVerdict: true }
     );
     expect(s3.project.status).toBe("feasible");
     expect(s3.project.idealPages).toBe(100);
@@ -192,7 +203,8 @@ describe("Phase 2 Setup Wizard — D1 persistence, validation, and isolation", (
       "usr_alice",
       oneQ.project.id,
       { step: 3, simulateVerdict: "feasible" },
-      fixedNow
+      fixedNow,
+      { allowMockVerdict: true }
     );
     expect(oneSweep.questions).toHaveLength(1);
     expect(oneSweep.feasibilityReports).toHaveLength(1);
@@ -222,7 +234,8 @@ describe("Phase 2 Setup Wizard — D1 persistence, validation, and isolation", (
       "usr_alice",
       fiveQ.project.id,
       { step: 3, simulateVerdict: "feasible" },
-      fixedNow
+      fixedNow,
+      { allowMockVerdict: true }
     );
     expect(fiveSweep.questions).toHaveLength(5);
     expect(fiveSweep.feasibilityReports).toHaveLength(5);

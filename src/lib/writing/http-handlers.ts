@@ -1,14 +1,29 @@
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
+import {
+  estimateAssignmentCredits,
+  estimateChapterCredits,
+  estimateRevisionCredits,
+} from "@/config/pricing";
 import { WRITING_CONFIG } from "@/config/writing";
 import { getProjectForUser } from "@/db/queries/projects";
-import { chapters, projectDatasets } from "@/db/schema";
-import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
+import { chapters, projectDatasets, projectSettings, questions } from "@/db/schema";
+import {
+  extractClientIp,
+  isAllowedOrigin,
+  jsonNoStore,
+  readSessionTokenFromRequest,
+} from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
-import { extractClientIp } from "@/lib/auth/cookies";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
-import { checkSpendCircuitBreaker } from "@/lib/billing/ledger";
+import {
+  BillingError,
+  checkSpendCircuitBreaker,
+  refundChapterReservation,
+  reserveChapterCredits,
+} from "@/lib/billing/ledger";
+import { calculateWordsPerPage } from "@/lib/outline/planner";
 import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { WriteChapterPayload } from "./chapter-orchestrator";
 import { analyzeCsvDataset } from "./results-data";
@@ -133,6 +148,36 @@ export async function handleStartChapter(
     );
   }
   const runId = `crun_${crypto.randomUUID()}`;
+  const creditsRequired = estimateChapterCredits(target.pageBudget);
+  let reservationId: string;
+
+  try {
+    const reserved = await reserveChapterCredits(deps.db, {
+      userId: auth.session.user.id,
+      projectId: auth.project.id,
+      chapterId: target.id,
+      credits: creditsRequired,
+      idempotencyKey: `chapter:${runId}`,
+      note: `Reserved ${creditsRequired} credits for Chapter ${target.number}: ${target.title}`,
+      now,
+    });
+    reservationId = reserved.reservationId;
+  } catch (err) {
+    if (err instanceof BillingError) {
+      return jsonNoStore(
+        {
+          ok: false,
+          code: err.code,
+          creditsRequired,
+          error: `Chapter ${target.number} requires ${creditsRequired} credits. Top up your credit balance on your Account page to continue.`,
+        },
+        err.status
+      );
+    }
+    throw err;
+  }
+
+  const previousStatus = target.status;
   let workflowInstanceId: string | null = null;
 
   await deps.db
@@ -141,25 +186,54 @@ export async function handleStartChapter(
     .where(eq(chapters.id, target.id));
 
   if (deps.workflowLauncher) {
-    const instance = await deps.workflowLauncher.create({
-      params: {
-        runId,
-        projectId: auth.project.id,
-        chapterId: target.id,
-        createdBy: "ai",
-        spendCapUsd: WRITING_CONFIG.limits.perChapterSpendCapUsd,
-      },
-    });
-    workflowInstanceId = instance.id;
+    try {
+      const instance = await deps.workflowLauncher.create({
+        params: {
+          runId,
+          projectId: auth.project.id,
+          chapterId: target.id,
+          reservationId,
+          createdBy: "ai",
+          spendCapUsd: WRITING_CONFIG.limits.perChapterSpendCapUsd,
+        },
+      });
+      workflowInstanceId = instance.id;
 
-    await deps.db
-      .update(chapters)
-      .set({ workflowInstanceId, updatedAt: now })
-      .where(eq(chapters.id, target.id));
+      await deps.db
+        .update(chapters)
+        .set({ workflowInstanceId, updatedAt: now })
+        .where(eq(chapters.id, target.id));
+    } catch {
+      await deps.db
+        .update(chapters)
+        .set({ status: previousStatus, updatedAt: now })
+        .where(eq(chapters.id, target.id));
+      await refundChapterReservation(
+        deps.db,
+        reservationId,
+        "Chapter workflow failed to start",
+        now
+      );
+      return jsonNoStore(
+        {
+          ok: false,
+          error: "Could not start chapter drafting. Your reserved credits were refunded.",
+        },
+        500
+      );
+    }
   }
 
   return jsonNoStore(
-    { ok: true, alreadyRunning: false, chapterId: target.id, runId, workflowInstanceId },
+    {
+      ok: true,
+      alreadyRunning: false,
+      chapterId: target.id,
+      runId,
+      workflowInstanceId,
+      creditsReserved: creditsRequired,
+      reservationId,
+    },
     202
   );
 }
@@ -252,7 +326,62 @@ export async function handleRequestChapterChanges(
   }
 
   const now = (deps.nowFn ?? (() => new Date()))();
+  const breaker = await checkSpendCircuitBreaker(deps.db, now);
+  if (!breaker.allowed) {
+    return jsonNoStore(
+      { ok: false, error: breaker.reason ?? "Chapter revisions are temporarily paused." },
+      503
+    );
+  }
+
+  const rl = await consumeAuthRateLimit(
+    deps.db,
+    "chapterStart",
+    `${auth.session.user.id}:${extractClientIp(request)}`,
+    now.getTime()
+  );
+  if (!rl.allowed) {
+    return jsonNoStore(
+      {
+        ok: false,
+        error: "Hourly chapter run limit reached. Please wait before requesting another revision.",
+      },
+      429,
+      { "retry-after": String(rl.retryAfterSeconds) }
+    );
+  }
+
   const runId = `rev_${crypto.randomUUID()}`;
+  const creditsRequired = estimateRevisionCredits(target.pageBudget);
+  let reservationId: string;
+
+  try {
+    const reserved = await reserveChapterCredits(deps.db, {
+      userId: auth.session.user.id,
+      projectId: auth.project.id,
+      chapterId: target.id,
+      credits: creditsRequired,
+      idempotencyKey: `revision:${runId}`,
+      note: `Reserved ${creditsRequired} credits for Chapter ${target.number} revision`,
+      now,
+    });
+    reservationId = reserved.reservationId;
+  } catch (err) {
+    if (err instanceof BillingError) {
+      return jsonNoStore(
+        {
+          ok: false,
+          code: err.code,
+          creditsRequired,
+          error: `Revising Chapter ${target.number} requires ${creditsRequired} credits. Top up your credit balance on your Account page to continue.`,
+        },
+        err.status
+      );
+    }
+    throw err;
+  }
+
+  const previousStatus = target.status;
   let workflowInstanceId: string | null = null;
 
   await deps.db
@@ -261,25 +390,57 @@ export async function handleRequestChapterChanges(
     .where(eq(chapters.id, target.id));
 
   if (deps.workflowLauncher) {
-    const instance = await deps.workflowLauncher.create({
-      params: {
-        runId,
-        projectId: auth.project.id,
-        chapterId: target.id,
-        createdBy: "revision",
-        revisionNotes: parsed.data.instructions,
-        spendCapUsd: WRITING_CONFIG.limits.maxRevisionSpendCapUsd,
-      },
-    });
-    workflowInstanceId = instance.id;
+    try {
+      const instance = await deps.workflowLauncher.create({
+        params: {
+          mode: target.chapterType === "assignment" ? "assignment" : "chapter",
+          runId,
+          projectId: auth.project.id,
+          chapterId: target.id,
+          reservationId,
+          createdBy: "revision",
+          revisionNotes: parsed.data.instructions,
+          spendCapUsd: WRITING_CONFIG.limits.maxRevisionSpendCapUsd,
+        },
+      });
+      workflowInstanceId = instance.id;
 
-    await deps.db
-      .update(chapters)
-      .set({ workflowInstanceId, updatedAt: now })
-      .where(eq(chapters.id, target.id));
+      await deps.db
+        .update(chapters)
+        .set({ workflowInstanceId, updatedAt: now })
+        .where(eq(chapters.id, target.id));
+    } catch {
+      await deps.db
+        .update(chapters)
+        .set({ status: previousStatus, updatedAt: now })
+        .where(eq(chapters.id, target.id));
+      await refundChapterReservation(
+        deps.db,
+        reservationId,
+        "Revision workflow failed to start",
+        now
+      );
+      return jsonNoStore(
+        {
+          ok: false,
+          error: "Could not start chapter revision. Your reserved credits were refunded.",
+        },
+        500
+      );
+    }
   }
 
-  return jsonNoStore({ ok: true, chapterId: target.id, runId, workflowInstanceId }, 202);
+  return jsonNoStore(
+    {
+      ok: true,
+      chapterId: target.id,
+      runId,
+      workflowInstanceId,
+      creditsReserved: creditsRequired,
+      reservationId,
+    },
+    202
+  );
 }
 
 const UploadDatasetSchema = z.object({
@@ -363,5 +524,200 @@ export async function handleUploadProjectDataset(
       },
     },
     201
+  );
+}
+
+export async function handleStartAssignment(
+  request: Request,
+  projectId: string,
+  deps: ChapterHttpDeps
+): Promise<Response> {
+  const auth = await authenticateAndLoadProject(request, projectId, deps, true);
+  if (!auth.ok) return auth.error;
+
+  if (auth.project.type !== "assignment") {
+    return jsonNoStore({ ok: false, error: "This endpoint is only for Assignment projects." }, 400);
+  }
+
+  const qRows = await deps.db
+    .select()
+    .from(questions)
+    .where(eq(questions.projectId, auth.project.id))
+    .orderBy(asc(questions.orderIndex));
+
+  if (qRows.length === 0) {
+    return jsonNoStore(
+      { ok: false, error: "Add at least one assignment question before starting." },
+      400
+    );
+  }
+
+  const [existingCh] = await deps.db
+    .select()
+    .from(chapters)
+    .where(and(eq(chapters.projectId, auth.project.id), eq(chapters.number, 1)))
+    .limit(1);
+
+  if (existingCh && (existingCh.status === "queued" || existingCh.status === "writing")) {
+    return jsonNoStore(
+      {
+        ok: true,
+        alreadyRunning: true,
+        chapterId: existingCh.id,
+        workflowInstanceId: existingCh.workflowInstanceId,
+      },
+      202
+    );
+  }
+
+  const now = (deps.nowFn ?? (() => new Date()))();
+  const breaker = await checkSpendCircuitBreaker(deps.db, now);
+  if (!breaker.allowed) {
+    return jsonNoStore(
+      { ok: false, error: breaker.reason ?? "Assignment drafting is temporarily paused." },
+      503
+    );
+  }
+
+  const rl = await consumeAuthRateLimit(
+    deps.db,
+    "chapterStart",
+    `${auth.session.user.id}:${extractClientIp(request)}`,
+    now.getTime()
+  );
+  if (!rl.allowed) {
+    return jsonNoStore(
+      {
+        ok: false,
+        error: "Hourly drafting limit reached. Please wait before starting another assignment.",
+      },
+      429,
+      { "retry-after": String(rl.retryAfterSeconds) }
+    );
+  }
+
+  const runId = `asgn_${crypto.randomUUID()}`;
+  const creditsRequired = estimateAssignmentCredits(auth.project.targetPages, qRows.length);
+
+  const [settingsRow] = await deps.db
+    .select()
+    .from(projectSettings)
+    .where(eq(projectSettings.projectId, auth.project.id))
+    .limit(1);
+  const wpp = calculateWordsPerPage(
+    settingsRow?.lineSpacing ?? "double",
+    settingsRow?.fontSizePt ?? 12
+  );
+  const targetPages = Math.max(qRows.length * 2, auth.project.targetPages ?? qRows.length * 4);
+
+  let chapterId = existingCh?.id;
+  const previousStatus = existingCh?.status ?? "not_started";
+  let createdNewChapter = false;
+
+  if (!chapterId) {
+    chapterId = `chp_${crypto.randomUUID()}`;
+    createdNewChapter = true;
+    await deps.db.insert(chapters).values({
+      id: chapterId,
+      projectId: auth.project.id,
+      number: 1,
+      title: auth.project.title,
+      chapterType: "assignment",
+      pageBudget: targetPages,
+      wordBudget: targetPages * wpp,
+      isAutoReferences: false,
+      status: "not_started",
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  let reservationId: string;
+  try {
+    const reserved = await reserveChapterCredits(deps.db, {
+      userId: auth.session.user.id,
+      projectId: auth.project.id,
+      chapterId,
+      credits: creditsRequired,
+      idempotencyKey: `assignment:${runId}`,
+      note: `Reserved ${creditsRequired} credits for assignment (${qRows.length} question${qRows.length === 1 ? "" : "s"})`,
+      now,
+    });
+    reservationId = reserved.reservationId;
+  } catch (err) {
+    if (createdNewChapter) {
+      await deps.db.delete(chapters).where(eq(chapters.id, chapterId));
+    }
+    if (err instanceof BillingError) {
+      return jsonNoStore(
+        {
+          ok: false,
+          code: err.code,
+          creditsRequired,
+          error: `Drafting this assignment requires ${creditsRequired} credits. Top up your credit balance on your Account page to continue.`,
+        },
+        err.status
+      );
+    }
+    throw err;
+  }
+
+  await deps.db
+    .update(chapters)
+    .set({ status: "queued", startedAt: existingCh?.startedAt ?? now, updatedAt: now })
+    .where(eq(chapters.id, chapterId));
+
+  let workflowInstanceId: string | null = null;
+  if (deps.workflowLauncher) {
+    try {
+      const instance = await deps.workflowLauncher.create({
+        params: {
+          mode: "assignment",
+          runId,
+          projectId: auth.project.id,
+          chapterId,
+          reservationId,
+          createdBy: "ai",
+          spendCapUsd: WRITING_CONFIG.limits.perChapterSpendCapUsd,
+        },
+      });
+      workflowInstanceId = instance.id;
+
+      await deps.db
+        .update(chapters)
+        .set({ workflowInstanceId, updatedAt: now })
+        .where(eq(chapters.id, chapterId));
+    } catch {
+      await deps.db
+        .update(chapters)
+        .set({ status: previousStatus, updatedAt: now })
+        .where(eq(chapters.id, chapterId));
+      await refundChapterReservation(
+        deps.db,
+        reservationId,
+        "Assignment workflow failed to start",
+        now
+      );
+      return jsonNoStore(
+        {
+          ok: false,
+          error: "Could not start assignment drafting. Your reserved credits were refunded.",
+        },
+        500
+      );
+    }
+  }
+
+  return jsonNoStore(
+    {
+      ok: true,
+      alreadyRunning: false,
+      chapterId,
+      runId,
+      workflowInstanceId,
+      creditsReserved: creditsRequired,
+      reservationId,
+    },
+    202
   );
 }

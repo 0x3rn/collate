@@ -55,6 +55,7 @@ export class ResearchSweepWorkflow extends WorkflowEntrypoint<Env, ResearchSweep
             : undefined,
         embedder: aiBinding ? createWorkersAiEmbedder(aiBinding) : undefined,
         vectorStore: vectorizeBinding ? createVectorizeStore(vectorizeBinding) : undefined,
+        citationFetchFn: globalThis.fetch,
       }
     );
   }

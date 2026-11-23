@@ -172,7 +172,7 @@ describe("Phase 2 Setup Wizard HTTP API", () => {
     );
     expect(bobPatch.status).toBe(404);
 
-    const patch = (payload: Record<string, unknown>) =>
+    const patch = (payload: Record<string, unknown>, overrideDeps: HttpAuthDeps = deps) =>
       handleSaveWizardStep(
         new Request(`https://collate.app/api/projects/${projectId}/wizard`, {
           method: "PATCH",
@@ -184,13 +184,21 @@ describe("Phase 2 Setup Wizard HTTP API", () => {
           body: JSON.stringify(payload),
         }),
         projectId,
-        deps
+        overrideDeps
       );
 
     expect(
       (await patch({ step: 2, title: "Urban Flood Resilience in Lagos", level: "Masters" })).status
     ).toBe(200);
-    expect((await patch({ step: 3, simulateVerdict: "feasible" })).status).toBe(200);
+
+    // NN-1 production guard: simulated verdicts are strictly forbidden in prod (403)
+    const prodMockBlocked = await patch({ step: 3, simulateVerdict: "feasible" });
+    expect(prodMockBlocked.status).toBe(403);
+
+    // Local dev preview works only when appEnv === "dev"
+    expect(
+      (await patch({ step: 3, simulateVerdict: "feasible" }, { ...deps, appEnv: "dev" })).status
+    ).toBe(200);
     expect((await patch({ step: 4, targetPages: 75 })).status).toBe(200);
 
     const dupRes = await patch({
@@ -304,7 +312,18 @@ describe("Phase 2 Setup Wizard HTTP API", () => {
     });
     expect(step2.status).toBe(200);
 
-    const step3 = await patch({ step: 3, simulateVerdict: "feasible" });
+    const step3ProdBlocked = await patch({ step: 3, simulateVerdict: "feasible" });
+    expect(step3ProdBlocked.status).toBe(403);
+
+    const step3 = await handleSaveWizardStep(
+      new Request(`https://collate.app/api/projects/${projectId}/wizard`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", origin: "https://collate.app", cookie },
+        body: JSON.stringify({ step: 3, simulateVerdict: "feasible" }),
+      }),
+      projectId,
+      { ...deps, appEnv: "dev" }
+    );
     expect(step3.status).toBe(200);
     const s3Json = (await step3.json()) as { wizard: SerializedWizardState };
     expect(s3Json.wizard.questions).toHaveLength(5);

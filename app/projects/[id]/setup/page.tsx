@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { env } from "cloudflare:workers";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SetupWizardClient } from "@/components/wizard/setup-wizard-client";
@@ -24,6 +25,8 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
   }
 
   const serialized = serializeWizardState(state);
+  const runtimeEnv = env as unknown as Record<string, string | undefined>;
+  const allowDevPreview = runtimeEnv.APP_ENV?.trim() === "dev";
 
   return (
     <>
@@ -46,7 +49,7 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
           </p>
         </div>
 
-        <SetupWizardClient initialWizard={serialized} />
+        <SetupWizardClient initialWizard={serialized} allowDevPreview={allowDevPreview} />
       </main>
       <SiteFooter />
     </>

@@ -2,7 +2,7 @@ import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { WRITING_CONFIG } from "@/config/writing";
 import type { AppDb } from "@/db/client";
-import { syncCitationRegistryForProject } from "@/db/queries/citations";
+import { syncCitationRegistryForProject, verifyProjectCitations } from "@/db/queries/citations";
 import {
   chapterFingerprints,
   chapters,
@@ -21,18 +21,28 @@ import {
   type SpellingVariant,
 } from "@/db/schema";
 import type { CallLLMContext } from "@/lib/ai/call-llm";
+import { captureChapterReservation, refundChapterReservation } from "@/lib/billing/ledger";
+import { createBrowserRunPageMeasurer } from "@/lib/export/pdf-assembler";
+import type { ExportFormattingSettings } from "@/lib/export/templates";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
-import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
+import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { EmbeddingProvider, VectorStore } from "@/lib/research/embeddings";
 import {
   runOriginalityGateWithRewrite,
   type ExternalPlagiarismProvider,
 } from "@/lib/originality/checker";
 import { normalizeTitle } from "@/lib/research/dedupe";
+import {
+  CoverDetailsSchema,
+  DEFAULT_COVER_DETAILS,
+  DEFAULT_FRONT_MATTER,
+  FrontMatterTogglesSchema,
+} from "@/lib/wizard/schema";
 import { buildLabelledResultsFramework, type DatasetAnalysisResult } from "./results-data";
 import { retrieveEvidencePassages, type RetrievedEvidencePassage } from "./retrieval";
 import {
   countWords,
+  defaultMeasurePages,
   draftAndVerifySection,
   enforceChapterLengthBand,
   summarizeChapterForMemory,
@@ -41,9 +51,11 @@ import {
 import { isChapterTimedOut } from "./state-machine";
 
 export const WriteChapterPayloadSchema = z.object({
+  mode: z.enum(["chapter", "assignment"]).default("chapter"),
   runId: z.string().min(1),
   projectId: z.string().min(1),
   chapterId: z.string().min(1),
+  reservationId: z.string().min(1).nullable().optional(),
   createdBy: z.enum(["ai", "revision"]).default("ai"),
   revisionNotes: z.string().trim().max(2000).nullable().optional(),
   spendCapUsd: z.number().positive().default(WRITING_CONFIG.limits.perChapterSpendCapUsd),
@@ -63,6 +75,7 @@ export interface LoadedChapterContext {
   spelling: SpellingVariant;
   targetPages: number;
   wordsPerPage: number;
+  formatting: ExportFormattingSettings;
   startedAtIso: string;
   priorSummaryText: string;
   glossaryText: string;
@@ -109,6 +122,9 @@ export interface WriteChapterDeps {
   llmCtx: CallLLMContext;
   embedder?: EmbeddingProvider;
   vectorStore?: VectorStore;
+  citationFetchFn?: typeof fetch;
+  contactEmail?: string;
+  browser?: BrowserRunPdfBinding;
   measurePagesFn?: MeasurePagesFn;
   externalPlagiarismProvider?: ExternalPlagiarismProvider;
   waiveOriginalityGate?: boolean;
@@ -119,6 +135,16 @@ export interface WriteChapterDeps {
     chapterNumber: number;
     chapterTitle: string;
     version: number;
+    wordCount: number;
+    pageCount: number;
+    allChaptersComplete: boolean;
+  }) => Promise<void>;
+  onNeedsAttention?: (info: {
+    projectId: string;
+    chapterId: string;
+    chapterNumber: number;
+    chapterTitle: string;
+    reason: string;
   }) => Promise<void>;
 }
 
@@ -177,6 +203,14 @@ export async function runWriteChapterOrchestration(
         });
 
       await syncCitationRegistryForProject(deps.db, project.id, now);
+      if (deps.citationFetchFn) {
+        await verifyProjectCitations(deps.db, project.id, {
+          onlyUnverified: true,
+          fetchFn: deps.citationFetchFn,
+          contactEmail: deps.contactEmail,
+          now,
+        });
+      }
 
       const [settingsRow] = await deps.db
         .select()
@@ -277,6 +311,32 @@ export async function runWriteChapterOrchestration(
         }
       }
 
+      let frontMatter = { ...DEFAULT_FRONT_MATTER };
+      let cover = { ...DEFAULT_COVER_DETAILS };
+      if (settingsRow?.frontMatterJson) {
+        try {
+          frontMatter = FrontMatterTogglesSchema.parse(JSON.parse(settingsRow.frontMatterJson));
+        } catch {
+          frontMatter = { ...DEFAULT_FRONT_MATTER };
+        }
+      }
+      if (settingsRow?.coverJson) {
+        try {
+          cover = CoverDetailsSchema.parse(JSON.parse(settingsRow.coverJson));
+        } catch {
+          cover = { ...DEFAULT_COVER_DETAILS };
+        }
+      }
+      const formatting: ExportFormattingSettings = {
+        font: settingsRow?.font ?? "Times New Roman",
+        fontSizePt: settingsRow?.fontSizePt ?? 12,
+        lineSpacing: settingsRow?.lineSpacing ?? "double",
+        marginsMm: settingsRow?.marginsMm ?? 25,
+        pageNumbering: settingsRow?.pageNumbering ?? true,
+        frontMatter,
+        cover,
+      };
+
       return {
         userId: project.userId,
         projectId: project.id,
@@ -289,6 +349,7 @@ export async function runWriteChapterOrchestration(
         spelling: settingsRow?.spelling ?? "uk",
         targetPages,
         wordsPerPage,
+        formatting,
         startedAtIso: startedAt.toISOString(),
         priorSummaryText,
         glossaryText,
@@ -347,6 +408,43 @@ export async function runWriteChapterOrchestration(
           .update(chapters)
           .set({ status: "ready", finishedAt: now, updatedAt: now })
           .where(eq(chapters.id, context.chapterId));
+
+        if (payload.reservationId) {
+          try {
+            await captureChapterReservation(deps.db, payload.reservationId, now);
+          } catch {
+            // Non-fatal if reservation already settled
+          }
+        }
+
+        const allProjectChapters = await deps.db
+          .select()
+          .from(chapters)
+          .where(eq(chapters.projectId, context.projectId));
+        const contentChapters = allProjectChapters.filter((c) => !c.isAutoReferences);
+        const allChaptersComplete =
+          contentChapters.length > 0 &&
+          contentChapters.every((c) => c.status === "ready" || c.status === "approved");
+
+        if (allChaptersComplete) {
+          await deps.db
+            .update(projects)
+            .set({ status: "completed", updatedAt: now })
+            .where(eq(projects.id, context.projectId));
+        }
+
+        if (deps.onChapterReady) {
+          await deps.onChapterReady({
+            projectId: context.projectId,
+            chapterId: context.chapterId,
+            chapterNumber: context.chapterNumber,
+            chapterTitle: context.chapterTitle,
+            version: nextVersion,
+            wordCount,
+            pageCount,
+            allChaptersComplete,
+          });
+        }
 
         return {
           chapterId: context.chapterId,
@@ -507,6 +605,19 @@ export async function runWriteChapterOrchestration(
         vectorStore: deps.vectorStore,
       });
 
+      const effectiveMeasurePagesFn: MeasurePagesFn = deps.measurePagesFn
+        ? deps.measurePagesFn
+        : deps.browser
+          ? async (md, wpp) => {
+              try {
+                const measurer = createBrowserRunPageMeasurer(deps.browser!, context.formatting);
+                return await measurer(md, wpp);
+              } catch {
+                return defaultMeasurePages(md, wpp);
+              }
+            }
+          : defaultMeasurePages;
+
       const calibrated = await enforceChapterLengthBand(
         {
           workflowId: payload.runId,
@@ -517,7 +628,7 @@ export async function runWriteChapterOrchestration(
           wordsPerPage: context.wordsPerPage,
           passages: allPassages,
           spendCapUsd: payload.spendCapUsd,
-          measurePagesFn: deps.measurePagesFn,
+          measurePagesFn: effectiveMeasurePagesFn,
         },
         deps.llmCtx
       );
@@ -569,7 +680,7 @@ export async function runWriteChapterOrchestration(
 
       const finalMarkdown = originalityOutcome.markdown;
       const finalWordCount = countWords(finalMarkdown);
-      const finalPageCount = Math.max(1, Math.round(finalWordCount / context.wordsPerPage));
+      const finalPageCount = await effectiveMeasurePagesFn(finalMarkdown, context.wordsPerPage);
       const finalStatus: "ready" | "needs_attention" = originalityOutcome.evaluation.passed
         ? "ready"
         : "needs_attention";
@@ -709,6 +820,40 @@ export async function runWriteChapterOrchestration(
         .from(claims)
         .where(and(eq(claims.chapterId, context.chapterId), eq(claims.verified, true)));
 
+      if (payload.reservationId) {
+        try {
+          if (finalStatus === "ready") {
+            await captureChapterReservation(deps.db, payload.reservationId, now);
+          } else {
+            await refundChapterReservation(
+              deps.db,
+              payload.reservationId,
+              "Chapter paused for originality review and needs attention",
+              now
+            );
+          }
+        } catch {
+          // Non-fatal if reservation already settled
+        }
+      }
+
+      const allProjectChapters = await deps.db
+        .select()
+        .from(chapters)
+        .where(eq(chapters.projectId, context.projectId));
+      const contentChapters = allProjectChapters.filter((c) => !c.isAutoReferences);
+      const allChaptersComplete =
+        finalStatus === "ready" &&
+        contentChapters.length > 0 &&
+        contentChapters.every((c) => c.status === "ready" || c.status === "approved");
+
+      if (allChaptersComplete) {
+        await deps.db
+          .update(projects)
+          .set({ status: "completed", updatedAt: now })
+          .where(eq(projects.id, context.projectId));
+      }
+
       if (finalStatus === "ready" && deps.onChapterReady) {
         await deps.onChapterReady({
           projectId: context.projectId,
@@ -716,6 +861,17 @@ export async function runWriteChapterOrchestration(
           chapterNumber: context.chapterNumber,
           chapterTitle: context.chapterTitle,
           version: nextVersion,
+          wordCount: finalWordCount,
+          pageCount: finalPageCount,
+          allChaptersComplete,
+        });
+      } else if (finalStatus === "needs_attention" && deps.onNeedsAttention) {
+        await deps.onNeedsAttention({
+          projectId: context.projectId,
+          chapterId: context.chapterId,
+          chapterNumber: context.chapterNumber,
+          chapterTitle: context.chapterTitle,
+          reason: `Originality gate flagged similarity above threshold (overlap ${originalityOutcome.evaluation.overlapScore}%, quotes ${originalityOutcome.evaluation.quoteSharePct}%). Review and edit before continuing.`,
         });
       }
 
@@ -731,94 +887,625 @@ export async function runWriteChapterOrchestration(
       };
     });
   } catch (err) {
+    const failedAt = nowFn();
     await deps.db
       .update(chapters)
-      .set({ status: "needs_attention", updatedAt: nowFn() })
+      .set({ status: "needs_attention", updatedAt: failedAt })
       .where(eq(chapters.id, payload.chapterId));
+
+    if (payload.reservationId) {
+      try {
+        await refundChapterReservation(
+          deps.db,
+          payload.reservationId,
+          "Chapter drafting failed before completion",
+          failedAt
+        );
+      } catch {
+        // Preserve original workflow error
+      }
+    }
+
+    if (deps.onNeedsAttention) {
+      try {
+        const [chRow] = await deps.db
+          .select()
+          .from(chapters)
+          .where(eq(chapters.id, payload.chapterId))
+          .limit(1);
+        const reason =
+          err instanceof Error
+            ? err.message.slice(0, 300)
+            : "Chapter run paused unexpectedly. Completed sections were saved.";
+        await deps.onNeedsAttention({
+          projectId: payload.projectId,
+          chapterId: payload.chapterId,
+          chapterNumber: chRow?.number ?? 1,
+          chapterTitle: chRow?.title ?? "Chapter",
+          reason,
+        });
+      } catch {
+        // Never mask the original workflow error with a notification failure
+      }
+    }
     throw err;
   }
 }
 
+export interface LoadedAssignmentContext {
+  userId: string;
+  projectId: string;
+  chapterId: string;
+  topic: string;
+  level: string | null;
+  spelling: SpellingVariant;
+  targetPages: number;
+  wordsPerPage: number;
+  formatting: ExportFormattingSettings;
+  questionPlan: Array<{
+    questionId: string;
+    sectionId: string;
+    orderIndex: number;
+    text: string;
+    wordBudget: number;
+  }>;
+}
+
+export interface AssignmentQuestionStepOutput {
+  sectionId: string;
+  reusedCheckpoint: boolean;
+}
+
+export interface AssignmentDraftOutput extends FinalizeChapterOutput {
+  questionCount: number;
+}
+
+export interface WriteAssignmentSteps {
+  loadContext(fn: () => Promise<LoadedAssignmentContext>): Promise<LoadedAssignmentContext>;
+  draftQuestion(
+    questionIndex: number,
+    fn: () => Promise<AssignmentQuestionStepOutput>
+  ): Promise<AssignmentQuestionStepOutput>;
+  assembleAndFinalize(fn: () => Promise<AssignmentDraftOutput>): Promise<AssignmentDraftOutput>;
+}
+
 export async function runWriteAssignmentOrchestration(
-  params: { runId: string; projectId: string; spendCapUsd?: number },
-  deps: Pick<WriteChapterDeps, "db" | "bucket" | "llmCtx" | "embedder" | "vectorStore" | "nowFn">
-): Promise<{ contentR2Key: string; questionCount: number; wordCount: number }> {
-  const now = (deps.nowFn ?? (() => new Date()))();
-  const [project] = await deps.db
-    .select()
-    .from(projects)
-    .where(eq(projects.id, params.projectId))
-    .limit(1);
-  if (!project) throw new Error(`Project ${params.projectId} not found`);
+  params: {
+    runId: string;
+    projectId: string;
+    chapterId?: string;
+    reservationId?: string | null;
+    createdBy?: "ai" | "revision";
+    revisionNotes?: string | null;
+    spendCapUsd?: number;
+  },
+  deps: WriteChapterDeps,
+  steps?: WriteAssignmentSteps
+): Promise<AssignmentDraftOutput> {
+  const nowFn = deps.nowFn ?? (() => new Date());
+  const spendCapUsd = params.spendCapUsd ?? WRITING_CONFIG.limits.perChapterSpendCapUsd;
+  const stepRunner: WriteAssignmentSteps = steps ?? {
+    loadContext: (fn) => fn(),
+    draftQuestion: (_idx, fn) => fn(),
+    assembleAndFinalize: (fn) => fn(),
+  };
 
-  const qRows = await deps.db
-    .select()
-    .from(questions)
-    .where(eq(questions.projectId, project.id))
-    .orderBy(asc(questions.orderIndex));
-  if (qRows.length === 0) throw new Error("Assignment has no questions to answer.");
+  let trackedChapterId = params.chapterId ?? "";
 
-  await syncCitationRegistryForProject(deps.db, project.id, now);
-  const [settingsRow] = await deps.db
-    .select()
-    .from(projectSettings)
-    .where(eq(projectSettings.projectId, project.id))
-    .limit(1);
+  try {
+    const context = await stepRunner.loadContext(async () => {
+      const now = nowFn();
+      const [project] = await deps.db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, params.projectId))
+        .limit(1);
+      if (!project) throw new Error(`Project ${params.projectId} not found`);
 
-  const wordsPerPage = calculateWordsPerPage(
-    settingsRow?.lineSpacing ?? "double",
-    settingsRow?.fontSizePt ?? 12
-  );
-  const targetPagesPerQ = Math.max(
-    2,
-    Math.round((project.targetPages ?? qRows.length * 4) / qRows.length)
-  );
-  const blocks: string[] = [`# ${project.title}`];
+      const qRows = await deps.db
+        .select()
+        .from(questions)
+        .where(eq(questions.projectId, project.id))
+        .orderBy(asc(questions.orderIndex));
+      if (qRows.length === 0) throw new Error("Assignment has no questions to answer.");
 
-  for (const q of qRows) {
-    const passages = await retrieveEvidencePassages(deps.db, {
-      projectId: project.id,
-      queryText: q.text,
-      topK: 8,
-      embedder: deps.embedder,
-      vectorStore: deps.vectorStore,
-    });
+      const [settingsRow] = await deps.db
+        .select()
+        .from(projectSettings)
+        .where(eq(projectSettings.projectId, project.id))
+        .limit(1);
 
-    const ans = await draftAndVerifySection(
-      {
-        workflowId: params.runId,
+      const wordsPerPage = calculateWordsPerPage(
+        settingsRow?.lineSpacing ?? "double",
+        settingsRow?.fontSizePt ?? 12
+      );
+      const targetPages = Math.max(qRows.length * 2, project.targetPages ?? qRows.length * 4);
+      const targetPagesPerQ = Math.max(2, Math.round(targetPages / qRows.length));
+
+      let frontMatter = { ...DEFAULT_FRONT_MATTER };
+      let cover = { ...DEFAULT_COVER_DETAILS };
+      if (settingsRow?.frontMatterJson) {
+        try {
+          frontMatter = FrontMatterTogglesSchema.parse(JSON.parse(settingsRow.frontMatterJson));
+        } catch {
+          frontMatter = { ...DEFAULT_FRONT_MATTER };
+        }
+      }
+      if (settingsRow?.coverJson) {
+        try {
+          cover = CoverDetailsSchema.parse(JSON.parse(settingsRow.coverJson));
+        } catch {
+          cover = { ...DEFAULT_COVER_DETAILS };
+        }
+      }
+
+      const formatting: ExportFormattingSettings = {
+        font: settingsRow?.font ?? "Times New Roman",
+        fontSizePt: settingsRow?.fontSizePt ?? 12,
+        lineSpacing: settingsRow?.lineSpacing ?? "double",
+        marginsMm: settingsRow?.marginsMm ?? 25,
+        pageNumbering: settingsRow?.pageNumbering ?? true,
+        frontMatter,
+        cover,
+      };
+
+      // Ensure a single combined assignment chapter record exists for versioning, reader, and PDF/DOCX exports
+      let chapterId = params.chapterId;
+      if (!chapterId) {
+        const [existingCh] = await deps.db
+          .select()
+          .from(chapters)
+          .where(and(eq(chapters.projectId, project.id), eq(chapters.number, 1)))
+          .limit(1);
+        chapterId = existingCh?.id;
+      }
+
+      if (!chapterId) {
+        chapterId = `chp_${crypto.randomUUID()}`;
+        await deps.db.insert(chapters).values({
+          id: chapterId,
+          projectId: project.id,
+          number: 1,
+          title: project.title,
+          chapterType: "assignment",
+          pageBudget: targetPages,
+          wordBudget: targetPages * wordsPerPage,
+          isAutoReferences: false,
+          status: "writing",
+          startedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        });
+      } else {
+        await deps.db
+          .update(chapters)
+          .set({ status: "writing", startedAt: now, updatedAt: now })
+          .where(eq(chapters.id, chapterId));
+      }
+
+      await deps.db
+        .update(projects)
+        .set({ status: "in_progress", updatedAt: now })
+        .where(eq(projects.id, project.id));
+
+      await deps.db
+        .insert(projectMemory)
+        .values({
+          projectId: project.id,
+          outlineJson: "{}",
+          outlineLocked: true,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: projectMemory.projectId,
+          set: { outlineLocked: true, updatedAt: now },
+        });
+
+      await syncCitationRegistryForProject(deps.db, project.id, now);
+      if (deps.citationFetchFn) {
+        await verifyProjectCitations(deps.db, project.id, {
+          onlyUnverified: true,
+          fetchFn: deps.citationFetchFn,
+          contactEmail: deps.contactEmail,
+          now,
+        });
+      }
+
+      const existingSections = await deps.db
+        .select()
+        .from(sections)
+        .where(eq(sections.chapterId, chapterId))
+        .orderBy(asc(sections.orderIndex));
+      const existingByOrder = new Map(existingSections.map((s) => [s.orderIndex, s]));
+
+      const questionPlan: Array<{
+        questionId: string;
+        sectionId: string;
+        orderIndex: number;
+        text: string;
+        wordBudget: number;
+      }> = [];
+
+      for (const q of qRows) {
+        const wordBudget = targetPagesPerQ * wordsPerPage;
+        const existingSec = existingByOrder.get(q.orderIndex);
+        let sectionId = existingSec?.id;
+        if (!sectionId) {
+          sectionId = `sec_${crypto.randomUUID()}`;
+          await deps.db.insert(sections).values({
+            id: sectionId,
+            chapterId,
+            orderIndex: q.orderIndex,
+            heading: `Question ${q.orderIndex}: ${q.text}`.slice(0, 180),
+            wordBudget,
+            status: "not_started",
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+        questionPlan.push({
+          questionId: q.id,
+          sectionId,
+          orderIndex: q.orderIndex,
+          text: q.text,
+          wordBudget,
+        });
+      }
+
+      return {
+        userId: project.userId,
         projectId: project.id,
+        chapterId,
         topic: project.title,
-        chapterTitle: `Question ${q.orderIndex}`,
-        sectionHeading: q.text,
-        wordBudget: targetPagesPerQ * wordsPerPage,
         level: project.level,
         spelling: settingsRow?.spelling ?? "uk",
-        priorSummaryText: "",
-        glossaryText: "",
-        passages,
-        spendCapUsd: params.spendCapUsd ?? WRITING_CONFIG.limits.perChapterSpendCapUsd,
-      },
-      deps.llmCtx
-    );
+        targetPages,
+        wordsPerPage,
+        formatting,
+        questionPlan,
+      };
+    });
 
-    blocks.push(`## Question ${q.orderIndex}: ${q.text}\n\n${ans.prose}`);
+    trackedChapterId = context.chapterId;
+
+    for (let idx = 0; idx < context.questionPlan.length; idx++) {
+      const q = context.questionPlan[idx]!;
+      await stepRunner.draftQuestion(idx, async () => {
+        const now = nowFn();
+        const [checkpoint] = await deps.db
+          .select()
+          .from(sectionDrafts)
+          .where(
+            and(eq(sectionDrafts.sectionId, q.sectionId), eq(sectionDrafts.runId, params.runId))
+          )
+          .limit(1);
+
+        if (checkpoint && checkpoint.status === "verified") {
+          return { sectionId: q.sectionId, reusedCheckpoint: true };
+        }
+
+        const passages = await retrieveEvidencePassages(deps.db, {
+          projectId: context.projectId,
+          queryText: q.text,
+          questionId: q.questionId,
+          topK: WRITING_CONFIG.limits.topPassagesPerSection,
+          embedder: deps.embedder,
+          vectorStore: deps.vectorStore,
+        });
+
+        const ans = await draftAndVerifySection(
+          {
+            workflowId: params.runId,
+            projectId: context.projectId,
+            topic: context.topic,
+            chapterTitle: `Question ${q.orderIndex}`,
+            sectionHeading: q.text,
+            wordBudget: q.wordBudget,
+            level: context.level,
+            spelling: context.spelling,
+            priorSummaryText: "",
+            glossaryText: "",
+            revisionInstructions: params.revisionNotes,
+            passages,
+            spendCapUsd,
+          },
+          deps.llmCtx
+        );
+
+        await deps.db.delete(claims).where(eq(claims.sectionId, q.sectionId));
+        for (const clm of ans.claims) {
+          await deps.db.insert(claims).values({
+            id: `clm_${crypto.randomUUID()}`,
+            sectionId: q.sectionId,
+            chapterId: context.chapterId,
+            text: clm.text,
+            citationId: clm.citationId,
+            passageId: clm.passageId,
+            verdict: clm.verdict,
+            verified: clm.verified,
+            verifierNotes: clm.verifierNotes,
+            createdAt: now,
+          });
+        }
+
+        await deps.db
+          .insert(sectionDrafts)
+          .values({
+            id: `sdr_${crypto.randomUUID()}`,
+            sectionId: q.sectionId,
+            chapterId: context.chapterId,
+            runId: params.runId,
+            draftText: ans.prose,
+            wordCount: ans.wordCount,
+            status: "verified",
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [sectionDrafts.sectionId, sectionDrafts.runId],
+            set: {
+              draftText: ans.prose,
+              wordCount: ans.wordCount,
+              status: "verified",
+              updatedAt: now,
+            },
+          });
+
+        await deps.db
+          .update(sections)
+          .set({ status: "verified", updatedAt: now })
+          .where(eq(sections.id, q.sectionId));
+
+        return { sectionId: q.sectionId, reusedCheckpoint: false };
+      });
+    }
+
+    return await stepRunner.assembleAndFinalize(async () => {
+      const now = nowFn();
+      const draftRows = await deps.db
+        .select()
+        .from(sectionDrafts)
+        .where(
+          and(eq(sectionDrafts.chapterId, context.chapterId), eq(sectionDrafts.runId, params.runId))
+        );
+      const draftBySectionId = new Map(draftRows.map((d) => [d.sectionId, d.draftText]));
+
+      const blocks = [
+        `# ${context.topic}`,
+        ...context.questionPlan.map((q) => {
+          const body = draftBySectionId.get(q.sectionId) ?? "";
+          return `## Question ${q.orderIndex}: ${q.text}\n\n${body}`;
+        }),
+      ];
+      const assembledMarkdown = blocks.join("\n\n");
+
+      const allProjectPassages = await deps.db
+        .select()
+        .from(sourcePassages)
+        .where(eq(sourcePassages.projectId, context.projectId));
+
+      const normalizedTopic = normalizeTitle(context.topic);
+      const otherFingerprintsRaw = await deps.db
+        .select()
+        .from(chapterFingerprints)
+        .where(
+          and(
+            eq(chapterFingerprints.topicNormalized, normalizedTopic),
+            ne(chapterFingerprints.userId, context.userId)
+          )
+        )
+        .limit(30);
+
+      const otherUserFingerprints = otherFingerprintsRaw.map((fp) => {
+        let hashes: string[];
+        try {
+          hashes = JSON.parse(fp.shingleHashesJson) as string[];
+        } catch {
+          hashes = [];
+        }
+        return { chapterVersionId: fp.chapterVersionId, shingleHashes: hashes };
+      });
+
+      const originalityOutcome = await runOriginalityGateWithRewrite({
+        workflowId: params.runId,
+        projectId: context.projectId,
+        chapterTitle: context.topic,
+        draftMarkdown: assembledMarkdown,
+        sourcePassages: allProjectPassages.map((p) => ({
+          passageId: p.id,
+          sourceId: p.sourceId,
+          text: p.text,
+        })),
+        otherUserFingerprints,
+        embedder: deps.embedder,
+        externalProvider: deps.externalPlagiarismProvider,
+        llmCtx: deps.llmCtx,
+        spendCapUsd,
+        waiveGate: deps.waiveOriginalityGate,
+      });
+
+      const effectiveMeasurePagesFn: MeasurePagesFn = deps.measurePagesFn
+        ? deps.measurePagesFn
+        : deps.browser
+          ? async (md, wpp) => {
+              try {
+                const measurer = createBrowserRunPageMeasurer(deps.browser!, context.formatting);
+                return await measurer(md, wpp);
+              } catch {
+                return defaultMeasurePages(md, wpp);
+              }
+            }
+          : defaultMeasurePages;
+
+      const finalMarkdown = originalityOutcome.markdown;
+      const finalWordCount = countWords(finalMarkdown);
+      const finalPageCount = await effectiveMeasurePagesFn(finalMarkdown, context.wordsPerPage);
+      const finalStatus: "ready" | "needs_attention" = originalityOutcome.evaluation.passed
+        ? "ready"
+        : "needs_attention";
+
+      const [latestVer] = await deps.db
+        .select()
+        .from(chapterVersions)
+        .where(eq(chapterVersions.chapterId, context.chapterId))
+        .orderBy(desc(chapterVersions.version))
+        .limit(1);
+
+      const nextVersion = (latestVer?.version ?? 0) + 1;
+      const versionId = `ver_${crypto.randomUUID()}`;
+      const contentR2Key = `chapters/${context.projectId}/${context.chapterId}/v${nextVersion}.md`;
+
+      await deps.bucket.put(contentR2Key, finalMarkdown, {
+        httpMetadata: { contentType: "text/markdown; charset=utf-8" },
+      });
+
+      await deps.db.insert(chapterVersions).values({
+        id: versionId,
+        chapterId: context.chapterId,
+        version: nextVersion,
+        contentR2Key,
+        wordCount: finalWordCount,
+        pageCount: finalPageCount,
+        promptVersion: WRITING_CONFIG.promptVersion,
+        createdBy: (params.createdBy ?? "ai") as ChapterVersionCreator,
+        revisionNotes: params.revisionNotes ?? null,
+        createdAt: now,
+      });
+
+      await deps.db.insert(originalityReports).values({
+        id: `org_${crypto.randomUUID()}`,
+        chapterVersionId: versionId,
+        chapterId: context.chapterId,
+        projectId: context.projectId,
+        overlapScore: originalityOutcome.evaluation.overlapScore,
+        semanticScore: originalityOutcome.evaluation.semanticScore,
+        quoteSharePct: originalityOutcome.evaluation.quoteSharePct,
+        crossUserScore: originalityOutcome.evaluation.crossUserScore,
+        flaggedSpansJson: JSON.stringify(originalityOutcome.evaluation.flaggedSpans),
+        externalReportJson: originalityOutcome.evaluation.externalReport
+          ? JSON.stringify(originalityOutcome.evaluation.externalReport)
+          : null,
+        passed: originalityOutcome.evaluation.passed,
+        waived: originalityOutcome.evaluation.waived,
+        createdAt: now,
+      });
+
+      await deps.db.insert(chapterFingerprints).values({
+        id: `cfp_${crypto.randomUUID()}`,
+        projectId: context.projectId,
+        userId: context.userId,
+        chapterVersionId: versionId,
+        topicNormalized: normalizedTopic,
+        shingleHashesJson: JSON.stringify(originalityOutcome.evaluation.shingleHashes),
+        createdAt: now,
+      });
+
+      await deps.db
+        .update(chapters)
+        .set({
+          status: finalStatus,
+          finishedAt: finalStatus === "ready" ? now : null,
+          updatedAt: now,
+        })
+        .where(eq(chapters.id, context.chapterId));
+
+      if (finalStatus === "ready") {
+        await deps.db
+          .update(projects)
+          .set({ status: "completed", updatedAt: now })
+          .where(eq(projects.id, context.projectId));
+      }
+
+      if (params.reservationId) {
+        try {
+          if (finalStatus === "ready") {
+            await captureChapterReservation(deps.db, params.reservationId, now);
+          } else {
+            await refundChapterReservation(
+              deps.db,
+              params.reservationId,
+              "Assignment paused for originality review and needs attention",
+              now
+            );
+          }
+        } catch {
+          // Non-fatal if reservation already settled
+        }
+      }
+
+      const verifiedClaims = await deps.db
+        .select()
+        .from(claims)
+        .where(and(eq(claims.chapterId, context.chapterId), eq(claims.verified, true)));
+
+      if (finalStatus === "ready" && deps.onChapterReady) {
+        await deps.onChapterReady({
+          projectId: context.projectId,
+          chapterId: context.chapterId,
+          chapterNumber: 1,
+          chapterTitle: context.topic,
+          version: nextVersion,
+          wordCount: finalWordCount,
+          pageCount: finalPageCount,
+          allChaptersComplete: true,
+        });
+      } else if (finalStatus === "needs_attention" && deps.onNeedsAttention) {
+        await deps.onNeedsAttention({
+          projectId: context.projectId,
+          chapterId: context.chapterId,
+          chapterNumber: 1,
+          chapterTitle: context.topic,
+          reason: `Originality gate flagged similarity above threshold (overlap ${originalityOutcome.evaluation.overlapScore}%).`,
+        });
+      }
+
+      return {
+        chapterId: context.chapterId,
+        versionId,
+        version: nextVersion,
+        contentR2Key,
+        wordCount: finalWordCount,
+        pageCount: finalPageCount,
+        totalVerifiedClaims: verifiedClaims.length,
+        status: finalStatus,
+        questionCount: context.questionPlan.length,
+      };
+    });
+  } catch (err) {
+    const failedAt = nowFn();
+    if (trackedChapterId) {
+      await deps.db
+        .update(chapters)
+        .set({ status: "needs_attention", updatedAt: failedAt })
+        .where(eq(chapters.id, trackedChapterId));
+    }
+    if (params.reservationId) {
+      try {
+        await refundChapterReservation(
+          deps.db,
+          params.reservationId,
+          "Assignment drafting failed before completion",
+          failedAt
+        );
+      } catch {
+        // Preserve original error
+      }
+    }
+    if (deps.onNeedsAttention && trackedChapterId) {
+      try {
+        await deps.onNeedsAttention({
+          projectId: params.projectId,
+          chapterId: trackedChapterId,
+          chapterNumber: 1,
+          chapterTitle: "Assignment answers",
+          reason:
+            err instanceof Error
+              ? err.message.slice(0, 300)
+              : "Assignment drafting paused unexpectedly.",
+        });
+      } catch {
+        // Ignore notification errors
+      }
+    }
+    throw err;
   }
-
-  const combined = blocks.join("\n\n");
-  const contentR2Key = `assignments/${project.id}/combined-${Date.now()}.md`;
-  await deps.bucket.put(contentR2Key, combined, {
-    httpMetadata: { contentType: "text/markdown; charset=utf-8" },
-  });
-
-  await deps.db
-    .update(projects)
-    .set({ status: "completed", updatedAt: now })
-    .where(eq(projects.id, project.id));
-
-  return {
-    contentR2Key,
-    questionCount: qRows.length,
-    wordCount: countWords(combined),
-  };
 }

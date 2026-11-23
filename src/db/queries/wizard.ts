@@ -27,10 +27,14 @@ import {
 } from "@/lib/wizard/schema";
 
 export class WizardError extends Error {
-  public readonly code: "NOT_FOUND" | "VALIDATION_ERROR";
+  public readonly code: "NOT_FOUND" | "VALIDATION_ERROR" | "FORBIDDEN";
   public readonly status: number;
 
-  constructor(code: "NOT_FOUND" | "VALIDATION_ERROR", message: string, status: number) {
+  constructor(
+    code: "NOT_FOUND" | "VALIDATION_ERROR" | "FORBIDDEN",
+    message: string,
+    status: number
+  ) {
     super(message);
     this.name = "WizardError";
     this.code = code;
@@ -271,7 +275,8 @@ export async function saveWizardStepForUser(
   userId: string,
   projectId: string,
   rawPayload: unknown,
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: { allowMockVerdict?: boolean } = {}
 ): Promise<HydratedWizardState> {
   const existing = await getWizardStateForUser(db, userId, projectId);
   if (!existing) {
@@ -368,7 +373,15 @@ export async function saveWizardStepForUser(
       })
       .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
   } else if (payload.step === 3) {
-    // Mock research sweep for Phase 2 (replaced by real ResearchSweep Workflow in Phases 3 & 4)
+    if (!options.allowMockVerdict) {
+      throw new WizardError(
+        "FORBIDDEN",
+        "Simulated feasibility verdicts are disabled outside local development. Run a live source sweep instead.",
+        403
+      );
+    }
+
+    // Local development-only mock research sweep helper (never enabled in staging/prod; NN-1)
     const { idealPages, reason } = recommendMockIdealPages({
       type: existing.project.type,
       level: existing.project.level,

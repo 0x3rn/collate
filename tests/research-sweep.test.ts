@@ -311,4 +311,100 @@ describe("Research Sweep HTTP API (idempotency and cross-user isolation)", () =>
     );
     expect(bobGet.status).toBe(404);
   });
+
+  it("grants 3 free sweeps, requires 2 credits on the 4th sweep (402 if empty), and refunds on workflow crash", async () => {
+    const alice = await signUpCookie(
+      "Alice Quota",
+      "alice.quota@uni.edu",
+      "steady archive shelf lamp"
+    );
+    await createProjectForUser(db, {
+      id: "prj_quota",
+      userId: alice.userId,
+      type: "research",
+      title: "Solar Desalination Efficiency",
+      now,
+    });
+
+    // Seed 3 completed free sweeps
+    for (let i = 1; i <= 3; i++) {
+      await db.insert(researchRuns).values({
+        id: `run_free_${i}`,
+        projectId: "prj_quota",
+        status: "completed",
+        startedAt: now,
+        updatedAt: now,
+      });
+    }
+
+    // 4th sweep with 0 credits -> 402
+    const blocked = await handleStartResearchSweep(
+      new Request("https://collate.app/api/projects/prj_quota/research", {
+        method: "POST",
+        headers: { origin: "https://collate.app", cookie: alice.cookie },
+      }),
+      "prj_quota",
+      authDeps
+    );
+    expect(blocked.status).toBe(402);
+
+    // Grant 5 credits -> 4th sweep reserves 2 credits
+    await db.update(users).set({ creditsBalance: 5 }).where(eq(users.id, alice.userId));
+    let capturedResId: string | null | undefined;
+    const paid = await handleStartResearchSweep(
+      new Request("https://collate.app/api/projects/prj_quota/research", {
+        method: "POST",
+        headers: { origin: "https://collate.app", cookie: alice.cookie },
+      }),
+      "prj_quota",
+      {
+        ...authDeps,
+        workflowLauncher: {
+          async create(opts) {
+            capturedResId = opts.params.reservationId;
+            return { id: "wf_paid_4" };
+          },
+        },
+      }
+    );
+    expect(paid.status).toBe(202);
+    const paidJson = (await paid.json()) as {
+      runId: string;
+      creditsReserved: number;
+      reservationId: string;
+    };
+    expect(paidJson.creditsReserved).toBe(2);
+    expect(capturedResId).toBe(paidJson.reservationId);
+
+    const [afterReserve] = await db.select().from(users).where(eq(users.id, alice.userId));
+    expect(afterReserve?.creditsBalance).toBe(3);
+
+    // Simulate sweep failure -> reservation is automatically refunded in full
+    await expect(
+      runResearchSweepOrchestration(
+        {
+          runId: paidJson.runId,
+          projectId: "prj_quota",
+          reservationId: paidJson.reservationId,
+        },
+        {
+          planQueries: async () => {
+            throw new Error("Simulated provider outage");
+          },
+          searchAndDedupe: (fn) => fn(),
+          fetchBatch: (_i, fn) => fn(),
+          scoreAndFinalize: (fn) => fn(),
+        },
+        {
+          db,
+          bucket: { async put() {} },
+          connectorEnv: {},
+          nowFn: () => now,
+        }
+      )
+    ).rejects.toThrow("Simulated provider outage");
+
+    const [afterRefund] = await db.select().from(users).where(eq(users.id, alice.userId));
+    expect(afterRefund?.creditsBalance).toBe(5);
+  });
 });

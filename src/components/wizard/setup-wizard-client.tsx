@@ -10,7 +10,13 @@ import { StepLengthForm, StepResearchSweep } from "./step-research-and-length";
 import { StepTopicForm } from "./step-topic-form";
 import { WizardStepper } from "./wizard-stepper";
 
-export function SetupWizardClient({ initialWizard }: { initialWizard: SerializedWizardState }) {
+export function SetupWizardClient({
+  initialWizard,
+  allowDevPreview = false,
+}: {
+  initialWizard: SerializedWizardState;
+  allowDevPreview?: boolean;
+}) {
   const router = useRouter();
   const [wizard, setWizard] = useState<SerializedWizardState>(initialWizard);
   const [currentStep, setCurrentStep] = useState<number>(
@@ -116,6 +122,7 @@ export function SetupWizardClient({ initialWizard }: { initialWizard: Serialized
           <StepResearchSweep
             wizard={wizard}
             saving={saving}
+            allowDevPreview={allowDevPreview}
             onSave={(payload) => saveStep(payload)}
             onRefreshWizard={refreshWizardState}
             onBackToTopic={() => setCurrentStep(2)}

@@ -1,14 +1,25 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { BILLING_POLICY } from "@/config/pricing";
 import { RESEARCH_CONFIG } from "@/config/research";
 import { getProjectForUser } from "@/db/queries/projects";
 import { researchRuns } from "@/db/schema";
-import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
+import {
+  extractClientIp,
+  isAllowedOrigin,
+  jsonNoStore,
+  readSessionTokenFromRequest,
+} from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
-import { extractClientIp } from "@/lib/auth/cookies";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
-import { checkSpendCircuitBreaker } from "@/lib/billing/ledger";
+import {
+  BillingError,
+  checkSpendCircuitBreaker,
+  countUserNonFailedSweeps,
+  refundChapterReservation,
+  reserveChapterCredits,
+} from "@/lib/billing/ledger";
 import { screenTopic } from "@/lib/feasibility/topic-screen";
 import { getLatestResearchRunSummary, type ResearchSweepPayload } from "./sweep-orchestrator";
 
@@ -122,6 +133,7 @@ export async function handleStartResearchSweep(
 
   const now = (deps.nowFn ?? (() => new Date()))();
   let runId = `run_${crypto.randomUUID()}`;
+  let resumingFailedRun = false;
 
   if (parsedBody.resumeRunId) {
     const [failedRun] = await deps.db
@@ -134,11 +146,50 @@ export async function handleStartResearchSweep(
 
     if (failedRun) {
       runId = failedRun.id;
-      await deps.db
-        .update(researchRuns)
-        .set({ status: "queued", error: null, updatedAt: now })
-        .where(eq(researchRuns.id, runId));
+      resumingFailedRun = true;
     }
+  }
+
+  // Enforce free feasibility sweep quota (3 free sweeps per user; 2 credits per additional sweep)
+  const usedSweeps = await countUserNonFailedSweeps(deps.db, session.user.id);
+  let reservationId: string | null = null;
+  let creditsReserved = 0;
+
+  if (usedSweeps >= BILLING_POLICY.freeFeasibilitySweepsPerUser) {
+    const sweepCost = BILLING_POLICY.paidFeasibilitySweepCredits;
+    const reserveKey = resumingFailedRun ? `sweep:${runId}:${now.getTime()}` : `sweep:${runId}`;
+    try {
+      const reserved = await reserveChapterCredits(deps.db, {
+        userId: session.user.id,
+        projectId: project.id,
+        credits: sweepCost,
+        idempotencyKey: reserveKey,
+        note: `Reserved ${sweepCost} credits for feasibility research sweep`,
+        now,
+      });
+      reservationId = reserved.reservationId;
+      creditsReserved = sweepCost;
+    } catch (err) {
+      if (err instanceof BillingError) {
+        return jsonNoStore(
+          {
+            ok: false,
+            code: err.code,
+            creditsRequired: sweepCost,
+            error: `You have used your ${BILLING_POLICY.freeFeasibilitySweepsPerUser} free topic sweeps. Additional sweeps require ${sweepCost} credits — top up on your Account page.`,
+          },
+          err.status
+        );
+      }
+      throw err;
+    }
+  }
+
+  if (resumingFailedRun) {
+    await deps.db
+      .update(researchRuns)
+      .set({ status: "queued", error: null, updatedAt: now })
+      .where(eq(researchRuns.id, runId));
   } else {
     await deps.db.insert(researchRuns).values({
       id: runId,
@@ -153,23 +204,53 @@ export async function handleStartResearchSweep(
 
   let workflowInstanceId: string | null = null;
   if (deps.workflowLauncher) {
-    const instance = await deps.workflowLauncher.create({
-      params: {
-        runId,
-        projectId: project.id,
-        questionId: parsedBody.questionId ?? null,
-        spendCapUsd: RESEARCH_CONFIG.caps.defaultSpendCapUsd,
-      },
-    });
-    workflowInstanceId = instance.id;
+    try {
+      const instance = await deps.workflowLauncher.create({
+        params: {
+          runId,
+          projectId: project.id,
+          questionId: parsedBody.questionId ?? null,
+          reservationId,
+          spendCapUsd: RESEARCH_CONFIG.caps.defaultSpendCapUsd,
+        },
+      });
+      workflowInstanceId = instance.id;
 
-    await deps.db
-      .update(researchRuns)
-      .set({ workflowInstanceId, updatedAt: now })
-      .where(eq(researchRuns.id, runId));
+      await deps.db
+        .update(researchRuns)
+        .set({ workflowInstanceId, updatedAt: now })
+        .where(eq(researchRuns.id, runId));
+    } catch {
+      await deps.db
+        .update(researchRuns)
+        .set({ status: "failed", error: "Could not start research workflow.", updatedAt: now })
+        .where(eq(researchRuns.id, runId));
+      if (reservationId) {
+        await refundChapterReservation(
+          deps.db,
+          reservationId,
+          "Research workflow failed to start",
+          now
+        );
+      }
+      return jsonNoStore(
+        { ok: false, error: "Could not start the research sweep. Any held credits were refunded." },
+        500
+      );
+    }
   }
 
-  return jsonNoStore({ ok: true, alreadyRunning: false, runId, workflowInstanceId }, 202);
+  return jsonNoStore(
+    {
+      ok: true,
+      alreadyRunning: false,
+      runId,
+      workflowInstanceId,
+      creditsReserved,
+      reservationId,
+    },
+    202
+  );
 }
 
 export async function handleGetResearchStatus(

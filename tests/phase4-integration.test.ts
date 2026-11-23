@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type AppDb } from "@/db/client";
 import { createProjectForUser } from "@/db/queries/projects";
 import { getWizardStateForUser } from "@/db/queries/wizard";
-import { feasibilityReports, projects, researchRuns, users } from "@/db/schema";
+import { feasibilityReports, projects, questions, researchRuns, sources, users } from "@/db/schema";
 import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { SourceConnector } from "@/lib/research/connectors/types";
 import { runResearchSweepOrchestration } from "@/lib/research/sweep-orchestrator";
@@ -181,5 +181,157 @@ describe("Phase 4 — Real Feasibility Gate integrated into ResearchSweepWorkflo
     expect(reports).toHaveLength(1);
     expect(reports[0]?.verdict).toBe("not_feasible");
     expect(reports[0]?.isMocked).toBe(false);
+  });
+
+  it("sweeps Assignment questions independently and stores distinct per-question verdicts", async () => {
+    await createProjectForUser(db, {
+      id: "prj_p4_assign",
+      userId: "usr_p4",
+      type: "assignment",
+      title: "Energy Policy Problem Set",
+      now,
+    });
+    await db.insert(questions).values([
+      {
+        id: "qst_good",
+        projectId: "prj_p4_assign",
+        text: "Evaluate empirical impacts of Pigouvian carbon taxation on industrial emissions.",
+        orderIndex: 1,
+        createdAt: now,
+      },
+      {
+        id: "qst_bad",
+        projectId: "prj_p4_assign",
+        text: "asdfghjkl qwrtypsdfg zxcvbnm",
+        orderIndex: 2,
+        createdAt: now,
+      },
+    ]);
+    await db.insert(researchRuns).values({
+      id: "run_p4_assign",
+      projectId: "prj_p4_assign",
+      status: "queued",
+      startedAt: now,
+      updatedAt: now,
+    });
+
+    const queryAwareConnector: SourceConnector = {
+      name: "mock_q_aware",
+      kind: "scholarly",
+      isEnabled: () => true,
+      async search(query) {
+        if (!query.toLowerCase().includes("pigouvian") && !query.toLowerCase().includes("carbon")) {
+          return [];
+        }
+        return [
+          {
+            url: "https://oecd.org/carbon-tax-1",
+            doi: "10.1000/carbon-1",
+            title: "Empirical Impacts of Pigouvian Carbon Taxation on Industrial Emissions",
+            authors: ["A. Okonkwo"],
+            year: 2024,
+            publisher: "OECD",
+            venue: "Energy Economics",
+            sourceType: "peer_reviewed",
+            connectorName: "mock_q_aware",
+            citationCount: 40,
+            abstractText:
+              "Empirical evaluation of Pigouvian carbon taxation on industrial emissions, theoretical foundations, challenges, and policy methodology.",
+            retrievedAt: now,
+          },
+          {
+            url: "https://worldbank.org/carbon-tax-2",
+            doi: "10.1000/carbon-2",
+            title: "Industrial Emissions Reductions Under Carbon Taxation Regimes",
+            authors: ["B. Mensah"],
+            year: 2023,
+            publisher: "World Bank",
+            venue: "Climate Policy",
+            sourceType: "peer_reviewed",
+            connectorName: "mock_q_aware",
+            citationCount: 30,
+            abstractText:
+              "Comparative analysis of Pigouvian carbon taxation outcomes across manufacturing sectors.",
+            retrievedAt: now,
+          },
+          {
+            url: "https://springer.com/carbon-tax-3",
+            doi: "10.1000/carbon-3",
+            title: "Carbon Pricing Policy Design and Empirical Industrial Evidence",
+            authors: ["C. Eze"],
+            year: 2025,
+            publisher: "Springer",
+            venue: "Environmental Economics",
+            sourceType: "peer_reviewed",
+            connectorName: "mock_q_aware",
+            citationCount: 22,
+            abstractText:
+              "Pigouvian carbon taxation industrial emissions policy challenges and empirical evidence.",
+            retrievedAt: now,
+          },
+          {
+            url: "https://wiley.com/carbon-tax-4",
+            doi: "10.1000/carbon-4",
+            title: "Pigouvian Taxation Framework and Industrial Carbon Abatement",
+            authors: ["D. Yusuf"],
+            year: 2024,
+            publisher: "Wiley",
+            venue: "Journal of Public Economics",
+            sourceType: "peer_reviewed",
+            connectorName: "mock_q_aware",
+            citationCount: 18,
+            abstractText:
+              "Theoretical foundations and empirical findings on Pigouvian carbon taxation.",
+            retrievedAt: now,
+          },
+        ];
+      },
+    };
+
+    const mockFetch: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt") || url.includes("unpaywall.org")) {
+        return new Response("", { status: 404 });
+      }
+      const body =
+        "Empirical evaluation of Pigouvian carbon taxation and industrial emissions abatement. ".repeat(
+          15
+        );
+      return new Response(`<html><body><article><p>${body}</p></article></body></html>`, {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    };
+
+    const out = await runResearchSweepOrchestration(
+      { runId: "run_p4_assign", projectId: "prj_p4_assign" },
+      immediateSteps,
+      {
+        db,
+        bucket: noopBucket,
+        connectorEnv: {},
+        connectors: [queryAwareConnector],
+        fetchFn: mockFetch,
+        nowFn: () => now,
+      }
+    );
+
+    expect(out.verdict).toBe("needs_refinement");
+    const reports = await db
+      .select()
+      .from(feasibilityReports)
+      .where(eq(feasibilityReports.projectId, "prj_p4_assign"));
+    expect(reports).toHaveLength(2);
+
+    const goodRep = reports.find((r) => r.questionId === "qst_good");
+    const badRep = reports.find((r) => r.questionId === "qst_bad");
+    expect(goodRep?.verdict).toBe("feasible");
+    expect(badRep?.verdict).toBe("not_feasible");
+
+    const storedSources = await db
+      .select()
+      .from(sources)
+      .where(eq(sources.projectId, "prj_p4_assign"));
+    expect(storedSources.every((s) => s.questionId === "qst_good")).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { RESEARCH_CONFIG } from "@/config/research";
 import type { AppDb } from "@/db/client";
+import { syncCitationRegistryForProject, verifyProjectCitations } from "@/db/queries/citations";
 import {
   feasibilityReports,
   projects,
@@ -12,6 +13,7 @@ import {
   type FeasibilityVerdict,
 } from "@/db/schema";
 import type { CallLLMContext } from "@/lib/ai/call-llm";
+import { captureChapterReservation, refundChapterReservation } from "@/lib/billing/ledger";
 import {
   evaluateAssignmentFeasibility,
   evaluateFeasibility,
@@ -33,6 +35,7 @@ export const ResearchSweepPayloadSchema = z.object({
   runId: z.string().min(1),
   projectId: z.string().min(1),
   questionId: z.string().min(1).nullable().optional(),
+  reservationId: z.string().min(1).nullable().optional(),
   spendCapUsd: z.number().positive().default(RESEARCH_CONFIG.caps.defaultSpendCapUsd),
   maxSourcesToFetch: z
     .number()
@@ -47,7 +50,8 @@ export type ResearchSweepPayload = z.input<typeof ResearchSweepPayloadSchema>;
 export interface PlanStepOutput {
   topic: string;
   subtopics: string[];
-  queries: Array<{ query: string; intent: string; subtopic: string }>;
+  queries: Array<{ query: string; intent: string; subtopic: string; questionId?: string | null }>;
+  questionSubtopics?: Record<string, string[]>;
   reusedExistingPlan: boolean;
 }
 
@@ -96,6 +100,7 @@ export interface ResearchSweepDeps {
   embedder?: EmbeddingProvider;
   vectorStore?: VectorStore;
   fetchFn?: typeof fetch;
+  citationFetchFn?: typeof fetch;
   nowFn?: () => Date;
   batchSize?: number;
 }
@@ -150,10 +155,22 @@ export async function runResearchSweepOrchestration(
               .set({ status: "searching", error: null, updatedAt: nowFn() })
               .where(eq(researchRuns.id, payload.runId));
 
+            const rebuiltQuestionSubtopics: Record<string, string[]> = {};
+            for (const qItem of prevQueries) {
+              if (qItem.questionId) {
+                const list = rebuiltQuestionSubtopics[qItem.questionId] ?? [];
+                if (!list.includes(qItem.subtopic)) list.push(qItem.subtopic);
+                rebuiltQuestionSubtopics[qItem.questionId] = list;
+              }
+            }
+
             return {
               topic: targetTopic,
               subtopics: prevSubtopics,
               queries: prevQueries,
+              ...(Object.keys(rebuiltQuestionSubtopics).length > 0
+                ? { questionSubtopics: rebuiltQuestionSubtopics }
+                : {}),
               reusedExistingPlan: true,
             };
           }
@@ -171,6 +188,67 @@ export async function runResearchSweepOrchestration(
         .update(projects)
         .set({ status: "researching", updatedAt: nowFn() })
         .where(eq(projects.id, payload.projectId));
+
+      if (project.type === "assignment" && !payload.questionId) {
+        const questionRows = await deps.db
+          .select()
+          .from(questions)
+          .where(eq(questions.projectId, payload.projectId))
+          .orderBy(asc(questions.orderIndex));
+
+        if (questionRows.length > 0) {
+          const allSubtopics: string[] = [];
+          const allQueries: PlanStepOutput["queries"] = [];
+          const questionSubtopics: Record<string, string[]> = {};
+          const perQuestionCap = Math.max(4, Math.floor(40 / questionRows.length));
+
+          for (const q of questionRows) {
+            const { plan } = await planResearchQueries(
+              {
+                workflowId: payload.runId,
+                projectId: payload.projectId,
+                topic: q.text,
+                projectType: "assignment",
+                field: project.field,
+                level: project.level,
+                supervisorNotes: project.supervisorNotes,
+                spendCapUsd: payload.spendCapUsd,
+              },
+              deps.llmCtx
+            );
+            questionSubtopics[q.id] = plan.subtopics;
+            for (const sub of plan.subtopics) {
+              if (!allSubtopics.includes(sub)) allSubtopics.push(sub);
+            }
+            for (const qItem of plan.queries.slice(0, perQuestionCap)) {
+              allQueries.push({
+                query: qItem.query,
+                intent: qItem.intent,
+                subtopic: qItem.subtopic,
+                questionId: q.id,
+              });
+            }
+          }
+
+          await deps.db
+            .update(researchRuns)
+            .set({
+              status: "searching",
+              subtopicsJson: JSON.stringify(allSubtopics),
+              queriesJson: JSON.stringify(allQueries),
+              updatedAt: nowFn(),
+            })
+            .where(eq(researchRuns.id, payload.runId));
+
+          return {
+            topic: targetTopic,
+            subtopics: allSubtopics,
+            queries: allQueries,
+            questionSubtopics,
+            reusedExistingPlan: false,
+          };
+        }
+      }
 
       const { plan } = await planResearchQueries(
         {
@@ -210,71 +288,99 @@ export async function runResearchSweepOrchestration(
         .from(sources)
         .where(eq(sources.projectId, payload.projectId));
 
-      const existingByDoi = new Set(
-        existingSources.map((s) => s.doi?.toLowerCase()).filter((v): v is string => Boolean(v))
-      );
-      const existingByUrl = new Set(existingSources.map((s) => s.canonicalUrl));
-      const existingByTitle = new Set(existingSources.map((s) => s.normalizedTitle));
+      const questionGroups = new Map<string, PlanStepOutput["queries"]>();
+      for (const qItem of planOutput.queries) {
+        if (qItem.questionId) {
+          const list = questionGroups.get(qItem.questionId) ?? [];
+          list.push(qItem);
+          questionGroups.set(qItem.questionId, list);
+        }
+      }
 
-      const fanOut = await runConnectorsForQueries(planOutput.queries, {
-        connectors: deps.connectors,
-        env: deps.connectorEnv,
-        fetchFn,
-        now: nowFn(),
-      });
-
-      const deduped = deduplicateSources(fanOut.candidates);
-      const unpaywallStats = await enrichSourcesWithUnpaywall(deduped, {
-        email: deps.connectorEnv.SCHOLARLY_CONTACT_EMAIL,
-        timeoutMs: RESEARCH_CONFIG.caps.perRequestTimeoutMs,
-        fetchFn,
-      });
+      const searchBuckets: Array<{
+        questionId: string | null;
+        queries: PlanStepOutput["queries"];
+      }> =
+        questionGroups.size > 0
+          ? Array.from(questionGroups.entries()).map(([qId, qQueries]) => ({
+              questionId: qId,
+              queries: qQueries,
+            }))
+          : [{ questionId: payload.questionId ?? null, queries: planOutput.queries }];
 
       let newlyInsertedCount = 0;
+      let totalUnpaywallEnriched = 0;
       const now = nowFn();
 
-      for (const candidate of deduped) {
-        if (candidate.doi && existingByDoi.has(candidate.doi)) continue;
-        if (existingByUrl.has(candidate.canonicalUrl)) continue;
-        if (
-          candidate.normalizedTitle.length >= 12 &&
-          existingByTitle.has(candidate.normalizedTitle)
-        ) {
-          continue;
-        }
+      for (const bucket of searchBuckets) {
+        const scopedExisting = existingSources.filter(
+          (s) => (s.questionId ?? null) === bucket.questionId
+        );
+        const existingByDoi = new Set(
+          scopedExisting.map((s) => s.doi?.toLowerCase()).filter((v): v is string => Boolean(v))
+        );
+        const existingByUrl = new Set(scopedExisting.map((s) => s.canonicalUrl));
+        const existingByTitle = new Set(scopedExisting.map((s) => s.normalizedTitle));
 
-        const sourceId = `src_${crypto.randomUUID()}`;
-        await deps.db.insert(sources).values({
-          id: sourceId,
-          projectId: payload.projectId,
-          questionId: payload.questionId ?? null,
-          researchRunId: payload.runId,
-          url: candidate.openAccessPdfUrl ?? candidate.url,
-          canonicalUrl: candidate.canonicalUrl,
-          doi: candidate.doi,
-          title: candidate.title,
-          normalizedTitle: candidate.normalizedTitle,
-          authorsJson: JSON.stringify(candidate.authors),
-          year: candidate.year,
-          publisher: candidate.publisher,
-          venue: candidate.venue,
-          sourceType: candidate.sourceType,
-          connectorName: candidate.connectorName,
-          citationCount: candidate.citationCount,
-          credibilityScore: 0,
-          relevanceScore: 0,
-          accessStatus: candidate.accessStatus,
-          fetchStatus: "pending",
-          abstractText: candidate.abstractText,
-          snapshotR2Key: null,
-          retrievedAt: candidate.retrievedAt,
-          createdAt: now,
+        const fanOut = await runConnectorsForQueries(bucket.queries, {
+          connectors: deps.connectors,
+          env: deps.connectorEnv,
+          maxQueriesPerConnector: searchBuckets.length > 1 ? 4 : 6,
+          fetchFn,
+          now: nowFn(),
         });
 
-        if (candidate.doi) existingByDoi.add(candidate.doi);
-        existingByUrl.add(candidate.canonicalUrl);
-        existingByTitle.add(candidate.normalizedTitle);
-        newlyInsertedCount++;
+        const deduped = deduplicateSources(fanOut.candidates);
+        const unpaywallStats = await enrichSourcesWithUnpaywall(deduped, {
+          email: deps.connectorEnv.SCHOLARLY_CONTACT_EMAIL,
+          timeoutMs: RESEARCH_CONFIG.caps.perRequestTimeoutMs,
+          fetchFn,
+        });
+        totalUnpaywallEnriched += unpaywallStats.enriched;
+
+        for (const candidate of deduped) {
+          if (candidate.doi && existingByDoi.has(candidate.doi)) continue;
+          if (existingByUrl.has(candidate.canonicalUrl)) continue;
+          if (
+            candidate.normalizedTitle.length >= 12 &&
+            existingByTitle.has(candidate.normalizedTitle)
+          ) {
+            continue;
+          }
+
+          const sourceId = `src_${crypto.randomUUID()}`;
+          await deps.db.insert(sources).values({
+            id: sourceId,
+            projectId: payload.projectId,
+            questionId: bucket.questionId,
+            researchRunId: payload.runId,
+            url: candidate.openAccessPdfUrl ?? candidate.url,
+            canonicalUrl: candidate.canonicalUrl,
+            doi: candidate.doi,
+            title: candidate.title,
+            normalizedTitle: candidate.normalizedTitle,
+            authorsJson: JSON.stringify(candidate.authors),
+            year: candidate.year,
+            publisher: candidate.publisher,
+            venue: candidate.venue,
+            sourceType: candidate.sourceType,
+            connectorName: candidate.connectorName,
+            citationCount: candidate.citationCount,
+            credibilityScore: 0,
+            relevanceScore: 0,
+            accessStatus: candidate.accessStatus,
+            fetchStatus: "pending",
+            abstractText: candidate.abstractText,
+            snapshotR2Key: null,
+            retrievedAt: candidate.retrievedAt,
+            createdAt: now,
+          });
+
+          if (candidate.doi) existingByDoi.add(candidate.doi);
+          existingByUrl.add(candidate.canonicalUrl);
+          existingByTitle.add(candidate.normalizedTitle);
+          newlyInsertedCount++;
+        }
       }
 
       const allAfter = await deps.db
@@ -299,7 +405,7 @@ export async function runResearchSweepOrchestration(
         totalProjectSources: allAfter.length,
         newlyInsertedCount,
         pendingFetchCount: pendingCount,
-        unpaywallEnriched: unpaywallStats.enriched,
+        unpaywallEnriched: totalUnpaywallEnriched,
       };
     });
 
@@ -541,15 +647,51 @@ export async function runResearchSweepOrchestration(
           .orderBy(asc(questions.orderIndex));
 
         if (questionRows.length > 0) {
-          const assignmentEval = evaluateAssignmentFeasibility(
-            questionRows.map((q) => ({
+          const hasPerQuestionTagging = normalizedForScoring.some((n) => n.questionId !== null);
+          const perQuestionInputs = [];
+
+          for (const q of questionRows) {
+            const qSubtopics = planOutput.questionSubtopics?.[q.id] ?? planOutput.subtopics;
+            const qRawSources = hasPerQuestionTagging
+              ? normalizedForScoring.filter((n) => n.questionId === q.id)
+              : normalizedForScoring;
+
+            const qRanked = scoreAndRankSources(qRawSources, q.text, qSubtopics, refYear);
+            for (const item of qRanked) {
+              const match = qRawSources.find(
+                (n) =>
+                  n.canonicalUrl === item.canonicalUrl && n.normalizedTitle === item.normalizedTitle
+              );
+              if (!match) continue;
+              await deps.db
+                .update(sources)
+                .set({
+                  credibilityScore: item.credibilityScore,
+                  relevanceScore: item.relevanceScore,
+                })
+                .where(eq(sources.id, match.id));
+            }
+
+            perQuestionInputs.push({
               questionId: q.id,
               questionText: q.text,
-              subtopics: planOutput.subtopics,
-              sources: feasibilitySources,
-            })),
-            refYear
-          );
+              subtopics: qSubtopics,
+              sources: qRanked.map((r) => ({
+                url: r.url,
+                doi: r.doi,
+                title: r.title,
+                year: r.year,
+                publisher: r.publisher,
+                sourceType: r.sourceType,
+                credibilityScore: r.credibilityScore,
+                relevanceScore: r.relevanceScore,
+                accessStatus: r.accessStatus,
+                matchedSubtopics: r.matchedSubtopics,
+              })),
+            });
+          }
+
+          const assignmentEval = evaluateAssignmentFeasibility(perQuestionInputs, refYear);
 
           finalVerdict = assignmentEval.overallVerdict;
           finalIdealPages = assignmentEval.totalIdealPages;
@@ -690,6 +832,17 @@ export async function runResearchSweepOrchestration(
       const subtopicsCovered = countCoveredSubtopics(ranked);
       const fetchedSources = stored.filter((s) => s.fetchStatus === "fetched").length;
 
+      // Build citation registry from verified metadata and verify DOIs/URLs (Rule NN-2)
+      await syncCitationRegistryForProject(deps.db, payload.projectId, doneAt);
+      if (deps.citationFetchFn) {
+        await verifyProjectCitations(deps.db, payload.projectId, {
+          onlyUnverified: true,
+          fetchFn: deps.citationFetchFn,
+          contactEmail: deps.connectorEnv.SCHOLARLY_CONTACT_EMAIL,
+          now: doneAt,
+        });
+      }
+
       await deps.db
         .update(researchRuns)
         .set({
@@ -701,6 +854,14 @@ export async function runResearchSweepOrchestration(
           updatedAt: doneAt,
         })
         .where(eq(researchRuns.id, payload.runId));
+
+      if (payload.reservationId) {
+        try {
+          await captureChapterReservation(deps.db, payload.reservationId, doneAt);
+        } catch {
+          // Non-fatal if reservation was already settled
+        }
+      }
 
       return {
         runId: payload.runId,
@@ -716,15 +877,29 @@ export async function runResearchSweepOrchestration(
       };
     });
   } catch (err) {
+    const failedAt = nowFn();
     const message = err instanceof Error ? err.message.slice(0, 1000) : String(err).slice(0, 1000);
     await deps.db
       .update(researchRuns)
       .set({
         status: "failed",
         error: message,
-        updatedAt: nowFn(),
+        updatedAt: failedAt,
       })
       .where(eq(researchRuns.id, payload.runId));
+
+    if (payload.reservationId) {
+      try {
+        await refundChapterReservation(
+          deps.db,
+          payload.reservationId,
+          "Research sweep failed before completion",
+          failedAt
+        );
+      } catch {
+        // Preserve original sweep error
+      }
+    }
     throw err;
   }
 }

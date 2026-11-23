@@ -61,6 +61,7 @@ const VERDICT_META: Record<
 export function StepResearchSweep({
   wizard,
   saving,
+  allowDevPreview = false,
   onSave,
   onRefreshWizard,
   onBackToTopic,
@@ -68,6 +69,7 @@ export function StepResearchSweep({
 }: {
   wizard: SerializedWizardState;
   saving: boolean;
+  allowDevPreview?: boolean;
   onSave: (payload: Record<string, unknown>) => Promise<void>;
   onRefreshWizard?: () => Promise<void>;
   onBackToTopic: () => void;
@@ -342,40 +344,42 @@ export function StepResearchSweep({
         </div>
       ) : null}
 
-      <details className="border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-4 bg-white">
-        <summary className="text-sm font-medium text-[var(--neutral-700)] cursor-pointer">
-          Local dev verdict preview (offline test helper)
-        </summary>
-        <div className="pt-4 space-y-4">
-          <div className="space-y-1.5">
-            <label
-              htmlFor="mock-verdict"
-              className="block text-sm font-medium text-[var(--neutral-800)]"
+      {allowDevPreview ? (
+        <details className="border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-4 bg-white">
+          <summary className="text-sm font-medium text-[var(--neutral-700)] cursor-pointer">
+            Local dev verdict preview (offline test helper)
+          </summary>
+          <div className="pt-4 space-y-4">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="mock-verdict"
+                className="block text-sm font-medium text-[var(--neutral-800)]"
+              >
+                Simulate verdict outcome
+              </label>
+              <select
+                id="mock-verdict"
+                value={simulateVerdict}
+                onChange={(e) => setSimulateVerdict(e.target.value as FeasibilityVerdict)}
+                className="block w-full sm:max-w-[320px] min-h-[44px] px-3.5 py-2.5 text-base bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
+              >
+                <option value="feasible">Feasible (sufficient evidence)</option>
+                <option value="needs_refinement">Needs refinement (too broad/narrow)</option>
+                <option value="not_feasible">Not feasible (cannot guess)</option>
+              </select>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              loading={saving}
+              loadingLabel="Saving verdict preview..."
+              onClick={() => onSave({ step: 3, simulateVerdict })}
             >
-              Simulate verdict outcome
-            </label>
-            <select
-              id="mock-verdict"
-              value={simulateVerdict}
-              onChange={(e) => setSimulateVerdict(e.target.value as FeasibilityVerdict)}
-              className="block w-full sm:max-w-[320px] min-h-[44px] px-3.5 py-2.5 text-base bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-            >
-              <option value="feasible">Feasible (sufficient evidence)</option>
-              <option value="needs_refinement">Needs refinement (too broad/narrow)</option>
-              <option value="not_feasible">Not feasible (cannot guess)</option>
-            </select>
+              Save offline preview verdict
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            loading={saving}
-            loadingLabel="Saving verdict preview..."
-            onClick={() => onSave({ step: 3, simulateVerdict })}
-          >
-            Save offline preview verdict
-          </Button>
-        </div>
-      </details>
+        </details>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
         <Button type="button" variant="secondary" onClick={onBackToTopic}>

@@ -5,6 +5,7 @@ import { env } from "cloudflare:workers";
 import { asc, desc, eq } from "drizzle-orm";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { AssignmentPipelinePanel } from "@/components/project/assignment-pipeline-panel";
 import {
   ChapterPipelinePanel,
   type ChapterPanelItem,
@@ -144,32 +145,26 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         </div>
 
         {project.type === "assignment" ? (
-          <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
-            <h2 className="text-xl font-medium m-0">
-              Assignment answer plan ({outlineData?.outline.assignmentPlans.length ?? 0} questions)
-            </h2>
-            <ol className="space-y-4 list-none p-0 m-0">
-              {(outlineData?.outline.assignmentPlans ?? []).map((q) => (
-                <li
-                  key={q.questionId}
-                  className="p-4 border border-[var(--neutral-200)] rounded-[var(--radius-sm)] space-y-1.5"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
-                      <span className="tabular-nums font-semibold mr-1.5">Q{q.orderIndex}.</span>
-                      {q.questionText}
-                    </p>
-                    <span className="text-xs text-[var(--neutral-600)] tabular-nums">
-                      ~{q.pageBudget} pages (~{q.wordBudget.toLocaleString()} words)
-                    </span>
-                  </div>
-                  <p className="text-xs text-[var(--neutral-600)] m-0">
-                    Sections: {q.sections.map((s) => s.heading).join(" · ")}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </section>
+          <AssignmentPipelinePanel
+            projectId={project.id}
+            questions={(outlineData?.outline.assignmentPlans ?? []).map((q) => ({
+              questionId: q.questionId,
+              orderIndex: q.orderIndex,
+              questionText: q.questionText,
+              pageBudget: q.pageBudget,
+              wordBudget: q.wordBudget,
+              sectionHeadings: q.sections.map((s) => s.heading),
+            }))}
+            assignmentChapter={
+              chapterPanelItems[0]
+                ? {
+                    id: chapterPanelItems[0].id,
+                    status: chapterPanelItems[0].status,
+                    originalityReport: chapterPanelItems[0].originalityReport,
+                  }
+                : null
+            }
+          />
         ) : (
           <ChapterPipelinePanel
             projectId={project.id}

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import { BILLING_POLICY } from "@/config/pricing";
 import type { AppDb } from "@/db/client";
 import {
@@ -7,6 +7,8 @@ import {
   creditReservations,
   jobsLog,
   payments,
+  projects,
+  researchRuns,
   systemControls,
   users,
 } from "@/db/schema";
@@ -177,7 +179,17 @@ export async function reserveChapterCredits(
     };
   }
 
-  if (user.creditsBalance < params.credits) {
+  const updatedRows = await db
+    .update(users)
+    .set({
+      creditsBalance: sql`${users.creditsBalance} - ${params.credits}`,
+      updatedAt: now,
+    })
+    .where(and(eq(users.id, user.id), gte(users.creditsBalance, params.credits)))
+    .returning({ creditsBalance: users.creditsBalance });
+
+  const updatedUser = updatedRows[0];
+  if (!updatedUser) {
     throw new BillingError(
       "INSUFFICIENT_CREDITS",
       `Insufficient credits: need ${params.credits}, available ${user.creditsBalance}.`,
@@ -185,13 +197,8 @@ export async function reserveChapterCredits(
     );
   }
 
-  const newBalance = user.creditsBalance - params.credits;
+  const newBalance = updatedUser.creditsBalance;
   const reservationId = `res_${crypto.randomUUID()}`;
-
-  await db
-    .update(users)
-    .set({ creditsBalance: newBalance, updatedAt: now })
-    .where(eq(users.id, user.id));
 
   await db.insert(creditReservations).values({
     id: reservationId,
@@ -314,6 +321,20 @@ export async function refundChapterReservation(
   });
 
   return { refunded: true, balanceAfter: newBalance };
+}
+
+/**
+ * Counts non-failed research sweeps already started or completed by a user across all projects.
+ * Failed sweeps never count against the user's free feasibility sweep quota.
+ */
+export async function countUserNonFailedSweeps(db: AppDb, userId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(researchRuns)
+    .innerJoin(projects, eq(researchRuns.projectId, projects.id))
+    .where(and(eq(projects.userId, userId), ne(researchRuns.status, "failed")));
+
+  return Number(row?.count ?? 0);
 }
 
 export async function issueAdminManualRefund(

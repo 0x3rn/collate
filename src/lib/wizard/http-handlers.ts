@@ -281,7 +281,8 @@ export async function handleSaveWizardStep(
       session.user.id,
       parsedId.data,
       parsedBody.data,
-      now
+      now,
+      { allowMockVerdict: deps.appEnv === "dev" }
     );
     return jsonNoStore({ ok: true, wizard: serializeWizardState(state) }, 200);
   } catch (err) {

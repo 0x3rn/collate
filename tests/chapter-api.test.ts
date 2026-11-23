@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { estimateChapterCredits, estimateRevisionCredits } from "@/config/pricing";
 import { createDb, type AppDb } from "@/db/client";
 import { createWizardDraftProject } from "@/db/queries/wizard";
-import { chapters } from "@/db/schema";
+import { chapters, creditReservations, users } from "@/db/schema";
 import {
   handleSignIn,
   handleSignUp,
@@ -105,10 +106,12 @@ describe("Phase 7 — Chapter & CSV Dataset HTTP API (NN-8 gating, idempotency &
     const ch1 = draft.chapters.find((c) => c.number === 1)!;
     const ch2 = draft.chapters.find((c) => c.number === 2)!;
 
+    const launchedParams: Array<Record<string, unknown>> = [];
     let launchCount = 0;
     const launcher = {
-      async create() {
+      async create(opts: { params: Record<string, unknown> }) {
         launchCount++;
+        launchedParams.push(opts.params);
         return { id: `wf_ch_${launchCount}` };
       },
     };
@@ -143,6 +146,22 @@ describe("Phase 7 — Chapter & CSV Dataset HTTP API (NN-8 gating, idempotency &
     );
     expect(ch2Early.status).toBe(409);
 
+    // Zero credits -> 402 Payment Required and workflow never launches
+    const noCreditsStart = await handleStartChapter(
+      new Request(`https://collate.app/api/projects/${projectId}/chapters/${ch1.id}/start`, {
+        method: "POST",
+        headers: { origin: "https://collate.app", cookie: alice.cookie },
+      }),
+      projectId,
+      ch1.id,
+      deps
+    );
+    expect(noCreditsStart.status).toBe(402);
+    expect(launchCount).toBe(0);
+
+    // Grant Alice 100 credits
+    await db.update(users).set({ creditsBalance: 100 }).where(eq(users.id, alice.userId));
+
     const ch1Start1 = await handleStartChapter(
       new Request(`https://collate.app/api/projects/${projectId}/chapters/${ch1.id}/start`, {
         method: "POST",
@@ -154,6 +173,11 @@ describe("Phase 7 — Chapter & CSV Dataset HTTP API (NN-8 gating, idempotency &
     );
     expect(ch1Start1.status).toBe(202);
     expect(launchCount).toBe(1);
+    expect(launchedParams[0]?.reservationId).toBeTruthy();
+
+    const ch1Cost = estimateChapterCredits(ch1.pageBudget);
+    const [aliceAfterCh1] = await db.select().from(users).where(eq(users.id, alice.userId));
+    expect(aliceAfterCh1?.creditsBalance).toBe(100 - ch1Cost);
 
     const ch1Start2 = await handleStartChapter(
       new Request(`https://collate.app/api/projects/${projectId}/chapters/${ch1.id}/start`, {
@@ -167,6 +191,9 @@ describe("Phase 7 — Chapter & CSV Dataset HTTP API (NN-8 gating, idempotency &
     const dupJson = (await ch1Start2.json()) as { alreadyRunning: boolean };
     expect(dupJson.alreadyRunning).toBe(true);
     expect(launchCount).toBe(1);
+    // Double-click must NOT deduct credits again
+    const [aliceAfterDup] = await db.select().from(users).where(eq(users.id, alice.userId));
+    expect(aliceAfterDup?.creditsBalance).toBe(100 - ch1Cost);
 
     await db.update(chapters).set({ status: "ready" }).where(eq(chapters.id, ch1.id));
 
@@ -209,6 +236,42 @@ describe("Phase 7 — Chapter & CSV Dataset HTTP API (NN-8 gating, idempotency &
     );
     expect(reviseRes.status).toBe(202);
     expect(launchCount).toBe(3);
+
+    const ch2Cost = estimateChapterCredits(ch2.pageBudget);
+    const revCost = estimateRevisionCredits(ch1.pageBudget);
+    const [aliceAfterRev] = await db.select().from(users).where(eq(users.id, alice.userId));
+    expect(aliceAfterRev?.creditsBalance).toBe(100 - ch1Cost - ch2Cost - revCost);
+
+    // If workflow launcher fails, reservation is immediately refunded and chapter status reverts
+    await db.update(chapters).set({ status: "ready" }).where(eq(chapters.id, ch2.id));
+    const ch3 = draft.chapters.find((c) => c.number === 3)!;
+    const balanceBeforeLaunchCrash = aliceAfterRev!.creditsBalance;
+    const failingRes = await handleStartChapter(
+      new Request(`https://collate.app/api/projects/${projectId}/chapters/${ch3.id}/start`, {
+        method: "POST",
+        headers: { origin: "https://collate.app", cookie: alice.cookie },
+      }),
+      projectId,
+      ch3.id,
+      {
+        ...deps,
+        workflowLauncher: {
+          async create() {
+            throw new Error("Simulated Cloudflare Workflows outage");
+          },
+        },
+      }
+    );
+    expect(failingRes.status).toBe(500);
+    const [aliceAfterRefund] = await db.select().from(users).where(eq(users.id, alice.userId));
+    expect(aliceAfterRefund?.creditsBalance).toBe(balanceBeforeLaunchCrash);
+    const [ch3Row] = await db.select().from(chapters).where(eq(chapters.id, ch3.id));
+    expect(ch3Row?.status).toBe("not_started");
+    const refundedRows = await db
+      .select()
+      .from(creditReservations)
+      .where(eq(creditReservations.chapterId, ch3.id));
+    expect(refundedRows[0]?.status).toBe("refunded");
 
     const uploadRes = await handleUploadProjectDataset(
       new Request(`https://collate.app/api/projects/${projectId}/datasets`, {

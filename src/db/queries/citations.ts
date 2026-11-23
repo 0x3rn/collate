@@ -109,45 +109,66 @@ export async function loadProjectCitationMap(
 export async function verifyProjectCitations(
   db: AppDb,
   projectId: string,
-  options: { fetchFn?: typeof fetch; contactEmail?: string; now?: Date } = {}
+  options: {
+    fetchFn?: typeof fetch;
+    contactEmail?: string;
+    now?: Date;
+    onlyUnverified?: boolean;
+    concurrency?: number;
+  } = {}
 ): Promise<{ verified: number; rejected: number; unverified: number }> {
-  const rows = await db.select().from(citations).where(eq(citations.projectId, projectId));
+  const allRows = await db.select().from(citations).where(eq(citations.projectId, projectId));
+  const onlyUnverified = options.onlyUnverified ?? true;
+  const rows = onlyUnverified
+    ? allRows.filter((r) => r.verificationStatus === "unverified")
+    : allRows;
   const now = options.now ?? new Date();
+  const concurrency = Math.max(1, Math.min(10, options.concurrency ?? 5));
 
   let verified = 0;
   let rejected = 0;
   let unverified = 0;
 
-  for (const row of rows) {
-    let item: CslItem;
-    try {
-      item = CslItemSchema.parse(JSON.parse(row.cslJson));
-    } catch {
-      continue;
-    }
+  for (let i = 0; i < rows.length; i += concurrency) {
+    const batch = rows.slice(i, i + concurrency);
+    const outcomes = await Promise.all(
+      batch.map(async (row) => {
+        let item: CslItem;
+        try {
+          item = CslItemSchema.parse(JSON.parse(row.cslJson));
+        } catch {
+          return null;
+        }
 
-    const result = item.DOI
-      ? await verifyDoiRecord(item.DOI, item.title, {
-          fetchFn: options.fetchFn,
-          contactEmail: options.contactEmail,
-        })
-      : await verifySourceUrlRecord(item.URL ?? "", {
-          fetchFn: options.fetchFn,
-          contactEmail: options.contactEmail,
-        });
+        const result = item.DOI
+          ? await verifyDoiRecord(item.DOI, item.title, {
+              fetchFn: options.fetchFn,
+              contactEmail: options.contactEmail,
+            })
+          : await verifySourceUrlRecord(item.URL ?? "", {
+              fetchFn: options.fetchFn,
+              contactEmail: options.contactEmail,
+            });
 
-    await db
-      .update(citations)
-      .set({
-        verificationStatus: result.status,
-        verificationNotes: result.notes,
-        verifiedAt: now,
+        return { rowId: row.id, result };
       })
-      .where(eq(citations.id, row.id));
+    );
 
-    if (result.status === "verified") verified++;
-    else if (result.status === "unverified") unverified++;
-    else rejected++;
+    for (const entry of outcomes) {
+      if (!entry) continue;
+      await db
+        .update(citations)
+        .set({
+          verificationStatus: entry.result.status,
+          verificationNotes: entry.result.notes,
+          verifiedAt: now,
+        })
+        .where(eq(citations.id, entry.rowId));
+
+      if (entry.result.status === "verified") verified++;
+      else if (entry.result.status === "unverified") unverified++;
+      else rejected++;
+    }
   }
 
   return { verified, rejected, unverified };

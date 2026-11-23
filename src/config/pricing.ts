@@ -64,6 +64,23 @@ export function estimateChapterCredits(pageBudget: number | null | undefined): n
   );
 }
 
+export function estimateRevisionCredits(pageBudget: number | null | undefined): number {
+  const base = estimateChapterCredits(pageBudget);
+  return Math.max(BILLING_POLICY.minCreditsPerChapter, Math.ceil(base * 0.25));
+}
+
+export function estimateAssignmentCredits(
+  targetPages: number | null | undefined,
+  questionCount: number
+): number {
+  const fallbackPages = Math.max(2, questionCount * 3);
+  const pages = Math.max(1, targetPages ?? fallbackPages);
+  return Math.max(
+    BILLING_POLICY.minCreditsPerChapter,
+    Math.ceil(pages * BILLING_POLICY.creditsPerPage)
+  );
+}
+
 export interface ProjectCreditEstimate {
   pages: number;
   baseCredits: number;

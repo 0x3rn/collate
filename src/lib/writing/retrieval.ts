@@ -44,6 +44,7 @@ export async function retrieveEvidencePassages(
   params: {
     projectId: string;
     queryText: string;
+    questionId?: string | null;
     topK?: number;
     sourceTypeFilter?: string[];
     embedder?: EmbeddingProvider;
@@ -106,10 +107,20 @@ export async function retrieveEvidencePassages(
   const queryTokens = tokenizeQuery(params.queryText);
   const scored: RetrievedEvidencePassage[] = [];
 
+  const hasQuestionScopedPassages =
+    Boolean(params.questionId) &&
+    allPassages.some((p) => {
+      const src = sourceById.get(p.sourceId);
+      return src?.questionId === params.questionId && validCitationsBySourceId.has(p.sourceId);
+    });
+
   for (const psg of allPassages) {
     const cit = validCitationsBySourceId.get(psg.sourceId);
     const src = sourceById.get(psg.sourceId);
     if (!cit || !src) continue;
+    if (hasQuestionScopedPassages && src.questionId !== params.questionId) {
+      continue;
+    }
     if (params.sourceTypeFilter && !params.sourceTypeFilter.includes(src.sourceType)) {
       continue;
     }

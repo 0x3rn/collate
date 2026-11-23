@@ -288,5 +288,17 @@ describe("Phase 6 — Fake DOI rejection, URL verification, and D1 citation regi
     expect(safeMap.size).toBe(1);
     expect(safeMap.has("okonkwo2024")).toBe(true);
     expect(safeMap.has("okonkwo2024a")).toBe(false);
+
+    // Calling verifyProjectCitations again with default onlyUnverified=true makes zero HTTP calls
+    let secondPassCalls = 0;
+    const secondStats = await verifyProjectCitations(db, "prj_cit", {
+      fetchFn: async () => {
+        secondPassCalls++;
+        return new Response("unexpected", { status: 500 });
+      },
+      now: RETRIEVED,
+    });
+    expect(secondPassCalls).toBe(0);
+    expect(secondStats).toEqual({ verified: 0, rejected: 0, unverified: 0 });
   });
 });
