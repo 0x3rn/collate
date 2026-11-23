@@ -8,23 +8,23 @@ import type { NotificationPrefs } from "@/lib/email/notifications";
 const PREF_ROWS: Array<{ key: keyof NotificationPrefs; label: string; description: string }> = [
   {
     key: "emailChapterReady",
-    label: "Chapter ready alerts",
-    description: "Email me with a direct link whenever a chapter finishes drafting.",
+    label: "Chapter ready",
+    description: "Send me an email with a direct link when a chapter finishes drafting.",
   },
   {
     key: "emailNeedsAttention",
-    label: "Needs attention alerts",
-    description: "Email me if a chapter pauses due to originality checks, timeouts, or errors.",
+    label: "Needs your review",
+    description: "Send me an email if a chapter pauses and needs my input before continuing.",
   },
   {
     key: "emailProjectComplete",
-    label: "Project completion alerts",
-    description: "Email me when all chapters are ready for full PDF and Word export.",
+    label: "Project finished",
+    description: "Send me an email when every chapter is ready for PDF and Word download.",
   },
   {
     key: "emailReceipts",
-    label: "Payment and credit receipts",
-    description: "Email me confirmation receipts whenever credits are purchased or refunded.",
+    label: "Receipts and refunds",
+    description: "Send me a receipt when I buy credits or receive an automatic refund.",
   },
 ];
 
@@ -51,12 +51,12 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not save notification preferences.");
+        setError(data.error ?? "Could not save your email settings. Please try again.");
         return;
       }
-      setSavedNotice("Email notification preferences saved.");
+      setSavedNotice("Email settings saved.");
     } catch {
-      setError("Network error while saving preferences.");
+      setError("Could not save right now. Check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -65,9 +65,9 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
   return (
     <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-5">
       <div className="space-y-1">
-        <h2 className="text-xl font-medium m-0">Email notifications</h2>
+        <h2 className="text-xl font-medium m-0">Email updates</h2>
         <p className="text-sm text-[var(--neutral-600)] m-0">
-          Choose which chapter and account emails Collate sends to your verified address.
+          Choose which project and receipt emails we send to your inbox.
         </p>
       </div>
 
@@ -78,7 +78,7 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
         {PREF_ROWS.map((row) => (
           <label
             key={row.key}
-            className="flex items-start gap-3 p-3.5 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] cursor-pointer"
+            className="flex items-start gap-3 p-3.5 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] cursor-pointer hover:border-[var(--neutral-300)] transition-colors"
           >
             <input
               type="checkbox"
@@ -88,7 +88,7 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
             />
             <div>
               <p className="text-sm font-medium text-[var(--neutral-900)] m-0">{row.label}</p>
-              <p className="text-xs text-[var(--neutral-600)] m-0">{row.description}</p>
+              <p className="text-xs text-[var(--neutral-600)] m-0 mt-0.5">{row.description}</p>
             </div>
           </label>
         ))}
@@ -96,7 +96,7 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
 
       <div className="flex justify-end">
         <Button type="button" loading={saving} loadingLabel="Saving..." onClick={handleSave}>
-          Save preferences
+          Save email settings
         </Button>
       </div>
     </section>

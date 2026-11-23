@@ -1,14 +1,11 @@
-import type { Metadata } from "next";
 import { env } from "cloudflare:workers";
-import { desc, eq } from "drizzle-orm";
-import { CreditsPanel } from "@/components/account/credits-panel";
+import type { Metadata } from "next";
+import Link from "next/link";
 import { DeleteAccountPanel } from "@/components/account/delete-account-panel";
 import { NotificationPrefsForm } from "@/components/account/notification-prefs-form";
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { createDb } from "@/db/client";
-import { creditLedger } from "@/db/schema";
 import { requireUser } from "@/lib/auth/server";
 import { getUserNotificationPrefs } from "@/lib/email/notifications";
 import { formatShortDate } from "@/lib/ui/formatters";
@@ -17,90 +14,80 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Account — Collate",
-  description:
-    "Manage your Collate account details, credits, email notifications, and active session.",
+  description: "Manage your profile, email updates, and account settings.",
 };
 
 export default async function AccountPage() {
   const user = await requireUser("/account");
   const db = createDb(env.DB);
   const notificationPrefs = await getUserNotificationPrefs(db, user.id);
-  const ledgerRows = await db
-    .select()
-    .from(creditLedger)
-    .where(eq(creditLedger.userId, user.id))
-    .orderBy(desc(creditLedger.createdAt))
-    .limit(10);
 
   return (
-    <>
-      <SiteHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-[820px] px-4 sm:px-6 py-10 sm:py-12 space-y-8">
-        <div className="border-b border-[var(--neutral-200)] pb-5">
-          <h1 className="text-[2rem] font-medium">Account</h1>
-          <p className="text-sm text-[var(--neutral-600)] mt-1">
-            Your profile, credit balance, email notifications, and session controls.
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[820px]">
+      <div className="space-y-8">
+        <header className="border-b border-[var(--neutral-200)] pb-5 space-y-1">
+          <h1 className="text-[1.875rem] sm:text-[2.125rem] font-medium m-0">Account</h1>
+          <p className="text-sm sm:text-base text-[var(--neutral-600)] m-0">
+            Manage your profile, email updates, and account settings.
           </p>
-        </div>
+        </header>
 
-        <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] divide-y divide-[var(--neutral-200)]">
-          <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <section
+          aria-label="Profile details"
+          className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] divide-y divide-[var(--neutral-200)]"
+        >
+          <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <p className="text-sm font-medium text-[var(--neutral-600)]">Full name</p>
-              <p className="text-base text-[var(--neutral-900)] mt-0.5">{user.name}</p>
+              <p className="text-xs font-medium text-[var(--neutral-500)] m-0">Full name</p>
+              <p className="text-base font-medium text-[var(--neutral-900)] mt-1 m-0">
+                {user.name}
+              </p>
             </div>
+            <p className="text-xs text-[var(--neutral-500)] tabular-nums m-0">
+              Joined {formatShortDate(user.createdAt)}
+            </p>
           </div>
 
-          <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-[var(--neutral-600)]">Email address</p>
-              <p className="text-base text-[var(--neutral-900)] mt-0.5">{user.email}</p>
+              <p className="text-xs font-medium text-[var(--neutral-500)] m-0">Email address</p>
+              <p className="text-base text-[var(--neutral-900)] mt-1 m-0">{user.email}</p>
             </div>
             <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] border bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)] w-fit">
               Verified
             </span>
           </div>
 
-          <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-[var(--neutral-600)]">Credits balance</p>
-              <p className="text-base text-[var(--neutral-900)] mt-0.5 tabular-nums">
-                {user.creditsBalance} credits
+              <p className="text-xs font-medium text-[var(--neutral-500)] m-0">Credits</p>
+              <p className="text-base text-[var(--neutral-900)] mt-1 tabular-nums m-0">
+                {user.creditsBalance} credits available
               </p>
             </div>
-            <p className="text-sm text-[var(--neutral-600)] tabular-nums">
-              Member since {formatShortDate(user.createdAt)}
-            </p>
+            <Link
+              href="/billing"
+              className="text-sm font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)] underline underline-offset-4 w-fit"
+            >
+              Manage credits &amp; billing
+            </Link>
           </div>
 
-          <div className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-[var(--neutral-900)]">Current session</p>
-              <p className="text-sm text-[var(--neutral-600)]">
-                Signing out revokes your session token on the server immediately.
+              <p className="text-sm font-medium text-[var(--neutral-900)] m-0">Sign out</p>
+              <p className="text-sm text-[var(--neutral-600)] mt-0.5 m-0">
+                Sign out of Collate on this device.
               </p>
             </div>
             <SignOutButton variant="secondary" />
           </div>
         </section>
 
-        <CreditsPanel
-          balance={user.creditsBalance}
-          recentLedger={ledgerRows.map((row) => ({
-            id: row.id,
-            entryType: row.entryType,
-            creditsDelta: row.creditsDelta,
-            balanceAfter: row.balanceAfter,
-            note: row.note,
-            createdAt: row.createdAt.toISOString(),
-          }))}
-        />
-
         <NotificationPrefsForm initialPrefs={notificationPrefs} />
 
         <DeleteAccountPanel />
-      </main>
-      <SiteFooter />
-    </>
+      </div>
+    </WorkspaceShell>
   );
 }

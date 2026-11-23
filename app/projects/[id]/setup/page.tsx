@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { env } from "cloudflare:workers";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { SetupWizardClient } from "@/components/wizard/setup-wizard-client";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
 import { formatProjectType } from "@/lib/ui/formatters";
@@ -29,18 +28,17 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
   const allowDevPreview = runtimeEnv.APP_ENV?.trim() === "dev";
 
   return (
-    <>
-      <SiteHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-[860px] px-4 sm:px-6 py-10 sm:py-12 space-y-6">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[860px]">
+      <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
           <div className="space-y-1">
             <Link
-              href="/dashboard"
+              href="/projects"
               className="text-sm text-[var(--neutral-600)] hover:text-[var(--neutral-900)] underline underline-offset-4"
             >
               Back to projects
             </Link>
-            <h1 className="text-[1.875rem] font-medium">
+            <h1 className="text-[1.875rem] font-medium m-0">
               {formatProjectType(serialized.project.type)} setup
             </h1>
           </div>
@@ -50,8 +48,7 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
         </div>
 
         <SetupWizardClient initialWizard={serialized} allowDevPreview={allowDevPreview} />
-      </main>
-      <SiteFooter />
-    </>
+      </div>
+    </WorkspaceShell>
   );
 }

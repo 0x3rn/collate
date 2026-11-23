@@ -1,4 +1,12 @@
-import type { ProjectStatus, ProjectType } from "@/db/schema";
+import type {
+  ChapterStatus,
+  CitationStyle,
+  CreditLedgerType,
+  ExportFormat,
+  ExportScope,
+  ProjectStatus,
+  ProjectType,
+} from "@/db/schema";
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   project: "Project",
@@ -24,6 +32,33 @@ export const PROJECT_STATUS_DISPLAY: Record<ProjectStatus, StatusDisplay> = {
   archived: { label: "Archived", tone: "neutral" },
 };
 
+export const CHAPTER_STATUS_DISPLAY: Record<ChapterStatus, StatusDisplay> = {
+  not_started: { label: "Not started", tone: "neutral" },
+  queued: { label: "Queued", tone: "info" },
+  writing: { label: "Writing", tone: "info" },
+  ready: { label: "Ready for review", tone: "info" },
+  approved: { label: "Approved", tone: "success" },
+  needs_attention: { label: "Needs your review", tone: "warning" },
+};
+
+export const CITATION_STYLE_LABELS: Record<CitationStyle, string> = {
+  apa7: "APA 7",
+  harvard: "Harvard",
+  mla9: "MLA 9",
+  chicago: "Chicago",
+  ieee: "IEEE",
+  vancouver: "Vancouver",
+};
+
+export const CREDIT_LEDGER_LABELS: Record<CreditLedgerType, string> = {
+  purchase: "Credit purchase",
+  reserve: "Chapter credit hold",
+  capture: "Chapter completed",
+  refund: "Automatic refund",
+  manual_adjustment: "Credit adjustment",
+  sweep_fee: "Topic source check",
+};
+
 export function formatProjectType(type: ProjectType): string {
   return PROJECT_TYPE_LABELS[type];
 }
@@ -32,11 +67,57 @@ export function formatProjectStatus(status: ProjectStatus): StatusDisplay {
   return PROJECT_STATUS_DISPLAY[status];
 }
 
-export function formatShortDate(date: Date): string {
+export function formatChapterStatus(status: ChapterStatus): StatusDisplay {
+  return CHAPTER_STATUS_DISPLAY[status];
+}
+
+export function formatCitationStyle(style: CitationStyle): string {
+  return CITATION_STYLE_LABELS[style];
+}
+
+export function formatCreditLedgerType(entryType: string): string {
+  return CREDIT_LEDGER_LABELS[entryType as CreditLedgerType] ?? "Credit activity";
+}
+
+export function formatExportScope(scope: ExportScope, chapterNumber?: number | null): string {
+  if (scope === "chapter") {
+    return chapterNumber ? `Chapter ${chapterNumber}` : "Single chapter";
+  }
+  if (scope === "combined") {
+    return "Completed chapters";
+  }
+  return "Full manuscript";
+}
+
+export function formatExportFormat(format: ExportFormat): string {
+  return format === "pdf" ? "PDF" : "Word (.docx)";
+}
+
+export function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  const mb = kb / 1024;
+  return `${mb.toFixed(1)} MB`;
+}
+
+export function formatShortDate(date: Date | string): string {
+  const value = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
     timeZone: "UTC",
-  }).format(date);
+  }).format(value);
+}
+
+export function getUserInitials(name: string): string {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter((p) => p.length > 0);
+  if (parts.length === 0) return "U";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
 }

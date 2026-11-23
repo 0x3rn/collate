@@ -100,7 +100,7 @@ export async function handleCreateCheckout(
         amount: pack.amountNgnKobo,
         currency: "NGN",
         reference,
-        callback_url: `${appUrl}/account?payment=paystack_pending`,
+        callback_url: `${appUrl}/billing?payment=paystack_pending`,
         metadata: {
           userId: session.user.id,
           credits: pack.credits,
@@ -148,8 +148,8 @@ export async function handleCreateCheckout(
 
   const form = new URLSearchParams({
     mode: "payment",
-    success_url: `${appUrl}/account?payment=stripe_success`,
-    cancel_url: `${appUrl}/account?payment=stripe_cancelled`,
+    success_url: `${appUrl}/billing?payment=stripe_success`,
+    cancel_url: `${appUrl}/billing?payment=stripe_cancelled`,
     customer_email: session.user.email,
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(pack.amountUsdCents),

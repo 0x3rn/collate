@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { env } from "cloudflare:workers";
 import { desc, sql } from "drizzle-orm";
 import { AdminDashboardClient } from "@/components/admin/admin-dashboard-client";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { FormAlert } from "@/components/ui/alert";
 import { LinkButton } from "@/components/ui/button";
 import { createDb } from "@/db/client";
@@ -25,18 +24,16 @@ export default async function AdminPage() {
 
   if (!isAdminEmail(user.email, runtimeEnv.ADMIN_EMAILS)) {
     return (
-      <>
-        <SiteHeader user={user} />
-        <main className="flex-1 mx-auto w-full max-w-[600px] px-4 sm:px-6 py-16 space-y-5">
+      <WorkspaceShell user={user} maxWidthClassName="max-w-[600px]">
+        <div className="py-8 space-y-5">
           <FormAlert tone="error">
             Admin authorization required. Your account does not have operator access.
           </FormAlert>
           <LinkButton href="/dashboard" variant="secondary">
-            Back to projects
+            Back to overview
           </LinkButton>
-        </main>
-        <SiteFooter />
-      </>
+        </div>
+      </WorkspaceShell>
     );
   }
 
@@ -65,12 +62,11 @@ export default async function AdminPage() {
     .limit(25);
 
   return (
-    <>
-      <SiteHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-[1040px] px-4 sm:px-6 py-10 sm:py-12 space-y-8">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[1040px]">
+      <div className="space-y-8">
         <div className="border-b border-[var(--neutral-200)] pb-5">
-          <h1 className="text-[2rem] font-medium">Admin operations</h1>
-          <p className="text-sm text-[var(--neutral-600)] mt-1">
+          <h1 className="text-[2rem] font-medium m-0">Admin operations</h1>
+          <p className="text-sm text-[var(--neutral-600)] mt-1 m-0">
             Monitor users, AI job costs, failures, spend circuit breakers, and manual refunds.
           </p>
         </div>
@@ -101,8 +97,7 @@ export default async function AdminPage() {
             })),
           }}
         />
-      </main>
-      <SiteFooter />
-    </>
+      </div>
+    </WorkspaceShell>
   );
 }

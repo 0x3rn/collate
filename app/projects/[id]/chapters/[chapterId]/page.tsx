@@ -3,8 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { and, desc, eq } from "drizzle-orm";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import {
   ChapterReaderClient,
   type ChapterReaderInitialData,
@@ -126,9 +125,8 @@ export default async function ChapterReaderPage({
   };
 
   return (
-    <>
-      <SiteHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-[1120px] px-4 sm:px-6 py-10 space-y-6">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[1120px]">
+      <div className="space-y-6">
         <div className="space-y-1 border-b border-[var(--neutral-200)] pb-5">
           <Link
             href={`/projects/${id}`}
@@ -142,8 +140,7 @@ export default async function ChapterReaderPage({
         </div>
 
         <ChapterReaderClient initial={initial} />
-      </main>
-      <SiteFooter />
-    </>
+      </div>
+    </WorkspaceShell>
   );
 }

@@ -21,6 +21,12 @@ export function SiteHeader({ user }: { user: PublicUser | null }) {
               href="/dashboard"
               className="min-h-[44px] px-3 inline-flex items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)] rounded-[var(--radius-sm)]"
             >
+              Dashboard
+            </Link>
+            <Link
+              href="/projects"
+              className="min-h-[44px] px-3 inline-flex items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)] rounded-[var(--radius-sm)]"
+            >
               Projects
             </Link>
             <Link

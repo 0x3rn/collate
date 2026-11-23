@@ -3,8 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { asc, desc, eq } from "drizzle-orm";
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { AssignmentPipelinePanel } from "@/components/project/assignment-pipeline-panel";
 import {
   ChapterPipelinePanel,
@@ -90,13 +89,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const statusDisplay = formatProjectStatus(project.status);
 
   return (
-    <>
-      <SiteHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-[960px] px-4 sm:px-6 py-10 sm:py-12 space-y-8">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[960px]">
+      <div className="space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[var(--neutral-200)] pb-6">
           <div className="space-y-1.5">
             <Link
-              href="/dashboard"
+              href="/projects"
               className="text-sm text-[var(--neutral-600)] hover:text-[var(--neutral-900)] underline underline-offset-4"
             >
               Back to projects
@@ -199,8 +197,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             verifiedSourceCount: citationRows.length,
           })}
         />
-      </main>
-      <SiteFooter />
-    </>
+      </div>
+    </WorkspaceShell>
   );
 }

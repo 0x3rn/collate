@@ -183,7 +183,7 @@ export function PricingShowcase({
             </div>
 
             <LinkButton
-              href={signedIn ? "/account" : "/sign-up"}
+              href={signedIn ? "/billing" : "/sign-up"}
               variant={pack.featured ? "primary" : "secondary"}
               fullWidth
             >

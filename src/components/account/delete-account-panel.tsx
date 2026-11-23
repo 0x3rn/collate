@@ -18,7 +18,7 @@ export function DeleteAccountPanel() {
     setError(null);
 
     if (confirmation.trim() !== "DELETE MY ACCOUNT") {
-      setError('Type "DELETE MY ACCOUNT" exactly to confirm permanent deletion.');
+      setError('Type "DELETE MY ACCOUNT" exactly to confirm.');
       return;
     }
 
@@ -37,7 +37,7 @@ export function DeleteAccountPanel() {
       router.push("/");
       router.refresh();
     } catch {
-      setError("Network error while deleting your account.");
+      setError("Could not delete your account right now. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -46,21 +46,19 @@ export function DeleteAccountPanel() {
   return (
     <section className="bg-white border border-[var(--error-border)] rounded-[var(--radius-md)] p-6 space-y-4">
       <div className="space-y-1">
-        <h2 className="text-xl font-medium text-[var(--error-text)] m-0">
-          Delete account and all data
-        </h2>
+        <h2 className="text-xl font-medium text-[var(--error-text)] m-0">Delete account</h2>
         <p className="text-sm text-[var(--neutral-600)] m-0">
-          Permanently removes your account, projects, chapters, uploaded CSV datasets, and stored
-          PDF/Word exports (NDPA / GDPR right to erasure). This cannot be undone.
+          Permanently deletes your account, projects, chapters, uploaded files, and saved exports.
+          This cannot be undone.
         </p>
       </div>
 
       {error ? <FormAlert tone="error">{error}</FormAlert> : null}
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4 max-w-[480px]">
         <FormField
           id="delete-password"
-          label="Confirm your password"
+          label="Your password"
           type="password"
           autoComplete="current-password"
           required
@@ -82,7 +80,7 @@ export function DeleteAccountPanel() {
           loadingLabel="Deleting account..."
           className="border-[var(--error-border)] text-[var(--error-text)] hover:bg-[var(--error-bg)]"
         >
-          Permanently delete account
+          Delete my account
         </Button>
       </form>
     </section>
