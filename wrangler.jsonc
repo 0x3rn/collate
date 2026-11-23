@@ -7,6 +7,12 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-11-21",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_ENV": "prod",
+    "APP_NAME": "Collate",
+    "EMAIL_FROM": "collate@corstack.dev",
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFSFBv33VMh4DpXy",
+  },
   "assets": {
     "directory": "dist/client",
     "html_handling": "none",

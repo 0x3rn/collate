@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent } from "react";
 import { FormAlert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import type { ChapterStatus } from "@/db/schema";
 import { canStartChapter } from "@/lib/writing/state-machine";
 
@@ -332,14 +332,22 @@ export function ChapterPipelinePanel({
                       ) : null}
 
                       {ch.status === "ready" || ch.status === "approved" ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={isBusy}
-                          onClick={() => triggerChapterPdfDownload(ch.id)}
-                        >
-                          Download PDF
-                        </Button>
+                        <>
+                          <LinkButton
+                            href={`/projects/${projectId}/chapters/${ch.id}`}
+                            variant="secondary"
+                          >
+                            Read / edit
+                          </LinkButton>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={isBusy}
+                            onClick={() => triggerChapterPdfDownload(ch.id)}
+                          >
+                            Download PDF
+                          </Button>
+                        </>
                       ) : null}
 
                       {ch.status === "ready" ? (

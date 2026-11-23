@@ -1,28 +1,34 @@
 import type { Metadata } from "next";
+import { env } from "cloudflare:workers";
+import { NotificationPrefsForm } from "@/components/account/notification-prefs-form";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { createDb } from "@/db/client";
 import { requireUser } from "@/lib/auth/server";
+import { getUserNotificationPrefs } from "@/lib/email/notifications";
 import { formatShortDate } from "@/lib/ui/formatters";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Account — Collate",
-  description: "Manage your Collate account details and session.",
+  description: "Manage your Collate account details, email notifications, and active session.",
 };
 
 export default async function AccountPage() {
   const user = await requireUser("/account");
+  const db = createDb(env.DB);
+  const notificationPrefs = await getUserNotificationPrefs(db, user.id);
 
   return (
     <>
       <SiteHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-[720px] px-4 sm:px-6 py-10 sm:py-12">
-        <div className="border-b border-[var(--neutral-200)] pb-5 mb-8">
+      <main className="flex-1 mx-auto w-full max-w-[720px] px-4 sm:px-6 py-10 sm:py-12 space-y-8">
+        <div className="border-b border-[var(--neutral-200)] pb-5">
           <h1 className="text-[2rem] font-medium">Account</h1>
           <p className="text-sm text-[var(--neutral-600)] mt-1">
-            Your profile, email verification status, and active session controls.
+            Your profile, email notification preferences, and active session controls.
           </p>
         </div>
 
@@ -66,6 +72,8 @@ export default async function AccountPage() {
             <SignOutButton variant="secondary" />
           </div>
         </section>
+
+        <NotificationPrefsForm initialPrefs={notificationPrefs} />
       </main>
       <SiteFooter />
     </>
