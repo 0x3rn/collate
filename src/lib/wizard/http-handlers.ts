@@ -169,8 +169,17 @@ function handleWizardRouteError(err: unknown, routeName: string): Response {
   if (err instanceof WizardError) {
     return jsonNoStore({ ok: false, code: err.code, error: err.message }, err.status);
   }
+  const causeMsg =
+    err instanceof Error && err.cause instanceof Error
+      ? err.cause.message
+      : err instanceof Error && err.cause
+        ? String(err.cause)
+        : undefined;
   logEvent("error", `api_${routeName}_unhandled`, {
-    data: { message: err instanceof Error ? err.message : String(err) },
+    data: {
+      message: err instanceof Error ? err.message : String(err),
+      ...(causeMsg ? { cause: causeMsg } : {}),
+    },
   });
   return jsonNoStore({ ok: false, error: "An unexpected error occurred. Please try again." }, 500);
 }

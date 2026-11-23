@@ -1,5 +1,5 @@
 // Collate — Cloudflare Workers configuration (pre-launch: main deploys directly to 'collate')
-// D1 (DB), R2 (FILES), Browser Run (BROWSER), Workers AI (AI), and Workflows.
+// D1 (DB), R2 (FILES), Browser Run (BROWSER), Images (IMAGES), Workers AI (AI), and Workflows.
 // Local dev overrides APP_ENV=dev via git-ignored .dev.vars.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -8,10 +8,8 @@
   "compatibility_date": "2026-11-21",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "APP_ENV": "prod",
     "APP_NAME": "Collate",
-    "EMAIL_FROM": "collate@corstack.dev",
-    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFSFBv33VMh4DpXy",
+    "APP_ENV": "prod",
   },
   "assets": {
     "directory": "dist/client",
@@ -25,10 +23,6 @@
   },
   "observability": {
     "enabled": true,
-  },
-  "vars": {
-    "APP_NAME": "Collate",
-    "APP_ENV": "prod",
   },
   "d1_databases": [
     {
