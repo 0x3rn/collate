@@ -32,7 +32,7 @@ export const WORK_TYPE_OVERVIEWS: readonly WorkTypeOverview[] = [
   },
   {
     title: "Assignment",
-    pageRange: `${FEASIBILITY_CONFIG.idealPageRanges.assignmentPerQuestion[0]}–${FEASIBILITY_CONFIG.idealPageRanges.assignmentPerQuestion[1]} pages / question`,
+    pageRange: `${FEASIBILITY_CONFIG.idealPageRanges.assignmentPerQuestion[0]}–${FEASIBILITY_CONFIG.idealPageRanges.assignmentPerQuestion[1]} pages per question`,
     bestFor: "Coursework and seminar sets with one or several questions.",
     structureNote:
       "Checks source depth for each question separately, then delivers direct, cited answers in one formatted file.",
@@ -90,6 +90,20 @@ export const CITATION_SPECIMENS = [
     inText: "(Okonkwo and Mensah 14)",
     reference:
       'Okonkwo, Adaeze, and Bamidele Mensah. "Solar microgrid reliability in rural health clinics." Energy Policy, 2024.',
+  },
+  {
+    id: "chicago",
+    label: "Chicago",
+    inText: "(Okonkwo and Mensah 2024, 14)",
+    reference:
+      'Okonkwo, Adaeze, and Bamidele Mensah. 2024. "Solar microgrid reliability in rural health clinics." Energy Policy.',
+  },
+  {
+    id: "vancouver",
+    label: "Vancouver",
+    inText: "(1)",
+    reference:
+      "1. Okonkwo A, Mensah B. Solar microgrid reliability in rural health clinics. Energy Policy. 2024. doi:10.1016/j.enpol.2024.113900.",
   },
 ] as const;
 

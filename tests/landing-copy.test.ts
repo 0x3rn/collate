@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CREDIT_PACKS } from "@/config/pricing";
+import { calculateProjectCreditEstimate, CREDIT_PACKS } from "@/config/pricing";
 import {
   CITATION_SPECIMENS,
   getPublicPricingSummary,
@@ -42,9 +42,10 @@ const INTERNAL_TECH_JARGON = [
   "backend",
   "json",
   "workers",
+  "workspace",
 ];
 
-describe("Landing page copy quality, non-technical language & config sync", () => {
+describe("Landing page copy quality, pricing & credit calculation", () => {
   it("contains zero banned marketing buzzwords and zero leaked internal tech jargon", () => {
     const allText = [
       ...WORK_TYPE_OVERVIEWS.flatMap((w) => [w.title, w.pageRange, w.bestFor, w.structureNote]),
@@ -65,12 +66,28 @@ describe("Landing page copy quality, non-technical language & config sync", () =
     }
   });
 
-  it("matches live CREDIT_PACKS pricing exactly with zero hardcoded drift", () => {
+  it("matches exact $10/10k, $25/30k, $50/60k credit packs and calculates project credits accurately", () => {
     const summary = getPublicPricingSummary();
     expect(summary.packs).toHaveLength(CREDIT_PACKS.length);
-    expect(summary.packs[0]?.credits).toBe(CREDIT_PACKS[0]?.credits);
-    expect(summary.packs[1]?.featured).toBe(true);
-    expect(summary.packs[1]?.ngnFormatted).toContain("16,500");
-    expect(summary.packs[2]?.usdFormatted).toBe("$32");
+    expect(summary.packs[0]).toMatchObject({
+      credits: 25,
+      ngnFormatted: "₦10,000",
+      usdFormatted: "$10",
+    });
+    expect(summary.packs[1]).toMatchObject({
+      credits: 80,
+      featured: true,
+      ngnFormatted: "₦30,000",
+      usdFormatted: "$25",
+    });
+    expect(summary.packs[2]).toMatchObject({
+      credits: 180,
+      ngnFormatted: "₦60,000",
+      usdFormatted: "$50",
+    });
+
+    const est = calculateProjectCreditEstimate({ workType: "project", targetPages: 55 });
+    expect(est.baseCredits).toBe(55);
+    expect(est.recommendedPack.id).toBe("pack_project_60");
   });
 });

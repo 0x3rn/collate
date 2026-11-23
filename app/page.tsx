@@ -26,7 +26,7 @@ export default async function HomePage() {
       <SiteHeader user={user} />
 
       <main className="flex-1">
-        {/* 1. Hero: Asymmetric editorial intro + interactive workspace showcase */}
+        {/* 1. Hero: Asymmetric editorial intro + layered stacked-page project preview */}
         <section className="relative overflow-hidden">
           <div className="mx-auto max-w-[1120px] px-4 sm:px-6 py-14 sm:py-20 lg:py-24">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
@@ -65,14 +65,20 @@ export default async function HomePage() {
                 </p>
               </div>
 
-              <div className="lg:col-span-6 p-3 sm:p-4 rounded-[var(--radius-md)] bg-editorial-grid border border-[var(--neutral-200)]">
-                <HeroWorkspacePreview />
+              <div className="lg:col-span-6 relative">
+                <div
+                  aria-hidden="true"
+                  className="hidden sm:block absolute inset-0 translate-x-2.5 translate-y-2.5 rounded-[var(--radius-md)] bg-[var(--neutral-100)] border border-[var(--neutral-200)]"
+                />
+                <div className="relative">
+                  <HeroWorkspacePreview />
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* 2. Work Types: Crisp 4-column architectural index */}
+        {/* 2. Work Types: 2x2 architectural ledger with bracketed page ranges aligned right of each title */}
         <section
           id="work-types"
           className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24"
@@ -91,23 +97,28 @@ export default async function HomePage() {
             </Reveal>
 
             <Reveal delayMs={60}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 border border-[var(--neutral-200)] rounded-[var(--radius-md)] divide-y sm:divide-y-0 sm:divide-x divide-[var(--neutral-200)] bg-[var(--neutral-50)] overflow-hidden">
-                {WORK_TYPE_OVERVIEWS.map((item) => (
-                  <article key={item.title} className="p-6 flex flex-col justify-between gap-4">
-                    <div className="space-y-2.5">
-                      <p className="text-xs font-semibold text-[var(--accent-600)] tabular-nums m-0">
-                        {item.pageRange}
-                      </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 border border-[var(--neutral-200)] rounded-[var(--radius-md)] bg-[var(--neutral-50)] overflow-hidden">
+                {WORK_TYPE_OVERVIEWS.map((item, idx) => (
+                  <article
+                    key={item.title}
+                    className={`p-6 sm:p-7 space-y-2.5 ${
+                      idx % 2 === 1 ? "md:border-l border-[var(--neutral-200)]" : ""
+                    } ${idx >= 2 ? "border-t border-[var(--neutral-200)]" : idx === 1 ? "border-t md:border-t-0 border-[var(--neutral-200)]" : ""}`}
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       <h3 className="text-xl font-medium text-[var(--neutral-900)] m-0">
                         {item.title}
                       </h3>
-                      <p className="text-sm font-medium text-[var(--neutral-800)] m-0">
-                        {item.bestFor}
-                      </p>
-                      <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
-                        {item.structureNote}
-                      </p>
+                      <span className="text-sm font-medium text-[var(--accent-600)] tabular-nums">
+                        ({item.pageRange})
+                      </span>
                     </div>
+                    <p className="text-sm font-medium text-[var(--neutral-800)] m-0">
+                      {item.bestFor}
+                    </p>
+                    <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+                      {item.structureNote}
+                    </p>
                   </article>
                 ))}
               </div>
@@ -115,7 +126,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* 3. How Collate Works: Sticky left narrative + vertical numbered timeline */}
+        {/* 3. How Collate Works: Sticky left narrative + vertical timeline */}
         <section id="how-it-works" className="border-t border-[var(--neutral-200)] py-16 md:py-24">
           <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
@@ -167,7 +178,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* 4. What You Get (Asymmetric Bento) + Strict Academic Rules */}
+        {/* 4. What You Get (Interactive Showcase) + Strict Rules */}
         <section
           id="what-you-get"
           className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24"
@@ -180,8 +191,8 @@ export default async function HomePage() {
                     What you get in every finished project
                   </h2>
                   <p className="text-[var(--neutral-600)] leading-relaxed m-0">
-                    Built around verifiable references, honest data handling, and real document
-                    formatting from cover page to reference list.
+                    Select any capability below to inspect how Collate verifies citations, checks
+                    claims, handles research data, and formats final files.
                   </p>
                 </div>
               </Reveal>
@@ -191,7 +202,6 @@ export default async function HomePage() {
               </Reveal>
             </div>
 
-            {/* Crisp architectural comparison rows instead of raw table */}
             <Reveal delayMs={80}>
               <div className="border-t border-[var(--neutral-200)] pt-14 space-y-6">
                 <div className="max-w-[64ch] space-y-2">
@@ -242,7 +252,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* 5. Transparent Pricing */}
+        {/* 5. Transparent Pricing & Credit Calculator */}
         <section id="pricing" className="border-t border-[var(--neutral-200)] py-16 md:py-24">
           <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-8">
             <Reveal>
@@ -251,9 +261,9 @@ export default async function HomePage() {
                   Simple credit packs, pay as you write
                 </h2>
                 <p className="text-[var(--neutral-600)] leading-relaxed m-0">
-                  Start with {pricing.freeSweeps} free topic checks. Credits are used at{" "}
-                  {pricing.creditsPerPage} credit per target page and refunded automatically if any
-                  chapter fails. Pay locally in Naira or internationally in US dollars.
+                  Start with {pricing.freeSweeps} free topic checks. Credits are deducted one
+                  chapter at a time and refunded automatically if any chapter fails. Pay in Naira or
+                  US dollars.
                 </p>
               </div>
             </Reveal>
@@ -264,7 +274,7 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* 6. Split FAQ (Eliminates empty right column space) */}
+        {/* 6. Split FAQ */}
         <section id="faq" className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24">
           <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
