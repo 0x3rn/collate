@@ -5,7 +5,11 @@ import { getProjectForUser } from "@/db/queries/projects";
 import { researchRuns } from "@/db/schema";
 import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
+import { extractClientIp } from "@/lib/auth/cookies";
+import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
+import { checkSpendCircuitBreaker } from "@/lib/billing/ledger";
+import { screenTopic } from "@/lib/feasibility/topic-screen";
 import { getLatestResearchRunSummary, type ResearchSweepPayload } from "./sweep-orchestrator";
 
 export interface ResearchWorkflowLauncher {
@@ -45,6 +49,37 @@ export async function handleStartResearchSweep(
   const project = await getProjectForUser(deps.db, session.user.id, projectId);
   if (!project) {
     return jsonNoStore({ ok: false, error: "Project not found." }, 404);
+  }
+
+  const nowCheck = (deps.nowFn ?? (() => new Date()))();
+  const topicScreen = screenTopic(project.title, { supervisorNotes: project.supervisorNotes });
+  if (topicScreen.flags.includes("disallowed")) {
+    return jsonNoStore(
+      { ok: false, error: topicScreen.reasons[0] ?? "This topic is disallowed." },
+      400
+    );
+  }
+
+  const breaker = await checkSpendCircuitBreaker(deps.db, nowCheck);
+  if (!breaker.allowed) {
+    return jsonNoStore(
+      { ok: false, error: breaker.reason ?? "Research sweeps are temporarily paused." },
+      503
+    );
+  }
+
+  const rl = await consumeAuthRateLimit(
+    deps.db,
+    "researchSweep",
+    `${session.user.id}:${extractClientIp(request)}`,
+    nowCheck.getTime()
+  );
+  if (!rl.allowed) {
+    return jsonNoStore(
+      { ok: false, error: "Hourly research sweep rate limit reached. Please try again later." },
+      429,
+      { "retry-after": String(rl.retryAfterSeconds) }
+    );
   }
 
   let parsedBody: z.infer<typeof StartSweepBodySchema> = {};

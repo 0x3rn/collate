@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { env } from "cloudflare:workers";
 import { desc, eq } from "drizzle-orm";
 import { CreditsPanel } from "@/components/account/credits-panel";
+import { DeleteAccountPanel } from "@/components/account/delete-account-panel";
 import { NotificationPrefsForm } from "@/components/account/notification-prefs-form";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -96,6 +97,8 @@ export default async function AccountPage() {
         />
 
         <NotificationPrefsForm initialPrefs={notificationPrefs} />
+
+        <DeleteAccountPanel />
       </main>
       <SiteFooter />
     </>

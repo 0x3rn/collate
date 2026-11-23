@@ -5,7 +5,10 @@ import { getProjectForUser } from "@/db/queries/projects";
 import { chapters, projectDatasets } from "@/db/schema";
 import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
+import { extractClientIp } from "@/lib/auth/cookies";
+import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
+import { checkSpendCircuitBreaker } from "@/lib/billing/ledger";
 import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { WriteChapterPayload } from "./chapter-orchestrator";
 import { analyzeCsvDataset } from "./results-data";
@@ -105,6 +108,30 @@ export async function handleStartChapter(
   }
 
   const now = (deps.nowFn ?? (() => new Date()))();
+  const breaker = await checkSpendCircuitBreaker(deps.db, now);
+  if (!breaker.allowed) {
+    return jsonNoStore(
+      { ok: false, error: breaker.reason ?? "Chapter writing is temporarily paused." },
+      503
+    );
+  }
+
+  const rl = await consumeAuthRateLimit(
+    deps.db,
+    "chapterStart",
+    `${auth.session.user.id}:${extractClientIp(request)}`,
+    now.getTime()
+  );
+  if (!rl.allowed) {
+    return jsonNoStore(
+      {
+        ok: false,
+        error: "Hourly chapter start limit reached. Please wait before starting another.",
+      },
+      429,
+      { "retry-after": String(rl.retryAfterSeconds) }
+    );
+  }
   const runId = `crun_${crypto.randomUUID()}`;
   let workflowInstanceId: string | null = null;
 

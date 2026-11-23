@@ -12,6 +12,10 @@ export const AUTH_RATE_LIMITS = {
   signin: { maxAttempts: 10, windowMs: 15 * 60 * 1000 },
   forgotPassword: { maxAttempts: 5, windowMs: 15 * 60 * 1000 },
   resendVerification: { maxAttempts: 5, windowMs: 15 * 60 * 1000 },
+  researchSweep: { maxAttempts: 10, windowMs: 60 * 60 * 1000 },
+  chapterStart: { maxAttempts: 20, windowMs: 60 * 60 * 1000 },
+  exportGenerate: { maxAttempts: 30, windowMs: 60 * 60 * 1000 },
+  accountDelete: { maxAttempts: 5, windowMs: 60 * 60 * 1000 },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 export type AuthRateLimitAction = keyof typeof AUTH_RATE_LIMITS;
@@ -22,9 +26,6 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
-/**
- * Shared D1-backed fixed-window rate limiter safe across Cloudflare Workers isolates.
- */
 export async function consumeAuthRateLimit(
   db: AppDb,
   action: AuthRateLimitAction,
