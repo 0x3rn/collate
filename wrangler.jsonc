@@ -10,6 +10,8 @@
   "vars": {
     "APP_NAME": "Collate",
     "APP_ENV": "prod",
+    "EMAIL_FROM": "collate@corstack.dev",
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFSFBv33VMh4DpXy",
   },
   "assets": {
     "directory": "dist/client",

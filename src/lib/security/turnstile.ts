@@ -22,6 +22,23 @@ export interface VerifyTurnstileResult {
 }
 
 /**
+ * Resolves the public Turnstile site key from Cloudflare Workers runtime `env`
+ * first (production & wrangler dev), falling back to `process.env` (local Vite / Node).
+ */
+export function resolveTurnstileSiteKey(
+  runtimeEnv?: Record<string, unknown>,
+  processEnv?: Record<string, string | undefined>
+): string {
+  const fromWorkerEnv =
+    typeof runtimeEnv?.NEXT_PUBLIC_TURNSTILE_SITE_KEY === "string"
+      ? runtimeEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY.trim()
+      : "";
+  if (fromWorkerEnv) return fromWorkerEnv;
+
+  return processEnv?.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() ?? "";
+}
+
+/**
  * Verifies Cloudflare Turnstile tokens server-side.
  * If TURNSTILE_SECRET_KEY is configured, verification is strictly enforced in all environments.
  * If unset, local 'dev' bypasses cleanly while 'prod' warns and enforces once configured.

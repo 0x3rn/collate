@@ -87,8 +87,8 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
               className="mt-1 w-4 h-4 accent-[var(--accent-600)]"
             />
             <div>
-              <p className="text-sm font-medium text-[var(--neutral-900)] m-0">{row.label}</p>
-              <p className="text-xs text-[var(--neutral-600)] m-0 mt-0.5">{row.description}</p>
+              <p className="text-sm font-medium text-[var(--neutral-900)]">{row.label}</p>
+              <p className="text-xs text-[var(--neutral-600)] mt-1">{row.description}</p>
             </div>
           </label>
         ))}

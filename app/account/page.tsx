@@ -38,20 +38,18 @@ export default async function AccountPage() {
         >
           <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <p className="text-xs font-medium text-[var(--neutral-500)] m-0">Full name</p>
-              <p className="text-base font-medium text-[var(--neutral-900)] mt-1 m-0">
-                {user.name}
-              </p>
+              <p className="text-xs font-medium text-[var(--neutral-500)]">Full name</p>
+              <p className="text-base font-medium text-[var(--neutral-900)] mt-1">{user.name}</p>
             </div>
-            <p className="text-xs text-[var(--neutral-500)] tabular-nums m-0">
+            <p className="text-xs text-[var(--neutral-500)] tabular-nums">
               Joined {formatShortDate(user.createdAt)}
             </p>
           </div>
 
           <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-[var(--neutral-500)] m-0">Email address</p>
-              <p className="text-base text-[var(--neutral-900)] mt-1 m-0">{user.email}</p>
+              <p className="text-xs font-medium text-[var(--neutral-500)]">Email address</p>
+              <p className="text-base text-[var(--neutral-900)] mt-1">{user.email}</p>
             </div>
             <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] border bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)] w-fit">
               Verified
@@ -60,8 +58,8 @@ export default async function AccountPage() {
 
           <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-medium text-[var(--neutral-500)] m-0">Credits</p>
-              <p className="text-base text-[var(--neutral-900)] mt-1 tabular-nums m-0">
+              <p className="text-xs font-medium text-[var(--neutral-500)]">Credits</p>
+              <p className="text-base text-[var(--neutral-900)] mt-1 tabular-nums">
                 {user.creditsBalance} credits available
               </p>
             </div>
@@ -75,8 +73,8 @@ export default async function AccountPage() {
 
           <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-[var(--neutral-900)] m-0">Sign out</p>
-              <p className="text-sm text-[var(--neutral-600)] mt-0.5 m-0">
+              <p className="text-sm font-medium text-[var(--neutral-900)]">Sign out</p>
+              <p className="text-sm text-[var(--neutral-600)] mt-1">
                 Sign out of Collate on this device.
               </p>
             </div>

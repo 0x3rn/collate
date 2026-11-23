@@ -283,7 +283,7 @@ export function StepCitationsForm({
               }`}
             >
               <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">{opt.label}</p>
-              <p className="text-xs text-[var(--neutral-600)] mt-1 m-0">{opt.example}</p>
+              <p className="text-xs text-[var(--neutral-600)] mt-1">{opt.example}</p>
             </button>
           );
         })}

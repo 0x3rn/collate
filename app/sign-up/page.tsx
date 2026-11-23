@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -5,6 +6,7 @@ import { SignUpForm } from "@/components/auth/sign-up-form";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { getCurrentUser } from "@/lib/auth/server";
+import { resolveTurnstileSiteKey } from "@/lib/security/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,10 @@ export default async function SignUpPage() {
     redirect("/dashboard");
   }
 
-  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+  const turnstileSiteKey = resolveTurnstileSiteKey(
+    env as unknown as Record<string, unknown>,
+    process.env
+  );
 
   return (
     <>

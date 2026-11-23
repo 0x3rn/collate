@@ -17,6 +17,7 @@ import type { EmailMessage, EmailSender } from "@/lib/email/mailer";
 import { handleCreateExport, type R2ReadWriteBucket } from "@/lib/export/http-handlers";
 import { extractCleanTextFromHtml, sanitizeUntrustedSourceText } from "@/lib/research/extractor";
 import { handleStartResearchSweep } from "@/lib/research/http-handlers";
+import { resolveTurnstileSiteKey } from "@/lib/security/turnstile";
 import { handleRequestChapterChanges, handleStartChapter } from "@/lib/writing/http-handlers";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
 
@@ -328,5 +329,20 @@ describe("Phase 12 — Security Hardening, Abuse Controls, Prompt-Injection & Ac
       authDeps
     );
     expect(meAfter.status).toBe(401);
+  });
+
+  it("resolves NEXT_PUBLIC_TURNSTILE_SITE_KEY from Cloudflare Workers env before process.env fallback", () => {
+    expect(
+      resolveTurnstileSiteKey(
+        { NEXT_PUBLIC_TURNSTILE_SITE_KEY: " 0x4AAAAAA_WORKER_KEY " },
+        { NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAA_PROCESS_KEY" }
+      )
+    ).toBe("0x4AAAAAA_WORKER_KEY");
+
+    expect(
+      resolveTurnstileSiteKey({}, { NEXT_PUBLIC_TURNSTILE_SITE_KEY: "0x4AAAAAA_LOCAL_KEY" })
+    ).toBe("0x4AAAAAA_LOCAL_KEY");
+
+    expect(resolveTurnstileSiteKey({}, {})).toBe("");
   });
 });

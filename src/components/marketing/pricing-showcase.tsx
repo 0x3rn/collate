@@ -45,11 +45,11 @@ export function PricingShowcase({
       {/* Interactive Credit Calculation Strip */}
       <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
         <div className="lg:col-span-7 space-y-4">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent-600)] m-0">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent-600)]">
               Credit calculator
             </p>
-            <p className="text-sm text-[var(--neutral-700)] m-0">
+            <p className="text-sm text-[var(--neutral-700)]">
               Estimate how many credits your project needs (1 credit per page, held one chapter at a
               time).
             </p>
@@ -187,7 +187,7 @@ export function PricingShowcase({
               variant={pack.featured ? "primary" : "secondary"}
               fullWidth
             >
-              {signedIn ? "Top up in account" : "Create account"}
+              {signedIn ? "Top up credits" : "Create account"}
             </LinkButton>
           </div>
         ))}

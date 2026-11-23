@@ -17,7 +17,7 @@ export function HeroWorkspacePreview() {
   const containerRef = useRef<HTMLElement | null>(null);
   const [tab, setTab] = useState<PreviewTab>("check");
   const [citationOpen, setCitationOpen] = useState(true);
-  const [barsAnimated, setBarsAnimated] = useState(false);
+  const [barsAnimated, setBarsAnimated] = useState(true);
 
   const replayBars = useCallback(() => {
     const prefersReduced =
@@ -36,7 +36,7 @@ export function HeroWorkspacePreview() {
     });
   }, []);
 
-  // Re-animate bars on initial mount and whenever hero scrolls back into view
+  // Animate bars smoothly on initial mount and whenever hero returns into view
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof IntersectionObserver === "undefined") {
@@ -44,17 +44,19 @@ export function HeroWorkspacePreview() {
       return;
     }
 
+    let wasIntersecting = false;
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
         if (!entry) return;
-        if (entry.isIntersecting) {
+        if (entry.isIntersecting && !wasIntersecting) {
+          wasIntersecting = true;
           replayBars();
-        } else {
-          setBarsAnimated(false);
+        } else if (!entry.isIntersecting) {
+          wasIntersecting = false;
         }
       },
-      { threshold: 0.25 }
+      { threshold: 0.15 }
     );
 
     observer.observe(el);

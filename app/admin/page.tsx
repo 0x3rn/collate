@@ -65,8 +65,8 @@ export default async function AdminPage() {
     <WorkspaceShell user={user} maxWidthClassName="max-w-[1040px]">
       <div className="space-y-8">
         <div className="border-b border-[var(--neutral-200)] pb-5">
-          <h1 className="text-[2rem] font-medium m-0">Admin operations</h1>
-          <p className="text-sm text-[var(--neutral-600)] mt-1 m-0">
+          <h1 className="text-[2rem] font-medium">Admin operations</h1>
+          <p className="text-sm text-[var(--neutral-600)] mt-1.5">
             Monitor users, AI job costs, failures, spend circuit breakers, and manual refunds.
           </p>
         </div>

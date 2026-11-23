@@ -177,10 +177,10 @@ function SidebarContent({
           className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-[var(--radius-sm)] bg-white border border-[var(--neutral-200)] hover:border-[var(--neutral-300)] transition-colors"
         >
           <div>
-            <p className="text-[11px] font-medium text-[var(--neutral-500)] m-0 leading-tight">
+            <p className="text-[11px] font-medium text-[var(--neutral-500)] leading-tight">
               Available credits
             </p>
-            <p className="text-sm font-semibold text-[var(--neutral-900)] tabular-nums m-0 mt-0.5">
+            <p className="text-sm font-semibold text-[var(--neutral-900)] tabular-nums mt-0.5">
               {user.creditsBalance} credits
             </p>
           </div>

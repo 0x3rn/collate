@@ -184,7 +184,7 @@ export function StepResearchSweep({
             <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
               Live scholarly &amp; web research sweep
             </p>
-            <p className="text-xs text-[var(--neutral-600)] mt-0.5 m-0">
+            <p className="text-xs text-[var(--neutral-600)] mt-1">
               {activeRun
                 ? RUN_STAGE_LABELS[activeRun.status]
                 : "Runs OpenAlex, Crossref, Semantic Scholar, arXiv, Europe PMC, DOAJ, Unpaywall, and configured web APIs."}

@@ -119,21 +119,21 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]">
-          <p className="text-xs text-[var(--neutral-600)] m-0">24h global AI spend</p>
-          <p className="text-2xl font-semibold tabular-nums text-[var(--neutral-900)] mt-1 m-0">
+          <p className="text-xs text-[var(--neutral-600)]">24h global AI spend</p>
+          <p className="text-2xl font-semibold tabular-nums text-[var(--neutral-900)] mt-1">
             ${initial.circuitBreaker.globalDailySpendUsd.toFixed(4)}
           </p>
         </div>
         <div className="p-5 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]">
-          <p className="text-xs text-[var(--neutral-600)] m-0">All-time logged AI spend</p>
-          <p className="text-2xl font-semibold tabular-nums text-[var(--neutral-900)] mt-1 m-0">
+          <p className="text-xs text-[var(--neutral-600)]">All-time logged AI spend</p>
+          <p className="text-2xl font-semibold tabular-nums text-[var(--neutral-900)] mt-1">
             ${initial.allTimeLlmCostUsd.toFixed(4)}
           </p>
         </div>
         <div className="p-5 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]">
-          <p className="text-xs text-[var(--neutral-600)] m-0">Circuit breaker status</p>
+          <p className="text-xs text-[var(--neutral-600)]">Circuit breaker status</p>
           <p
-            className={`text-2xl font-semibold mt-1 m-0 ${
+            className={`text-2xl font-semibold mt-1 ${
               initial.circuitBreaker.allowed
                 ? "text-[var(--success-text)]"
                 : "text-[var(--error-text)]"

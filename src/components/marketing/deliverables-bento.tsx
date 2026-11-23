@@ -53,7 +53,7 @@ export function DeliverablesBento() {
       <div
         role="tablist"
         aria-label="Project deliverables"
-        className="lg:col-span-5 flex flex-col gap-2"
+        className="lg:col-span-5 flex flex-col gap-3"
       >
         {FEATURES.map((feat) => {
           const active = selected === feat.id;
@@ -83,7 +83,7 @@ export function DeliverablesBento() {
                   →
                 </span>
               </div>
-              <p className="text-sm text-[var(--neutral-600)] leading-relaxed mt-1 m-0">
+              <p className="text-sm text-[var(--neutral-600)] leading-relaxed mt-1.5">
                 {feat.summary}
               </p>
             </button>
