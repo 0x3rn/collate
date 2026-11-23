@@ -5,8 +5,17 @@
 # Local runtime override
 APP_ENV=
 APP_URL=
-# HMAC secret signing short-lived PDF/DOCX download URLs
 EXPORT_SIGNING_SECRET=
+# Comma-separated operator emails allowed to access /admin
+ADMIN_EMAILS=
+
+# Payments (Paystack NGN & Stripe International)
+# Paystack secret key (sk_test_... / sk_live_...)
+PAYSTACK_SECRET_KEY=
+# Stripe secret key (sk_test_... / sk_live_...)
+STRIPE_SECRET_KEY=
+# Stripe webhook signing secret (whsec_...)
+STRIPE_WEBHOOK_SECRET=
 
 # Cloudflare Turnstile
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=
