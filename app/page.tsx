@@ -3,72 +3,41 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { LinkButton } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth/server";
+import {
+  DELIVERABLES_LIST,
+  getPublicPricingSummary,
+  LANDING_FAQS,
+  REFUSAL_RULES,
+  WORKFLOW_STEPS,
+  WORK_TYPE_OVERVIEWS,
+} from "@/lib/marketing/landing-content";
 
 export const dynamic = "force-dynamic";
 
-const PROCESS_STEPS = [
-  {
-    step: "01",
-    title: "Choose your work type and topic",
-    body: "Select Project, Research paper, Thesis, or Assignment. Enter one topic or a list of assignment questions.",
-  },
-  {
-    step: "02",
-    title: "Deep source sweep before writing",
-    body: "Collate checks scholarly databases and web sources first. If credible evidence is missing, it tells you why and stops instead of guessing.",
-  },
-  {
-    step: "03",
-    title: "Approve length, chapters, and citations",
-    body: "Review the recommended page count, define your chapter titles, pick your citation style, and confirm the full outline.",
-  },
-  {
-    step: "04",
-    title: "Write one verified chapter at a time",
-    body: "Each chapter is checked against stored passages and originality gates, emailed when ready, and exported as PDF or Word.",
-  },
-];
-
-const GROUND_RULES = [
-  {
-    title: "Refuses weak topics instead of guessing",
-    body: "When real evidence is too thin or a topic is too vague, Collate gives clear reasons and refinement ideas rather than filling pages.",
-  },
-  {
-    title: "Citations come only from verified records",
-    body: "Reference lists are formatted by a citation engine from real DOI and publisher metadata, never invented in free text.",
-  },
-  {
-    title: "Never fabricates research data",
-    body: "Results chapters use your uploaded data, cited public datasets, or a clearly labelled framework—never invented survey numbers.",
-  },
-  {
-    title: "Measured page counts and real exports",
-    body: "PDFs are rendered server-side with headers, numbering, and table of contents—so reported page counts match the downloaded file.",
-  },
-];
-
 export default async function HomePage() {
   const user = await getCurrentUser();
+  const pricing = getPublicPricingSummary();
 
   return (
     <>
       <SiteHeader user={user} />
 
       <main className="flex-1">
+        {/* 1. Hero: Clear value line, audience, primary CTA, and structured product preview */}
         <section className="mx-auto max-w-[1120px] px-4 sm:px-6 py-16 md:py-24">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
-            <div className="lg:col-span-7 space-y-6">
-              <p className="text-sm font-medium text-[var(--accent-600)]">
-                Research and drafting assistant for university work
+            <div className="lg:col-span-6 space-y-6">
+              <p className="text-sm font-medium text-[var(--accent-600)] m-0">
+                For university students and academic researchers
               </p>
-              <h1 className="text-[2.25rem] sm:text-[2.75rem] font-medium leading-[1.15] text-[var(--neutral-900)]">
-                Write projects, theses, and assignments backed by real sources
+              <h1 className="text-[2.25rem] sm:text-[2.875rem] font-medium leading-[1.14] text-[var(--neutral-900)] m-0">
+                Check your topic against real sources, then write one verified chapter at a time
               </h1>
-              <p className="text-lg text-[var(--neutral-600)] max-w-[54ch] leading-relaxed">
-                Collate sweeps scholarly and web sources first to confirm your topic can be written
-                without guessing, then drafts one verified chapter at a time and exports formatted
-                PDF and Word files.
+              <p className="text-lg text-[var(--neutral-600)] max-w-[54ch] leading-relaxed m-0">
+                Collate sweeps scholarly databases and web sources before any writing starts. If
+                credible evidence is missing, it tells you why and stops instead of guessing. When a
+                topic passes, it plans your outline, verifies every claim and citation, and exports
+                server-typeset PDF and Word files.
               </p>
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -87,133 +56,163 @@ export default async function HomePage() {
                   </>
                 )}
               </div>
+
+              <p className="text-sm text-[var(--neutral-600)] m-0">
+                Includes {pricing.freeSweeps} free topic feasibility checks when you sign up.
+              </p>
             </div>
 
+            {/* Concrete product frame showing actual Collate screens/states */}
             <aside
-              aria-label="How Collate checks a project"
-              className="lg:col-span-5 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 shadow-[var(--shadow-subtle)] space-y-5"
+              aria-label="Sample project inspection view"
+              className="lg:col-span-6 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] shadow-[var(--shadow-subtle)] overflow-hidden"
             >
-              <div className="flex items-center justify-between border-b border-[var(--neutral-200)] pb-4">
-                <div>
-                  <p className="text-xs font-medium text-[var(--neutral-500)]">Workflow sequence</p>
-                  <p className="text-base font-semibold text-[var(--neutral-900)] mt-0.5">
-                    From topic check to typeset PDF
+              <div className="px-5 py-3.5 bg-[var(--neutral-100)] border-b border-[var(--neutral-200)] flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[var(--neutral-500)] m-0">
+                    Example project workspace
+                  </p>
+                  <p className="text-sm font-semibold text-[var(--neutral-900)] truncate m-0">
+                    Solar Microgrid Reliability in Rural Clinics
                   </p>
                 </div>
-                <span className="inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] bg-[var(--accent-100)] text-[var(--accent-600)]">
-                  Chapter by chapter
+                <span className="shrink-0 inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] border bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]">
+                  Feasible · 86/100
                 </span>
               </div>
 
-              <ol className="space-y-4 list-none p-0 m-0">
-                <li className="flex items-start gap-3">
-                  <span className="tabular-nums text-xs font-semibold text-[var(--neutral-500)] pt-1">
-                    01
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--neutral-900)]">
-                      Feasibility gate
-                    </p>
-                    <p className="text-sm text-[var(--neutral-600)]">
-                      Verifies source depth before any writing begins.
+              <div className="p-5 sm:p-6 space-y-5">
+                <div className="grid grid-cols-3 gap-3 text-left">
+                  <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
+                    <p className="text-xs text-[var(--neutral-600)] m-0">Verified sources</p>
+                    <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+                      38 DOIs &amp; reports
                     </p>
                   </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="tabular-nums text-xs font-semibold text-[var(--neutral-500)] pt-1">
-                    02
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--neutral-900)]">
-                      Evidence-bound drafting
-                    </p>
-                    <p className="text-sm text-[var(--neutral-600)]">
-                      Every factual claim links to a stored source passage.
+                  <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
+                    <p className="text-xs text-[var(--neutral-600)] m-0">Recommended</p>
+                    <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+                      80 pages
                     </p>
                   </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="tabular-nums text-xs font-semibold text-[var(--neutral-500)] pt-1">
-                    03
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--neutral-900)]">
-                      Originality and length check
-                    </p>
-                    <p className="text-sm text-[var(--neutral-600)]">
-                      Runs overlap checks and measures real rendered PDF pages.
+                  <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
+                    <p className="text-xs text-[var(--neutral-600)] m-0">Citation style</p>
+                    <p className="text-base font-semibold text-[var(--neutral-900)] m-0">
+                      APA 7th ed.
                     </p>
                   </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="tabular-nums text-xs font-semibold text-[var(--neutral-500)] pt-1">
-                    04
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+                    Chapter progress
+                  </p>
+                  <ul className="divide-y divide-[var(--neutral-200)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] list-none p-0 m-0 text-sm">
+                    <li className="px-3.5 py-2.5 flex items-center justify-between gap-2">
+                      <span className="text-[var(--neutral-900)]">
+                        <strong className="tabular-nums mr-1.5">Ch. 1</strong> Introduction
+                      </span>
+                      <span className="text-xs font-medium text-[var(--success-text)]">
+                        Approved · Overlap 3.1%
+                      </span>
+                    </li>
+                    <li className="px-3.5 py-2.5 flex items-center justify-between gap-2 bg-[var(--neutral-50)]">
+                      <span className="text-[var(--neutral-900)]">
+                        <strong className="tabular-nums mr-1.5">Ch. 2</strong> Literature Review
+                      </span>
+                      <span className="text-xs font-medium text-[var(--accent-600)]">
+                        Ready · Email sent
+                      </span>
+                    </li>
+                    <li className="px-3.5 py-2.5 flex items-center justify-between gap-2">
+                      <span className="text-[var(--neutral-600)]">
+                        <strong className="tabular-nums mr-1.5">Ch. 3</strong> Methodology
+                      </span>
+                      <span className="text-xs text-[var(--neutral-500)]">
+                        Waiting for your click
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="pt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--neutral-600)]">
+                  <span>PDF &amp; Word (.docx) export with Roman + Arabic pages</span>
+                  <span className="font-medium text-[var(--neutral-800)]">
+                    Illustrative preview
                   </span>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--neutral-900)]">
-                      Your approval before the next chapter
-                    </p>
-                    <p className="text-sm text-[var(--neutral-600)]">
-                      Review, download PDF or Word, and start Chapter N+1 when ready.
-                    </p>
-                  </div>
-                </li>
-              </ol>
+                </div>
+              </div>
             </aside>
           </div>
         </section>
 
+        {/* 2. Work types & realistic university length ranges */}
         <section
-          id="how-it-works"
+          id="work-types"
           className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24"
         >
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
-            <div className="max-w-[60ch] mb-12 space-y-3">
-              <h2 className="text-[1.75rem] sm:text-[2rem] font-medium">How Collate works</h2>
-              <p className="text-[var(--neutral-600)]">
-                Long academic work should not be rushed into one prompt. Collate breaks the job into
-                clear, inspectable stages.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {PROCESS_STEPS.map((item) => (
-                <div
-                  key={item.step}
-                  className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-3"
-                >
-                  <p className="tabular-nums text-sm font-semibold text-[var(--accent-600)]">
-                    Step {item.step}
-                  </p>
-                  <h3 className="text-lg font-medium text-[var(--neutral-900)]">{item.title}</h3>
-                  <p className="text-sm text-[var(--neutral-600)] leading-relaxed">{item.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="rules" className="border-t border-[var(--neutral-200)] py-16 md:py-24">
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
-            <div className="max-w-[60ch] mb-12 space-y-3">
-              <h2 className="text-[1.75rem] sm:text-[2rem] font-medium">
-                Built around strict academic ground rules
+          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-10">
+            <div className="max-w-[64ch] space-y-3">
+              <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium m-0">
+                Built for four types of academic work
               </h2>
-              <p className="text-[var(--neutral-600)]">
-                Collate is a research and drafting assistant. It is designed to show its sources and
-                limits honestly—never to fake evidence or promise evasion of university checks.
+              <p className="text-[var(--neutral-600)] leading-relaxed m-0">
+                Each work type uses different source thresholds, section templates, and ideal page
+                recommendations—and you can always override the target page count.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {GROUND_RULES.map((rule) => (
-                <div
-                  key={rule.title}
-                  className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-2"
+              {WORK_TYPE_OVERVIEWS.map((item) => (
+                <article
+                  key={item.title}
+                  className="p-6 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-2.5"
                 >
-                  <h3 className="text-xl font-medium text-[var(--neutral-900)]">{rule.title}</h3>
-                  <p className="text-sm sm:text-base text-[var(--neutral-600)] leading-relaxed">
-                    {rule.body}
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-xl font-medium m-0">{item.title}</h3>
+                    <span className="text-xs font-medium tabular-nums px-2.5 py-1 rounded-[var(--radius-sm)] bg-white border border-[var(--neutral-200)] text-[var(--neutral-700)]">
+                      {item.pageRange}
+                    </span>
+                  </div>
+                  <p className="text-sm font-medium text-[var(--neutral-800)] m-0">
+                    {item.bestFor}
+                  </p>
+                  <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+                    {item.structureNote}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 3. How Collate works (4 steps) */}
+        <section id="how-it-works" className="border-t border-[var(--neutral-200)] py-16 md:py-24">
+          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-10">
+            <div className="max-w-[64ch] space-y-3">
+              <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium m-0">
+                How Collate works
+              </h2>
+              <p className="text-[var(--neutral-600)] leading-relaxed m-0">
+                Long projects need inspectable checkpoints rather than a single rushed output. Your
+                progress is saved after every step so you can pause and resume at any time.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {WORKFLOW_STEPS.map((item) => (
+                <div
+                  key={item.step}
+                  className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-3"
+                >
+                  <p className="tabular-nums text-sm font-semibold text-[var(--accent-600)] m-0">
+                    Step {item.step}
+                  </p>
+                  <h3 className="text-lg font-medium text-[var(--neutral-900)] m-0">
+                    {item.title}
+                  </h3>
+                  <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+                    {item.body}
                   </p>
                 </div>
               ))}
@@ -221,27 +220,179 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* 4. What you get + Hard ground rules */}
+        <section
+          id="what-you-get"
+          className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24"
+        >
+          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-16">
+            <div className="space-y-10">
+              <div className="max-w-[64ch] space-y-3">
+                <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium m-0">
+                  What you get in every finished project
+                </h2>
+                <p className="text-[var(--neutral-600)] leading-relaxed m-0">
+                  Every chapter goes through evidence retrieval, fact checking, similarity checks,
+                  and server-side typesetting before it reaches your inbox.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {DELIVERABLES_LIST.map((item) => (
+                  <div
+                    key={item.title}
+                    className="p-6 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-2"
+                  >
+                    <h3 className="text-lg font-medium text-[var(--neutral-900)] m-0">
+                      {item.title}
+                    </h3>
+                    <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+                      {item.detail}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-[var(--neutral-200)] pt-12 space-y-6">
+              <div className="max-w-[64ch] space-y-2">
+                <h2 className="text-[1.625rem] font-medium m-0">
+                  What Collate enforces—and what it refuses to do
+                </h2>
+                <p className="text-sm text-[var(--neutral-600)] m-0">
+                  These non-negotiable engineering rules are built into the backend, not just
+                  written in marketing copy.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto border border-[var(--neutral-200)] rounded-[var(--radius-md)]">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-[var(--neutral-100)] border-b border-[var(--neutral-200)]">
+                      <th className="py-3.5 px-5 font-semibold text-[var(--neutral-900)]">
+                        What Collate does
+                      </th>
+                      <th className="py-3.5 px-5 font-semibold text-[var(--neutral-900)]">
+                        What Collate refuses to do
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--neutral-200)] bg-white">
+                    {REFUSAL_RULES.map((row) => (
+                      <tr key={row.willDo}>
+                        <td className="py-3.5 px-5 text-[var(--neutral-800)]">{row.willDo}</td>
+                        <td className="py-3.5 px-5 text-[var(--neutral-600)]">{row.wontDo}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 5. Transparent pricing & refund policy */}
+        <section id="pricing" className="border-t border-[var(--neutral-200)] py-16 md:py-24">
+          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-10">
+            <div className="max-w-[64ch] space-y-3">
+              <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium m-0">
+                Simple credit packs with Paystack and Stripe
+              </h2>
+              <p className="text-[var(--neutral-600)] leading-relaxed m-0">
+                Start with {pricing.freeSweeps} free topic source checks. When you are ready to
+                write chapters, credits are reserved at {pricing.creditsPerPage} credit per target
+                page and refunded automatically if a chapter run fails.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {pricing.packs.map((pack) => (
+                <div
+                  key={pack.id}
+                  className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 flex flex-col justify-between gap-6"
+                >
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-[var(--accent-600)] m-0">
+                      {pack.label}
+                    </p>
+                    <p
+                      className="text-2xl font-medium text-[var(--neutral-900)] tabular-nums m-0"
+                      style={{ fontFamily: "var(--font-serif)" }}
+                    >
+                      {pack.ngnFormatted}
+                    </p>
+                    <p className="text-sm text-[var(--neutral-600)] tabular-nums m-0">
+                      International: {pack.usdFormatted}
+                    </p>
+                    <p className="text-sm text-[var(--neutral-700)] pt-2 leading-relaxed m-0">
+                      {pack.description}
+                    </p>
+                  </div>
+
+                  <LinkButton href={user ? "/account" : "/sign-up"} variant="secondary" fullWidth>
+                    {user ? "Top up in account" : "Create account"}
+                  </LinkButton>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 6. Accessible FAQ */}
+        <section id="faq" className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24">
+          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-10">
+            <div className="max-w-[64ch] space-y-3">
+              <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium m-0">
+                Frequently asked questions
+              </h2>
+              <p className="text-[var(--neutral-600)] m-0">
+                Clear answers on source verification, data integrity, timing, and university checks.
+              </p>
+            </div>
+
+            <div className="max-w-[78ch] divide-y divide-[var(--neutral-200)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] bg-[var(--neutral-50)]">
+              {LANDING_FAQS.map((faq) => (
+                <details key={faq.question} className="group p-5 sm:p-6">
+                  <summary className="list-none cursor-pointer flex items-center justify-between gap-4 text-base font-semibold text-[var(--neutral-900)]">
+                    <span>{faq.question}</span>
+                    <span
+                      aria-hidden="true"
+                      className="text-sm font-medium text-[var(--neutral-500)] shrink-0"
+                    >
+                      +
+                    </span>
+                  </summary>
+                  <p className="text-sm sm:text-base text-[var(--neutral-700)] leading-relaxed pt-3 m-0">
+                    {faq.answer}
+                  </p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 7. Final CTA */}
         <section className="border-t border-[var(--neutral-200)] bg-[var(--neutral-100)] py-16">
           <div className="mx-auto max-w-[1120px] px-4 sm:px-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="space-y-2 max-w-[54ch]">
-              <h2 className="text-[1.75rem] font-medium">Start with your topic</h2>
-              <p className="text-[var(--neutral-600)]">
-                Create an account to set up your first project, thesis, research paper, or
-                assignment.
+              <h2 className="text-[1.75rem] font-medium m-0">
+                Check your topic against real sources first
+              </h2>
+              <p className="text-[var(--neutral-600)] m-0">
+                Create a free account to test your project, research paper, thesis, or assignment
+                questions before writing a single paragraph.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <LinkButton href={user ? "/dashboard" : "/sign-up"} variant="primary">
-                {user ? "Go to projects" : "Create account"}
+              <LinkButton href={user ? "/projects/new" : "/sign-up"} variant="primary">
+                {user ? "Start a new project" : "Create account"}
               </LinkButton>
-              {!user ? (
-                <Link
-                  href="/terms"
-                  className="min-h-[44px] px-3 inline-flex items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)] underline underline-offset-4"
-                >
-                  Read terms of service
-                </Link>
-              ) : null}
+              <Link
+                href="/terms"
+                className="min-h-[44px] px-3 inline-flex items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)] underline underline-offset-4"
+              >
+                Terms &amp; integrity limits
+              </Link>
             </div>
           </div>
         </section>

@@ -9,7 +9,7 @@ export function SiteHeader({ user }: { user: PublicUser | null }) {
       <div className="mx-auto max-w-[1120px] px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         <Link
           href={user ? "/dashboard" : "/"}
-          className="text-xl font-semibold tracking-tight text-[var(--neutral-900)]"
+          className="text-xl font-semibold tracking-tight text-[var(--neutral-900)] shrink-0"
           style={{ fontFamily: "var(--font-serif)" }}
         >
           Collate
@@ -32,18 +32,30 @@ export function SiteHeader({ user }: { user: PublicUser | null }) {
             <SignOutButton variant="ghost" />
           </nav>
         ) : (
-          <nav aria-label="Main navigation" className="flex items-center gap-2 sm:gap-4">
+          <nav aria-label="Main navigation" className="flex items-center gap-1 sm:gap-3">
             <Link
               href="/#how-it-works"
-              className="hidden sm:inline-flex min-h-[44px] px-2 items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
+              className="hidden md:inline-flex min-h-[44px] px-2.5 items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
             >
               How it works
             </Link>
             <Link
-              href="/#rules"
-              className="hidden sm:inline-flex min-h-[44px] px-2 items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
+              href="/#what-you-get"
+              className="hidden md:inline-flex min-h-[44px] px-2.5 items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
             >
-              Ground rules
+              What you get
+            </Link>
+            <Link
+              href="/#pricing"
+              className="hidden md:inline-flex min-h-[44px] px-2.5 items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
+            >
+              Pricing
+            </Link>
+            <Link
+              href="/#faq"
+              className="hidden md:inline-flex min-h-[44px] px-2.5 items-center text-sm font-medium text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
+            >
+              FAQ
             </Link>
             <Link
               href="/sign-in"
