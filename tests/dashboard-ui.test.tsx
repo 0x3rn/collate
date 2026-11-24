@@ -302,6 +302,22 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
             isAutoReferences: false,
             status: "not_started",
             sectionHeadings: [],
+            userInstructions: "Highlight primary MDA biomarker measurements.",
+            userAttachmentName: "lab_biomarkers.csv",
+            userAttachmentKind: "csv",
+            hasUserDataTables: true,
+          },
+          {
+            id: "ch_5",
+            number: 5,
+            title: "Discussion",
+            chapterType: "discussion",
+            pageBudget: 6,
+            wordBudget: 1650,
+            isAutoReferences: false,
+            status: "ready",
+            hasDraftVersion: true,
+            sectionHeadings: [],
           },
           {
             id: "ch_6",
@@ -318,6 +334,12 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
       />
     );
     expect(chaptersHtml).toContain("Chapter 1: Introduction");
+    expect(chaptersHtml).toContain("Add instructions (optional)");
+    expect(chaptersHtml).toContain("Edit instructions");
+    expect(chaptersHtml).toContain("Pre-start instructions saved");
+    expect(chaptersHtml).toContain("lab_biomarkers.csv");
+    // Started/ready chapter shows Request changes instead of Add instructions
+    expect(chaptersHtml).toContain("Request changes");
     expect(chaptersHtml).toContain("Results data (optional)");
     expect(chaptersHtml).toContain("Chapters unlock one at a time");
     expect(chaptersHtml).toContain("Automatic");

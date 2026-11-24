@@ -159,6 +159,7 @@ export async function draftAndVerifySection(
     spelling: SpellingVariant;
     priorSummaryText: string;
     glossaryText: string;
+    chapterGuidance?: string | null;
     revisionInstructions?: string | null;
     existingSectionProse?: string | null;
     isSingleSectionSurgical?: boolean;
@@ -265,24 +266,36 @@ export async function draftAndVerifySection(
           .join("\n\n")
       : "";
 
+  const hasChapterGuidance = Boolean(!isSurgicalRevision && input.chapterGuidance?.trim());
+  const systemRules: string[] = [
+    "1. Use ONLY the provided passages, verified data tables, and any explicit experimental measurements supplied by the author below. Never invent statistics, quotes, or sources.",
+    `2. You may cite ONLY these registered citation keys using [@key] syntax: ${allowedKeys.map((k) => `@${k}`).join(", ") || "(none)"}. Attach [@key] citations strictly to claims supported by the provided scholarly passages.`,
+    "3. Write in original academic prose without copying source sentences verbatim. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
+  ];
+  if (isSurgicalRevision) {
+    systemRules.push(
+      `${systemRules.length + 1}. SURGICAL REVISION MODE: Preserve all unaffected sentences, existing verified [@key] citations, tables, page breaks (<!-- pagebreak -->), and :::figure blocks from CURRENT SECTION TEXT verbatim. Modify ONLY what the user's revision request specifically asks to add, fix, expand, or tighten.`
+    );
+  }
+  if (hasChapterGuidance) {
+    systemRules.push(
+      `${systemRules.length + 1}. AUTHOR PRE-START INSTRUCTIONS & NOTES (APPENDED — STAY ON THE MAIN CHAPTER PLAN): You MUST still fully draft the planned section "${input.sectionHeading}" according to its academic purpose, target word budget, and verified scholarly passages. Do NOT deviate from or abandon the section's main academic scope. Alongside the main plan, apply every instruction from AUTHOR PRE-START INSTRUCTIONS that fits this section (specific focus points, frameworks, terminology, formatting, or experimental details). Treat any numbers, measurements, or tables explicitly supplied by the author as verified primary data (Rule NN-4: report them accurately without altering or fabricating additional figures).`
+    );
+  }
+  if (figuresBlock) {
+    systemRules.push(
+      `${systemRules.length + 1}. VERIFIED FIGURES: Never invent or generate image URLs. When an illustration strengthens this section (or the user requested an image), insert ONLY from VERIFIED FIGURES using the exact fenced block syntax:\n:::figure\nurl: <exact url>\nalt: <alt text>\ncaption: <academic caption explaining the figure>\nattribution: <exact attribution>\nsourceUrl: <exact sourceUrl if provided>\nwidth: <exact width>\nheight: <exact height>\n:::`
+    );
+  }
+  systemRules.push(
+    `${systemRules.length + 1}. Return ONLY a valid JSON object: { "prose": "...", "claims": [{ "text": "...", "citeKey": "bare_key_without_at", "passageId": "..." }] }.`
+  );
+
   const systemPrompt = [
     `You are an academic researcher ${isSurgicalRevision ? "performing a surgical revision of" : "drafting"} a section of "${input.chapterTitle}" (${WRITING_CONFIG.promptVersion}).`,
     `Academic level: ${input.level || "University"}. Spelling: ${input.spelling.toUpperCase()} English.`,
     "STRICT EVIDENCE RULES (NON-NEGOTIABLE):",
-    "1. Use ONLY the provided passages and verified data tables. Never invent statistics, quotes, or sources.",
-    `2. You may cite ONLY these registered citation keys using [@key] syntax: ${allowedKeys.map((k) => `@${k}`).join(", ") || "(none)"}.`,
-    "3. Write in original academic prose without copying source sentences verbatim. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
-    ...(isSurgicalRevision
-      ? [
-          "4. SURGICAL REVISION MODE: Preserve all unaffected sentences, existing verified [@key] citations, tables, page breaks (<!-- pagebreak -->), and :::figure blocks from CURRENT SECTION TEXT verbatim. Modify ONLY what the user's revision request specifically asks to add, fix, expand, or tighten.",
-        ]
-      : []),
-    ...(figuresBlock
-      ? [
-          `${isSurgicalRevision ? "5" : "4"}. VERIFIED FIGURES: Never invent or generate image URLs. When an illustration strengthens this section (or the user requested an image), insert ONLY from VERIFIED FIGURES using the exact fenced block syntax:\n:::figure\nurl: <exact url>\nalt: <alt text>\ncaption: <academic caption explaining the figure>\nattribution: <exact attribution>\nsourceUrl: <exact sourceUrl if provided>\nwidth: <exact width>\nheight: <exact height>\n:::`,
-        ]
-      : []),
-    `${isSurgicalRevision ? (figuresBlock ? "6" : "5") : figuresBlock ? "5" : "4"}. Return ONLY a valid JSON object: { "prose": "...", "claims": [{ "text": "...", "citeKey": "bare_key_without_at", "passageId": "..." }] }.`,
+    ...systemRules,
   ].join("\n");
 
   const baseUserPrompt = [
@@ -295,6 +308,9 @@ export async function draftAndVerifySection(
     !omitChapterWideContext && input.glossaryText ? `Glossary terms:\n${input.glossaryText}` : "",
     input.existingSectionProse
       ? `CURRENT SECTION TEXT (preserve untouched sentences verbatim):\n${input.existingSectionProse}`
+      : "",
+    hasChapterGuidance
+      ? `AUTHOR PRE-START INSTRUCTIONS & NOTES (apply alongside the main plan without deviating from "${input.sectionHeading}"):\n${input.chapterGuidance!.trim()}`
       : "",
     input.revisionInstructions ? `Revision request from user:\n${input.revisionInstructions}` : "",
     input.extraDataContext ? `Verified empirical data (Rule NN-4):\n${input.extraDataContext}` : "",

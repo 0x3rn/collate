@@ -816,11 +816,22 @@ export async function checkSpendCircuitBreaker(
   db: AppDb,
   now: Date = new Date()
 ): Promise<CircuitBreakerStatus> {
-  const [control] = await db
-    .select()
-    .from(systemControls)
-    .where(eq(systemControls.key, "global_circuit_breaker"))
-    .limit(1);
+  const dayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const [[control], [sumRow]] = await Promise.all([
+    db
+      .select()
+      .from(systemControls)
+      .where(eq(systemControls.key, "global_circuit_breaker"))
+      .limit(1),
+    db
+      .select({
+        total: sql<number>`coalesce(sum(${jobsLog.costEstimateUsd}), 0)`,
+      })
+      .from(jobsLog)
+      .where(gte(jobsLog.createdAt, dayStart)),
+  ]);
+
+  const globalDailySpendUsd = Number(sumRow?.total ?? 0);
 
   let lastAdminResumeAt: Date | null = null;
   if (control) {
@@ -830,7 +841,7 @@ export async function checkSpendCircuitBreaker(
         return {
           allowed: false,
           reason: parsed.reason || "Global AI spend circuit breaker is active.",
-          globalDailySpendUsd: 0,
+          globalDailySpendUsd,
           globalKillSwitchActive: true,
         };
       }
@@ -840,15 +851,6 @@ export async function checkSpendCircuitBreaker(
     }
   }
 
-  const dayStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const [sumRow] = await db
-    .select({
-      total: sql<number>`coalesce(sum(${jobsLog.costEstimateUsd}), 0)`,
-    })
-    .from(jobsLog)
-    .where(gte(jobsLog.createdAt, dayStart));
-
-  const globalDailySpendUsd = Number(sumRow?.total ?? 0);
   if (globalDailySpendUsd >= BILLING_POLICY.spendCaps.globalDailyUsd) {
     return {
       allowed: false,

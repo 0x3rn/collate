@@ -350,7 +350,18 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
       </div>
 
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
-        <h2 className="text-xl font-medium m-0">Global circuit breaker</h2>
+        <div className="space-y-1">
+          <h2 className="text-xl font-medium m-0">Global circuit breaker</h2>
+          <p className="text-sm text-[var(--neutral-600)] m-0">
+            Pausing blocks all new chapter drafts, revisions, assignments, and topic checks without
+            charging credits, while letting any runs already in progress finish cleanly.
+          </p>
+        </div>
+        {!initial.circuitBreaker.allowed && initial.circuitBreaker.reason ? (
+          <p className="text-xs font-medium text-[var(--error-text)] bg-[var(--error-bg)] border border-[var(--error-border)] rounded-[var(--radius-sm)] px-3.5 py-2.5 m-0">
+            Active pause reason: {initial.circuitBreaker.reason}
+          </p>
+        ) : null}
         <FormField
           id="breaker-reason"
           label="Operational note"
@@ -362,7 +373,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
           <Button
             type="button"
             variant="secondary"
-            disabled={busy}
+            disabled={busy || !initial.circuitBreaker.allowed}
             onClick={() => toggleCircuitBreaker(true)}
           >
             Pause all drafting jobs
@@ -370,7 +381,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
           <Button
             type="button"
             variant="primary"
-            disabled={busy}
+            disabled={busy || initial.circuitBreaker.allowed}
             onClick={() => toggleCircuitBreaker(false)}
           >
             Resume drafting jobs

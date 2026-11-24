@@ -104,6 +104,16 @@ describe("Chapter attention classification, masking, and D1 persistence", () => 
     expect(map.get("ch_orig")?.kind).toBe("user_input_required");
     expect(map.get("ch_orig")?.inputType).toBe("originality_guidance");
     expect(map.get("ch_orig")?.userMessage).toContain("18%");
+
+    // When overlap and quotes are both 0%, report paraphrase similarity rather than misleading "0%"
+    const semanticOnly = buildOriginalityAttention({
+      overlapScore: 0,
+      quoteSharePct: 0,
+      semanticScore: 93,
+      crossUserScore: 0,
+    });
+    expect(semanticOnly.userMessage).toContain("paraphrase similarity 93%");
+    expect(semanticOnly.userMessage).not.toContain("source overlap 0%");
   });
 
   it("detects legacy failed originality report as user_input_required even without audit_log row", async () => {

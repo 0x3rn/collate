@@ -104,6 +104,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       isAutoReferences: ch.isAutoReferences,
       status: ch.status,
       sectionHeadings: secRows.map((s) => s.heading),
+      userInstructions: ch.userInstructions ?? null,
+      userAttachmentName: ch.userAttachmentName ?? null,
+      userAttachmentKind: ch.userAttachmentKind ?? null,
+      hasUserDataTables: Boolean(ch.userDataSummaryMarkdown?.trim()),
       attention: chapterAttentionMap.get(ch.id) ?? null,
       hasDraftVersion: chaptersWithDraftVersion.has(ch.id),
       originalityReport: latestReportByChapter.has(ch.id)

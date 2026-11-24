@@ -208,6 +208,7 @@ export async function checkSemanticSimilarityAndMirroring(
     embedder.embed(sampledSentences),
     embedder.embed(sampledPassages.map((p) => p.text)),
   ]);
+  const passageTrigrams = sampledPassages.map((p) => buildShingleHashSet(p.text, 3));
 
   const flagged: FlaggedSpan[] = [];
   let maxScore = 0;
@@ -219,6 +220,7 @@ export async function checkSemanticSimilarityAndMirroring(
     if (!sVec) continue;
 
     let bestSim = 0;
+    let bestIdx = -1;
     let bestPassage: { passageId: string; sourceId: string } | null = null;
 
     for (let j = 0; j < sampledPassages.length; j++) {
@@ -227,24 +229,49 @@ export async function checkSemanticSimilarityAndMirroring(
       const sim = cosineSimilarity(sVec, pVec);
       if (sim > bestSim) {
         bestSim = sim;
+        bestIdx = j;
         bestPassage = sampledPassages[j]!;
       }
     }
 
     if (bestSim > maxScore) maxScore = bestSim;
 
-    if (bestSim >= ORIGINALITY_CONFIG.maxSemanticParaphraseScore && bestPassage) {
-      flagged.push({
-        kind: "semantic_paraphrase",
-        sentence: sampledSentences[i]!,
-        score: Number((bestSim * 100).toFixed(1)),
-        sourceId: bestPassage.sourceId,
-        passageId: bestPassage.passageId,
-        reason: `Close semantic paraphrase detected (${Math.round(bestSim * 100)}% similarity to a single source passage).`,
-      });
+    if (bestPassage && bestIdx >= 0 && bestSim >= ORIGINALITY_CONFIG.maxSemanticParaphraseScore) {
+      // Embedding models such as bge-base-en-v1.5 naturally score 0.88-0.93 when an original
+      // cited scientific sentence uses mandatory domain terminology (e.g. enzyme/biomarker names).
+      // Flag unconditionally only for near-verbatim semantic clones (>= 0.96); for 0.89-0.96,
+      // require real 3-gram phrasing closeness (>= 30%) so mosaic plagiarism is caught without
+      // false-flagging original cited academic synthesis.
+      let trigramOverlapRatio = 0;
+      const sentTrigrams = buildShingleHashSet(sampledSentences[i]!, 3);
+      const bestPassTrigrams = passageTrigrams[bestIdx];
+      if (sentTrigrams.size > 0 && bestPassTrigrams && bestPassTrigrams.size > 0) {
+        let shared = 0;
+        for (const h of sentTrigrams) {
+          if (bestPassTrigrams.has(h)) shared++;
+        }
+        trigramOverlapRatio = shared / sentTrigrams.size;
+      }
+
+      const isClone = bestSim >= ORIGINALITY_CONFIG.maxSemanticCloneScore;
+      const isMosaicParaphrase =
+        trigramOverlapRatio >= ORIGINALITY_CONFIG.maxSemanticTrigramOverlapRatio;
+
+      if (isClone || isMosaicParaphrase) {
+        flagged.push({
+          kind: "semantic_paraphrase",
+          sentence: sampledSentences[i]!,
+          score: Number((bestSim * 100).toFixed(1)),
+          sourceId: bestPassage.sourceId,
+          passageId: bestPassage.passageId,
+          reason: isClone
+            ? `Close semantic paraphrase detected (${Math.round(bestSim * 100)}% similarity to a single source passage).`
+            : `Close mosaic paraphrase detected (${Math.round(bestSim * 100)}% semantic similarity and ${Math.round(trigramOverlapRatio * 100)}% shared phrasing).`,
+        });
+      }
     }
 
-    if (bestSim >= 0.78 && bestPassage) {
+    if (bestSim >= ORIGINALITY_CONFIG.structureMirroringScore && bestPassage) {
       if (bestPassage.sourceId === prevSourceId) {
         consecutiveSameSource++;
       } else {

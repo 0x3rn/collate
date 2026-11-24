@@ -1300,4 +1300,170 @@ describe("Phase 7 — WriteChapterWorkflow (resumability, claim rewriting, 20-cl
     );
     expect(isExplicitFullChapterRewriteRequest("Expand the chapter to add more pages")).toBe(true);
   });
+
+  it("appends pre-start chapter instructions and user CSV/Markdown data alongside main section plan without deviating, and activates user_dataset mode on Results chapters", async () => {
+    await db.insert(chapters).values({
+      id: "chp_prestart_res",
+      projectId: "prj_p7",
+      number: 4,
+      title: "Results and Findings",
+      chapterType: "results",
+      userInstructions:
+        "Highlight the 98.2% uptime achieved in Enugu clinics and compare against diesel failure rates.\n\n| Site | Uptime (%) |\n| --- | --- |\n| Enugu | 98.2 |\n| Kano | 94.1 |",
+      userAttachmentName: "clinic_trial.md",
+      userAttachmentKind: "markdown",
+      userDataSummaryMarkdown:
+        "**Table: Descriptive Statistics (User-Supplied Dataset)**\n\n| Variable | N | Mean |\n| --- | ---: | ---: |\n| uptime_pct | 2 | 96.15 |",
+      pageBudget: 2,
+      wordBudget: 550,
+      isAutoReferences: false,
+      status: "not_started",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(sections).values({
+      id: "sec_prestart_1",
+      chapterId: "chp_prestart_res",
+      orderIndex: 1,
+      heading: "Observed Uptime Findings",
+      wordBudget: 400,
+      status: "not_started",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const capturedDraftPrompts: string[] = [];
+    const r2Map = new Map<string, string>();
+    const llmCtx: CallLLMContext = {
+      db,
+      env: { ANTHROPIC_API_KEY: "sk-ant-test", APP_ENV: "dev" },
+      fetchFn: async (_url, init) => {
+        const rawBody = String(init?.body ?? "");
+        const parsed = JSON.parse(rawBody) as {
+          system?: string;
+          messages?: Array<{ content: string }>;
+        };
+        const userText = parsed.messages?.[0]?.content ?? "";
+        if (parsed.system?.includes("fact-checker")) {
+          return new Response(
+            JSON.stringify({
+              id: "msg_v",
+              model: "claude-test",
+              stop_reason: "end_turn",
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    results: [{ index: 0, verdict: "supported", notes: "Matches passage" }],
+                  }),
+                },
+              ],
+              usage: { input_tokens: 100, output_tokens: 40 },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+
+        if (parsed.system?.includes("Summarize the chapter")) {
+          return new Response(
+            JSON.stringify({
+              id: "msg_m",
+              model: "claude-test",
+              stop_reason: "end_turn",
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    summary: "Summarized empirical clinic uptime results.",
+                    glossaryTerms: [],
+                  }),
+                },
+              ],
+              usage: { input_tokens: 100, output_tokens: 40 },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+
+        capturedDraftPrompts.push(`${parsed.system ?? ""}\n---\n${userText}`);
+        return new Response(
+          JSON.stringify({
+            id: "msg_d",
+            model: "claude-test",
+            stop_reason: "end_turn",
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  prose:
+                    "In the primary trial data, Enugu clinics reached 98.2% uptime compared with 94.1% in Kano (mean 96.15%), outperforming diesel backups. Prior multi-site studies corroborate that solar microgrids raise rural clinic uptime above 90% [@okonkwo2024].",
+                  claims: [
+                    {
+                      text: "Prior multi-site studies corroborate that solar microgrids raise rural clinic uptime above 90% [@okonkwo2024].",
+                      citeKey: "okonkwo2024",
+                      passageId: "psg_1_0",
+                    },
+                  ],
+                }),
+              },
+            ],
+            usage: { input_tokens: 300, output_tokens: 120 },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      },
+    };
+
+    const out = await runWriteChapterOrchestration(
+      {
+        runId: "crun_prestart_1",
+        projectId: "prj_p7",
+        chapterId: "chp_prestart_res",
+        createdBy: "ai",
+      },
+      {
+        loadContext: (fn) => fn(),
+        draftSection: (_idx, fn) => fn(),
+        assembleAndFinalize: (fn) => fn(),
+      },
+      {
+        db,
+        bucket: {
+          async put(key, val) {
+            r2Map.set(key, String(val));
+          },
+          async get(key) {
+            const val = r2Map.get(key);
+            return val === undefined
+              ? null
+              : {
+                  async text() {
+                    return val;
+                  },
+                };
+          },
+        },
+        llmCtx,
+        measurePagesFn: async () => 2,
+        waiveOriginalityGate: true,
+        nowFn: () => now,
+      }
+    );
+
+    expect(out.status).toBe("ready");
+    expect(capturedDraftPrompts.length).toBeGreaterThanOrEqual(1);
+    const prompt = capturedDraftPrompts[0]!;
+    // Preserves main plan instruction AND appends user pre-start instructions + verified CSV table
+    expect(prompt).toContain("STAY ON THE MAIN CHAPTER PLAN");
+    expect(prompt).toContain("Observed Uptime Findings");
+    expect(prompt).toContain("Highlight the 98.2% uptime achieved in Enugu clinics");
+    expect(prompt).toContain("Descriptive Statistics (User-Supplied Dataset)");
+    expect(prompt).toContain("VERIFIED EVIDENCE PASSAGES");
+    expect(prompt).not.toContain("SURGICAL REVISION MODE");
+
+    const finalMd = r2Map.get(out.contentR2Key) ?? "";
+    expect(finalMd).toContain("98.2% uptime");
+    expect(finalMd).not.toContain("RESULTS FRAMEWORK PLACEHOLDER");
+  });
 });

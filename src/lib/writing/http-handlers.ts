@@ -9,6 +9,7 @@ import { WRITING_CONFIG } from "@/config/writing";
 import { getProjectForUser } from "@/db/queries/projects";
 import {
   chapters,
+  chapterVersions,
   projectDatasets,
   projects,
   projectSettings,
@@ -35,6 +36,11 @@ import { logEvent } from "@/lib/observability/logger";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
 import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { WriteChapterPayload } from "./chapter-orchestrator";
+import {
+  ChapterInstructionValidationError,
+  MAX_CHAPTER_INSTRUCTIONS_CHARS,
+  prepareChapterInstructionsPayload,
+} from "./chapter-instructions";
 import { analyzeCsvDataset } from "./results-data";
 import { matchExplicitRevisionTargets } from "./section-revision";
 import { canStartChapter } from "./state-machine";
@@ -101,6 +107,165 @@ async function authenticateAndLoadProject(
     return { ok: false, error: jsonNoStore({ ok: false, error: "Project not found." }, 404) };
   }
   return { ok: true, session, project };
+}
+
+const SaveChapterInstructionsBodySchema = z.object({
+  instructions: z
+    .string()
+    .max(
+      MAX_CHAPTER_INSTRUCTIONS_CHARS,
+      `Instructions must be ${MAX_CHAPTER_INSTRUCTIONS_CHARS.toLocaleString("en-US")} characters or fewer.`
+    )
+    .nullable()
+    .optional(),
+  attachmentFilename: z.string().trim().max(160).nullable().optional(),
+  attachmentContent: z
+    .string()
+    .max(WRITING_CONFIG.limits.maxCsvBytes, "Uploaded file exceeds the 5 MB limit.")
+    .nullable()
+    .optional(),
+  keepExistingAttachment: z.boolean().optional(),
+});
+
+/**
+ * Saves or clears pre-start drafting instructions, experimental notes, or uploaded
+ * CSV/Markdown files for a chapter that has never been started yet.
+ */
+export async function handleSaveChapterInstructions(
+  request: Request,
+  projectId: string,
+  chapterId: string,
+  deps: ChapterHttpDeps
+): Promise<Response> {
+  const auth = await authenticateAndLoadProject(request, projectId, deps, true);
+  if (!auth.ok) return auth.error;
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return jsonNoStore({ ok: false, error: "Invalid JSON request body." }, 400);
+  }
+
+  const parsed = SaveChapterInstructionsBodySchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return jsonNoStore(
+      { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid instructions payload." },
+      400
+    );
+  }
+
+  const [target] = await deps.db
+    .select()
+    .from(chapters)
+    .where(and(eq(chapters.id, chapterId), eq(chapters.projectId, auth.project.id)))
+    .limit(1);
+
+  if (!target) {
+    return jsonNoStore({ ok: false, error: "Chapter not found." }, 404);
+  }
+
+  if (target.isAutoReferences) {
+    return jsonNoStore(
+      { ok: false, error: "Automatic References chapters cannot take custom instructions." },
+      409
+    );
+  }
+
+  const existingVersions = await deps.db
+    .select({ id: chapterVersions.id })
+    .from(chapterVersions)
+    .where(eq(chapterVersions.chapterId, target.id))
+    .limit(1);
+
+  if (target.status !== "not_started" || existingVersions.length > 0) {
+    return jsonNoStore(
+      {
+        ok: false,
+        error:
+          "Pre-start instructions can only be saved before a chapter is started. Use Request changes for started chapters.",
+      },
+      409
+    );
+  }
+
+  let prepared: ReturnType<typeof prepareChapterInstructionsPayload>;
+  try {
+    prepared = prepareChapterInstructionsPayload({
+      instructions: parsed.data.instructions,
+      attachmentFilename: parsed.data.attachmentFilename,
+      attachmentContent: parsed.data.attachmentContent,
+      keepExistingAttachment: parsed.data.keepExistingAttachment,
+      existingAttachment: {
+        name: target.userAttachmentName,
+        kind: target.userAttachmentKind,
+        dataSummaryMarkdown: target.userDataSummaryMarkdown,
+      },
+    });
+  } catch (err) {
+    if (err instanceof ChapterInstructionValidationError) {
+      return jsonNoStore({ ok: false, error: err.message }, err.status);
+    }
+    return jsonNoStore({ ok: false, error: "Could not process chapter instructions." }, 400);
+  }
+
+  const now = (deps.nowFn ?? (() => new Date()))();
+
+  // If the student uploaded a CSV file directly on a Results chapter, also mirror it into
+  // project_datasets (and R2 when available) so the Results data card stays consistent.
+  if (
+    prepared.uploadedCsvRaw &&
+    prepared.csvAnalysis &&
+    prepared.userAttachmentName &&
+    target.chapterType === "results"
+  ) {
+    const datasetId = `dts_${crypto.randomUUID()}`;
+    const r2Key = `datasets/${auth.project.id}/${datasetId}.csv`;
+    if (deps.bucket) {
+      await deps.bucket.put(r2Key, prepared.uploadedCsvRaw, {
+        httpMetadata: { contentType: "text/csv; charset=utf-8" },
+      });
+    }
+    await deps.db.insert(projectDatasets).values({
+      id: datasetId,
+      projectId: auth.project.id,
+      filename: prepared.userAttachmentName,
+      r2Key,
+      rowCount: prepared.csvAnalysis.rowCount,
+      columnsJson: JSON.stringify(prepared.csvAnalysis.columns),
+      summaryJson: JSON.stringify(prepared.csvAnalysis),
+      createdAt: now,
+    });
+  }
+
+  await deps.db
+    .update(chapters)
+    .set({
+      userInstructions: prepared.userInstructions,
+      userAttachmentName: prepared.userAttachmentName,
+      userAttachmentKind: prepared.userAttachmentKind,
+      userDataSummaryMarkdown: prepared.userDataSummaryMarkdown,
+      updatedAt: now,
+    })
+    .where(eq(chapters.id, target.id));
+
+  return jsonNoStore(
+    {
+      ok: true,
+      chapterId: target.id,
+      userInstructions: prepared.userInstructions,
+      userAttachmentName: prepared.userAttachmentName,
+      userAttachmentKind: prepared.userAttachmentKind,
+      hasDataTables: Boolean(prepared.userDataSummaryMarkdown),
+      csvStats: prepared.csvAnalysis
+        ? {
+            rowCount: prepared.csvAnalysis.rowCount,
+            columnCount: prepared.csvAnalysis.columnCount,
+          }
+        : null,
+    },
+    200
+  );
 }
 
 const StartChapterBodySchema = z

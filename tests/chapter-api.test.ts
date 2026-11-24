@@ -7,7 +7,7 @@ import {
 } from "@/config/pricing";
 import { createDb, type AppDb } from "@/db/client";
 import { createWizardDraftProject } from "@/db/queries/wizard";
-import { chapters, creditReservations, sections, users } from "@/db/schema";
+import { chapters, creditReservations, projectDatasets, sections, users } from "@/db/schema";
 import {
   handleSignIn,
   handleSignUp,
@@ -15,9 +15,11 @@ import {
   type HttpAuthDeps,
 } from "@/lib/auth/http-handlers";
 import type { EmailMessage, EmailSender } from "@/lib/email/mailer";
+import { detectLooksLikeCsv, hasUserExperimentalData } from "@/lib/writing/chapter-instructions";
 import {
   handleApproveChapter,
   handleRequestChapterChanges,
+  handleSaveChapterInstructions,
   handleStartChapter,
   handleUploadProjectDataset,
 } from "@/lib/writing/http-handlers";
@@ -421,5 +423,163 @@ describe("Phase 7 — Chapter & CSV Dataset HTTP API (NN-8 gating, idempotency &
       deps
     );
     expect(badUpload.status).toBe(400);
+  });
+
+  it("saves, updates, validates, and clears pre-start chapter instructions + CSV/Markdown files only for unstarted chapters with IDOR and CSRF protection", async () => {
+    const alice = await signUpCookie("Alice Instr", "instr-alice@uni.edu", "Str0ngPass!1");
+    const bob = await signUpCookie("Bob Instr", "instr-bob@uni.edu", "Str0ngPass!2");
+
+    const draft = await createWizardDraftProject(
+      db,
+      alice.userId,
+      "thesis",
+      now,
+      "Effect of Beta vulgaris on Oxidative Stress Biomarkers"
+    );
+    const projectId = draft.project.id;
+    const ch1 = draft.chapters.find((c) => c.number === 1)!;
+    const ch4 = draft.chapters.find((c) => c.chapterType === "results")!;
+    const refCh = draft.chapters.find((c) => c.isAutoReferences)!;
+
+    // Pure CSV/data heuristics
+    expect(detectLooksLikeCsv("group,mda,gsh\nControl,4.2,12.1\nTreated,2.5,18.4")).toBe(true);
+    expect(detectLooksLikeCsv("| Group | MDA |\n| --- | --- |\n| Control | 4.2 |")).toBe(false);
+    expect(
+      hasUserExperimentalData({
+        userInstructions: "| Group | MDA |\n| --- | --- |\n| Control | 4.2 |",
+      })
+    ).toBe(true);
+
+    const makePut = (
+      chapterId: string,
+      body: Record<string, unknown>,
+      cookie = alice.cookie,
+      origin = "https://collate.app"
+    ) =>
+      handleSaveChapterInstructions(
+        new Request(
+          `https://collate.app/api/projects/${projectId}/chapters/${chapterId}/instructions`,
+          {
+            method: "PUT",
+            headers: {
+              "content-type": "application/json",
+              origin,
+              cookie,
+            },
+            body: JSON.stringify(body),
+          }
+        ),
+        projectId,
+        chapterId,
+        {
+          ...authDeps,
+          bucket: {
+            async put() {
+              // captured cleanly
+            },
+          },
+        }
+      );
+
+    // 1. CSRF blocked
+    const csrfRes = await makePut(
+      ch1.id,
+      { instructions: "Focus on West Africa." },
+      alice.cookie,
+      "https://evil.example"
+    );
+    expect(csrfRes.status).toBe(403);
+
+    // 2. IDOR blocked (Bob cannot modify Alice's chapter)
+    const idorRes = await makePut(ch1.id, { instructions: "Focus on West Africa." }, bob.cookie);
+    expect(idorRes.status).toBe(404);
+
+    // 3. Auto-References chapter rejected (409)
+    const refRes = await makePut(refCh.id, { instructions: "Custom refs" });
+    expect(refRes.status).toBe(409);
+
+    // 4. Reject invalid extension and binary null bytes
+    const badExtRes = await makePut(ch1.id, {
+      attachmentFilename: "../../malware.exe",
+      attachmentContent: "bad",
+    });
+    expect(badExtRes.status).toBe(400);
+
+    const binaryRes = await makePut(ch1.id, {
+      attachmentFilename: "notes.md",
+      attachmentContent: "hello\u0000world",
+    });
+    expect(binaryRes.status).toBe(400);
+
+    // 5. Save Markdown instructions + uploaded .md file on unstarted Chapter 1
+    const mdSaveRes = await makePut(ch1.id, {
+      instructions: "Emphasize ethnobotanical use of beetroot in Nigeria.",
+      attachmentFilename: "chapter1_notes.md",
+      attachmentContent:
+        "### Lab context\n- Male Wistar rats (180-220 g)\n- 28-day dosing protocol",
+    });
+    expect(mdSaveRes.status).toBe(200);
+    const mdSaveJson = (await mdSaveRes.json()) as {
+      ok: boolean;
+      userInstructions: string;
+      userAttachmentName: string;
+      userAttachmentKind: string;
+    };
+    expect(mdSaveJson.ok).toBe(true);
+    expect(mdSaveJson.userAttachmentName).toBe("chapter1_notes.md");
+    expect(mdSaveJson.userAttachmentKind).toBe("markdown");
+    expect(mdSaveJson.userInstructions).toContain("ethnobotanical use of beetroot");
+    expect(mdSaveJson.userInstructions).toContain("28-day dosing protocol");
+
+    // 6. Save CSV experimental data on unstarted Results chapter -> computes summary tables + mirrors into project_datasets
+    const csvSaveRes = await makePut(ch4.id, {
+      instructions: "Highlight the significant reduction in hepatic MDA.",
+      attachmentFilename: "wistar_oxidative_stress.csv",
+      attachmentContent:
+        "group,mda_nmol_ml,gsh_u_mg\nControl,2.1,18.4\nGinOnly,5.8,9.2\nGinPlusBeetroot,2.9,16.1\n",
+    });
+    expect(csvSaveRes.status).toBe(200);
+    const csvSaveJson = (await csvSaveRes.json()) as {
+      ok: boolean;
+      hasDataTables: boolean;
+      csvStats: { rowCount: number; columnCount: number } | null;
+    };
+    expect(csvSaveJson.ok).toBe(true);
+    expect(csvSaveJson.hasDataTables).toBe(true);
+    expect(csvSaveJson.csvStats).toEqual({ rowCount: 3, columnCount: 3 });
+
+    const [ch4Row] = await db.select().from(chapters).where(eq(chapters.id, ch4.id));
+    expect(ch4Row?.userAttachmentName).toBe("wistar_oxidative_stress.csv");
+    expect(ch4Row?.userAttachmentKind).toBe("csv");
+    expect(ch4Row?.userDataSummaryMarkdown).toContain("mda_nmol_ml");
+    expect(ch4Row?.userDataSummaryMarkdown).toContain("Descriptive Statistics");
+
+    const mirroredDatasets = await db
+      .select()
+      .from(projectDatasets)
+      .where(eq(projectDatasets.projectId, projectId));
+    expect(mirroredDatasets).toHaveLength(1);
+    expect(mirroredDatasets[0]?.filename).toBe("wistar_oxidative_stress.csv");
+
+    // 7. Pasted raw CSV directly in instructions box (no file upload) also computes summary tables automatically
+    const pastedCsvRes = await makePut(ch1.id, {
+      instructions: "group,mda,gsh\nControl,2.1,18.4\nTreated,2.8,16.2",
+    });
+    expect(pastedCsvRes.status).toBe(200);
+    const [ch1Pasted] = await db.select().from(chapters).where(eq(chapters.id, ch1.id));
+    expect(ch1Pasted?.userDataSummaryMarkdown).toContain("Descriptive Statistics");
+
+    // 8. Clear instructions back to null cleanly
+    const clearRes = await makePut(ch1.id, { instructions: "", keepExistingAttachment: false });
+    expect(clearRes.status).toBe(200);
+    const [ch1Cleared] = await db.select().from(chapters).where(eq(chapters.id, ch1.id));
+    expect(ch1Cleared?.userInstructions).toBeNull();
+    expect(ch1Cleared?.userAttachmentName).toBeNull();
+    expect(ch1Cleared?.userDataSummaryMarkdown).toBeNull();
+
+    // 9. Reject once chapter has started (status !== "not_started")
+    await db.update(chapters).set({ status: "ready" }).where(eq(chapters.id, ch1.id));
+    const startedRes = await makePut(ch1.id, { instructions: "Too late" });
+    expect(startedRes.status).toBe(409);
   });
 });

@@ -35,13 +35,28 @@ export function buildTechnicalErrorAttention(): ChapterAttentionInfo {
 export function buildOriginalityAttention(params: {
   overlapScore?: number;
   quoteSharePct?: number;
+  semanticScore?: number;
+  crossUserScore?: number;
 }): ChapterAttentionInfo {
-  const scoreDetail =
-    typeof params.overlapScore === "number"
-      ? ` (source overlap ${params.overlapScore}%${
-          typeof params.quoteSharePct === "number" ? `, direct quotes ${params.quoteSharePct}%` : ""
-        })`
-      : "";
+  const details: string[] = [];
+  if (typeof params.overlapScore === "number" && params.overlapScore > 0) {
+    details.push(`source overlap ${params.overlapScore}%`);
+  }
+  if (typeof params.quoteSharePct === "number" && params.quoteSharePct > 0) {
+    details.push(`direct quotes ${params.quoteSharePct}%`);
+  }
+  if (typeof params.crossUserScore === "number" && params.crossUserScore > 0) {
+    details.push(`cross-project similarity ${params.crossUserScore}%`);
+  }
+  if (
+    details.length === 0 &&
+    typeof params.semanticScore === "number" &&
+    params.semanticScore > 0
+  ) {
+    details.push(`paraphrase similarity ${Math.round(params.semanticScore)}%`);
+  }
+
+  const scoreDetail = details.length > 0 ? ` (${details.join(", ")})` : "";
   return {
     kind: "user_input_required",
     inputType: "originality_guidance",
@@ -215,6 +230,8 @@ export async function loadChapterAttentionMap(
         buildOriginalityAttention({
           overlapScore: latestReport.overlapScore,
           quoteSharePct: latestReport.quoteSharePct,
+          semanticScore: latestReport.semanticScore,
+          crossUserScore: latestReport.crossUserScore,
         })
       );
       continue;

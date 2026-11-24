@@ -154,6 +154,43 @@ describe("Phase 8 — Layered Originality Engine (shingle overlap, quote budget,
     });
     expect(paraphraseEval.passed).toBe(false);
     expect(paraphraseEval.flaggedSpans.some((f) => f.kind === "semantic_paraphrase")).toBe(true);
+
+    // Original cited scientific synthesis sharing unavoidable biochemical nouns (0% 5-gram overlap,
+    // low 3-gram overlap) must NOT false-fail at bge-base-en-v1.5's typical 0.92 cosine band.
+    const bioSource =
+      "Chronic ethanol administration accelerates hepatic cytochrome P450 2E1 metabolism, generating excess reactive oxygen species that elevate malondialdehyde (MDA) and deplete reduced glutathione (GSH) in rodent liver tissue.";
+    const originalBioParaphrase =
+      "When rodents undergo prolonged ethanol exposure, heightened activity of the hepatic enzyme cytochrome P450 2E1 drives an overproduction of reactive oxygen species; this oxidative burden impairs cellular defences by exhausting reduced glutathione (GSH) stores while simultaneously raising liver concentrations of malondialdehyde (MDA) [@darvish2024].";
+
+    const scientificSynthesisEval = await evaluateChapterOriginality({
+      draftMarkdown: originalBioParaphrase,
+      sourcePassages: [{ passageId: "psg_bio", sourceId: "src_bio", text: bioSource }],
+      embedder: {
+        async embed(texts) {
+          // Cosine similarity ≈ 0.92 between drafted sentence and source passage
+          return texts.map((t) => (t.startsWith("When rodents") ? [0.92, 0.3919, 0] : [1, 0, 0]));
+        },
+      },
+    });
+    expect(scientificSynthesisEval.overlapScore).toBe(0);
+    expect(scientificSynthesisEval.passed).toBe(true);
+    expect(scientificSynthesisEval.flaggedSpans).toHaveLength(0);
+
+    // Genuine mosaic plagiarism (swap a few synonyms while keeping >= 30% of 3-word phrases) at
+    // cosine 0.92 MUST still be caught even when 5-gram overlap is reduced.
+    const mosaicPlagiarism =
+      "Chronic ethanol administration boosts hepatic cytochrome P450 2E1 metabolism, producing excess reactive oxygen species that raise malondialdehyde (MDA) and drain reduced glutathione (GSH) in rodent liver tissue.";
+    const mosaicEval = await evaluateChapterOriginality({
+      draftMarkdown: mosaicPlagiarism,
+      sourcePassages: [{ passageId: "psg_bio", sourceId: "src_bio", text: bioSource }],
+      embedder: {
+        async embed(texts) {
+          return texts.map((t) => (t.includes("boosts") ? [0.92, 0.3919, 0] : [1, 0, 0]));
+        },
+      },
+    });
+    expect(mosaicEval.passed).toBe(false);
+    expect(mosaicEval.flaggedSpans.some((f) => f.kind === "semantic_paraphrase")).toBe(true);
   });
 });
 

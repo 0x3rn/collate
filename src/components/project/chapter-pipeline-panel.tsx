@@ -15,7 +15,12 @@ import {
 } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
 import { estimateRevisionCredits, estimateSingleSectionRevisionCredits } from "@/config/pricing";
-import type { ChapterStatus, ExperimentalDataMode } from "@/db/schema";
+import type { ChapterAttachmentKind, ChapterStatus, ExperimentalDataMode } from "@/db/schema";
+import {
+  inferAttachmentKind,
+  MAX_CHAPTER_INSTRUCTIONS_CHARS,
+  MAX_MARKDOWN_ATTACHMENT_BYTES,
+} from "@/lib/writing/chapter-instructions";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 import { canStartChapter } from "@/lib/writing/state-machine";
 
@@ -29,6 +34,10 @@ export interface ChapterPanelItem {
   isAutoReferences: boolean;
   status: ChapterStatus;
   sectionHeadings: string[];
+  userInstructions?: string | null;
+  userAttachmentName?: string | null;
+  userAttachmentKind?: ChapterAttachmentKind | null;
+  hasUserDataTables?: boolean;
   attention?: ChapterAttentionInfo | null;
   hasDraftVersion?: boolean;
   originalityReport?: {
@@ -97,6 +106,15 @@ export function ChapterPipelinePanel({
   const [revisionTargetSection, setRevisionTargetSection] = useState("");
   const [detailsChapter, setDetailsChapter] = useState<ChapterPanelItem | null>(null);
   const [detailsText, setDetailsText] = useState("");
+  const [instructionsChapter, setInstructionsChapter] = useState<ChapterPanelItem | null>(null);
+  const [instructionsText, setInstructionsText] = useState("");
+  const [stagedFile, setStagedFile] = useState<{
+    filename: string;
+    kind: ChapterAttachmentKind;
+    content: string;
+  } | null>(null);
+  const [keepExistingAttachment, setKeepExistingAttachment] = useState(false);
+  const [savingInstructions, setSavingInstructions] = useState(false);
   const [uploadingCsv, setUploadingCsv] = useState(false);
   const [creditsModal, setCreditsModal] = useState<InsufficientCreditsDetails | null>(null);
 
@@ -303,6 +321,153 @@ export function ChapterPipelinePanel({
     }
   }
 
+  function openInstructionsModal(ch: ChapterPanelItem) {
+    setInstructionsChapter(ch);
+    setInstructionsText(ch.userInstructions ?? "");
+    setStagedFile(null);
+    setKeepExistingAttachment(Boolean(ch.userAttachmentName));
+  }
+
+  function closeInstructionsModal() {
+    if (savingInstructions) return;
+    setInstructionsChapter(null);
+    setInstructionsText("");
+    setStagedFile(null);
+    setKeepExistingAttachment(false);
+  }
+
+  async function handleInstructionFileSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const kind = inferAttachmentKind(file.name);
+    if (!kind) {
+      toast.error("Please upload a .csv, .md, .markdown, or .txt file.", "Unsupported file type");
+      return;
+    }
+
+    if (kind === "csv" && file.size > 5 * 1024 * 1024) {
+      toast.error("CSV files must be 5 MB or smaller.", "File too large");
+      return;
+    }
+    if (kind !== "csv" && file.size > MAX_MARKDOWN_ATTACHMENT_BYTES) {
+      toast.error("Markdown and text files must be 250 KB or smaller.", "File too large");
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      if (text.includes("\u0000")) {
+        toast.error(
+          "This file appears to be binary. Upload plain text CSV or Markdown files only.",
+          "Invalid file"
+        );
+        return;
+      }
+
+      if (kind === "csv") {
+        setStagedFile({ filename: file.name, kind, content: text });
+        setKeepExistingAttachment(false);
+        toast.info(
+          `${file.name} attached. Click Save instructions to calculate statistical tables for this chapter.`,
+          "CSV file attached"
+        );
+      } else {
+        const trimmedFile = text.replace(/\r\n/g, "\n").trim();
+        if (!trimmedFile) {
+          toast.error("The selected file is empty.", "Empty file");
+          return;
+        }
+        const existingTrimmed = instructionsText.trim();
+        const combined = existingTrimmed ? `${existingTrimmed}\n\n${trimmedFile}` : trimmedFile;
+        if (combined.length > MAX_CHAPTER_INSTRUCTIONS_CHARS) {
+          toast.error(
+            `Combined text exceeds ${MAX_CHAPTER_INSTRUCTIONS_CHARS.toLocaleString("en-US")} characters. Trim the notes before attaching.`,
+            "Notes too long"
+          );
+          return;
+        }
+        setInstructionsText(combined);
+        setStagedFile({ filename: file.name, kind, content: trimmedFile });
+        setKeepExistingAttachment(false);
+        toast.info(
+          `Loaded ${file.name} into the instructions box. Review or edit, then click Save instructions.`,
+          "File loaded"
+        );
+      }
+    } catch {
+      toast.error("Could not read the selected file.", "File read failed");
+    }
+  }
+
+  async function saveChapterInstructions(clearAll = false) {
+    if (!instructionsChapter) return;
+    setSavingInstructions(true);
+    try {
+      const payload = clearAll
+        ? { instructions: "", keepExistingAttachment: false }
+        : {
+            instructions: instructionsText,
+            ...(stagedFile
+              ? {
+                  attachmentFilename: stagedFile.filename,
+                  attachmentContent: stagedFile.content,
+                }
+              : { keepExistingAttachment }),
+          };
+
+      const res = await fetch(
+        `/api/projects/${projectId}/chapters/${instructionsChapter.id}/instructions`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      const data = (await res.json()) as {
+        ok: boolean;
+        error?: string;
+        userInstructions?: string | null;
+        userAttachmentName?: string | null;
+        hasDataTables?: boolean;
+        csvStats?: { rowCount: number; columnCount: number } | null;
+      };
+      if (!res.ok || !data.ok) {
+        toast.error(data.error ?? "Could not save chapter instructions.", "Save failed");
+        return;
+      }
+
+      const cleared = !data.userInstructions && !data.userAttachmentName && !data.hasDataTables;
+      if (cleared) {
+        toast.success(
+          `Cleared pre-start instructions for Chapter ${instructionsChapter.number}.`,
+          "Instructions cleared"
+        );
+      } else if (data.csvStats) {
+        toast.success(
+          `Saved Chapter ${instructionsChapter.number} instructions with ${data.csvStats.rowCount} data rows (${data.csvStats.columnCount} columns) analyzed.`,
+          "Instructions & data saved"
+        );
+      } else {
+        toast.success(
+          `Saved instructions for Chapter ${instructionsChapter.number}. They will be applied when you start drafting.`,
+          "Instructions saved"
+        );
+      }
+
+      setInstructionsChapter(null);
+      setInstructionsText("");
+      setStagedFile(null);
+      setKeepExistingAttachment(false);
+      router.refresh();
+    } catch {
+      toast.error("Network error while saving chapter instructions.", "Connection error");
+    } finally {
+      setSavingInstructions(false);
+    }
+  }
+
   async function handleCsvUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -454,6 +619,25 @@ export function ChapterPipelinePanel({
                         </p>
                       ) : null}
 
+                      {!ch.isAutoReferences &&
+                      ch.status === "not_started" &&
+                      !ch.hasDraftVersion &&
+                      (ch.userInstructions || ch.userAttachmentName || ch.hasUserDataTables) ? (
+                        <p className="inline-flex flex-wrap items-center gap-1.5 text-xs font-medium text-[var(--accent-600)] pt-0.5 m-0">
+                          <span
+                            aria-hidden="true"
+                            className="w-1.5 h-1.5 rounded-full bg-[var(--accent-600)] shrink-0"
+                          />
+                          <span>
+                            Pre-start instructions saved
+                            {ch.userAttachmentName ? ` · ${ch.userAttachmentName}` : ""}
+                            {!ch.userAttachmentName && ch.hasUserDataTables
+                              ? " · Data tables ready"
+                              : ""}
+                          </span>
+                        </p>
+                      ) : null}
+
                       {ch.originalityReport ? (
                         <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] pt-0.5 m-0">
                           Similarity report:{" "}
@@ -504,17 +688,41 @@ export function ChapterPipelinePanel({
                       }
                     >
                       {ch.status === "not_started" ? (
-                        <Button
-                          type="button"
-                          variant={gate.allowed ? "primary" : "secondary"}
-                          disabled={!gate.allowed || isBusy}
-                          loading={isBusy}
-                          loadingLabel="Starting..."
-                          title={gate.allowed ? undefined : gate.reason}
-                          onClick={() => triggerStart(ch.id)}
-                        >
-                          Start Chapter {ch.number}
-                        </Button>
+                        <>
+                          {!ch.hasDraftVersion ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={isBusy}
+                              onClick={() => openInstructionsModal(ch)}
+                            >
+                              {ch.userInstructions ||
+                              ch.userAttachmentName ||
+                              ch.hasUserDataTables ? (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span
+                                    aria-hidden="true"
+                                    className="w-1.5 h-1.5 rounded-full bg-[var(--accent-600)]"
+                                  />
+                                  <span>Edit instructions</span>
+                                </span>
+                              ) : (
+                                "Add instructions (optional)"
+                              )}
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant={gate.allowed ? "primary" : "secondary"}
+                            disabled={!gate.allowed || isBusy}
+                            loading={isBusy}
+                            loadingLabel="Starting..."
+                            title={gate.allowed ? undefined : gate.reason}
+                            onClick={() => triggerStart(ch.id)}
+                          >
+                            Start Chapter {ch.number}
+                          </Button>
+                        </>
                       ) : null}
 
                       {ch.status === "needs_attention" ? (
@@ -723,6 +931,153 @@ export function ChapterPipelinePanel({
           })}
         </ul>
       </section>
+
+      <ModalCard
+        open={Boolean(instructionsChapter)}
+        onClose={closeInstructionsModal}
+        eyebrow={
+          instructionsChapter
+            ? `Chapter ${instructionsChapter.number}: ${instructionsChapter.title}`
+            : undefined
+        }
+        title="Optional instructions & data"
+        maxWidthClassName="max-w-[580px]"
+        footer={
+          instructionsChapter ? (
+            <div className="w-full flex flex-wrap items-center justify-between gap-2">
+              <div>
+                {instructionsChapter.userInstructions ||
+                instructionsChapter.userAttachmentName ||
+                instructionsChapter.hasUserDataTables ||
+                instructionsText.trim() ||
+                stagedFile ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={savingInstructions}
+                    onClick={() => saveChapterInstructions(true)}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={savingInstructions}
+                  onClick={closeInstructionsModal}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  loading={savingInstructions}
+                  loadingLabel="Saving..."
+                  onClick={() => saveChapterInstructions(false)}
+                >
+                  Save instructions
+                </Button>
+              </div>
+            </div>
+          ) : null
+        }
+      >
+        {instructionsChapter ? (
+          <>
+            <div className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3.5 py-2.5 text-sm text-[var(--neutral-700)] leading-relaxed">
+              <strong className="font-semibold text-[var(--neutral-900)]">
+                Optional: you can start this chapter right away.
+              </strong>{" "}
+              Collate already has your topic, chapter outline, and verified sources. Only add notes
+              here if you want to include extra details such as supervisor instructions, specific
+              points to emphasize, or your own experimental or survey results.
+            </div>
+
+            <div className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] p-3.5 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                    Upload CSV or Markdown (optional)
+                  </p>
+                  <p className="text-xs text-[var(--neutral-600)] m-0">
+                    Attach a .csv dataset for automatic statistical tables, or load a .md / .txt
+                    file directly into the box below.
+                  </p>
+                </div>
+                <label className="inline-flex items-center justify-center min-h-[38px] px-3.5 py-1.5 text-xs font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] cursor-pointer shrink-0 whitespace-nowrap transition-colors">
+                  Upload CSV / Markdown
+                  <input
+                    type="file"
+                    accept=".csv,.md,.markdown,.txt,text/csv,text/markdown,text/plain"
+                    disabled={savingInstructions}
+                    onChange={handleInstructionFileSelect}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
+
+              {stagedFile ? (
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--neutral-200)] text-xs">
+                  <span className="text-[var(--neutral-800)] font-medium truncate">
+                    Attached: {stagedFile.filename}
+                    {stagedFile.kind === "csv" ? " (CSV, stats calculated on save)" : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStagedFile(null)}
+                    className="text-[var(--neutral-500)] hover:text-[var(--neutral-900)] underline underline-offset-2 shrink-0 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : keepExistingAttachment && instructionsChapter.userAttachmentName ? (
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-[var(--neutral-200)] text-xs">
+                  <span className="text-[var(--neutral-800)] font-medium truncate">
+                    Saved file: {instructionsChapter.userAttachmentName}
+                    {instructionsChapter.hasUserDataTables ? " · Data tables ready" : ""}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setKeepExistingAttachment(false)}
+                    className="text-[var(--neutral-500)] hover:text-[var(--neutral-900)] underline underline-offset-2 shrink-0 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-1.5">
+              <label
+                htmlFor="chapter-prestart-instructions"
+                className="block text-sm font-medium text-[var(--neutral-800)]"
+              >
+                Extra instructions, supervisor notes, or experimental data (optional)
+              </label>
+              <textarea
+                id="chapter-prestart-instructions"
+                rows={7}
+                maxLength={MAX_CHAPTER_INSTRUCTIONS_CHARS}
+                value={instructionsText}
+                onChange={(e) => setInstructionsText(e.target.value)}
+                placeholder="e.g. Emphasize glutathione depletion mechanisms in male Wistar rats, include a summary table of the three dosage groups, or paste raw CSV / Markdown data directly here..."
+                className="block w-full px-3.5 py-2.5 text-sm bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] leading-relaxed font-sans"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--neutral-500)]">
+                <span>
+                  Paste raw CSV rows or Markdown tables directly; Collate parses them automatically.
+                </span>
+                <span className="tabular-nums">
+                  {instructionsText.length.toLocaleString("en-US")} /{" "}
+                  {MAX_CHAPTER_INSTRUCTIONS_CHARS.toLocaleString("en-US")}
+                </span>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </ModalCard>
 
       <ModalCard
         open={Boolean(detailsChapter)}

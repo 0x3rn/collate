@@ -229,6 +229,7 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
     const manualPause = await checkSpendCircuitBreaker(db, now);
     expect(manualPause.allowed).toBe(false);
     expect(manualPause.globalKillSwitchActive).toBe(true);
+    expect(manualPause.globalDailySpendUsd).toBe(300);
   });
 
   it("trips on consecutive recent failures, auto-recovers after cooldown, and clears immediately on admin resume", async () => {

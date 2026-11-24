@@ -140,6 +140,9 @@ export const CHAPTER_STATUSES = [
 ] as const;
 export type ChapterStatus = (typeof CHAPTER_STATUSES)[number];
 
+export const CHAPTER_ATTACHMENT_KINDS = ["csv", "markdown", "text"] as const;
+export type ChapterAttachmentKind = (typeof CHAPTER_ATTACHMENT_KINDS)[number];
+
 export const users = sqliteTable(
   "users",
   {
@@ -323,6 +326,10 @@ export const chapters = sqliteTable(
     title: text("title").notNull(),
     chapterType: text("chapter_type").notNull().default("custom"),
     brief: text("brief"),
+    userInstructions: text("user_instructions"),
+    userAttachmentName: text("user_attachment_name"),
+    userAttachmentKind: text("user_attachment_kind", { enum: CHAPTER_ATTACHMENT_KINDS }),
+    userDataSummaryMarkdown: text("user_data_summary_markdown"),
     pageBudget: integer("page_budget"),
     wordBudget: integer("word_budget"),
     isAutoReferences: integer("is_auto_references", { mode: "boolean" }).notNull().default(false),

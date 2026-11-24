@@ -52,6 +52,7 @@ import {
   type ChapterAttentionKind,
 } from "./attention";
 import { buildLabelledResultsFramework, type DatasetAnalysisResult } from "./results-data";
+import { hasUserExperimentalData } from "./chapter-instructions";
 import { retrieveEvidencePassages, type RetrievedEvidencePassage } from "./retrieval";
 import {
   countWords,
@@ -125,6 +126,7 @@ export interface LoadedChapterContext {
   resultsMode:
     "standard" | "user_dataset" | "public_dataset" | "published_benchmarks" | "labelled_framework";
   datasetMarkdown: string | null;
+  chapterGuidance: string | null;
   existingProseBySectionId?: Record<string, string>;
   targetedSectionIds?: string[];
   availableFigures?: DraftFigureContext[];
@@ -347,7 +349,8 @@ export async function runWriteChapterOrchestration(
       }
 
       let resultsMode: LoadedChapterContext["resultsMode"] = "standard";
-      let datasetMarkdown: string | null = null;
+      let datasetMarkdown: string | null = chapter.userDataSummaryMarkdown?.trim() || null;
+      const chapterGuidance = chapter.userInstructions?.trim() || null;
       if (chapter.chapterType === "results") {
         const [dataset] = await deps.db
           .select()
@@ -356,7 +359,10 @@ export async function runWriteChapterOrchestration(
           .orderBy(desc(projectDatasets.createdAt))
           .limit(1);
 
-        if (dataset) {
+        if (chapter.userDataSummaryMarkdown?.trim()) {
+          resultsMode = "user_dataset";
+          datasetMarkdown = chapter.userDataSummaryMarkdown.trim();
+        } else if (dataset) {
           resultsMode = "user_dataset";
           try {
             const summary = JSON.parse(dataset.summaryJson) as DatasetAnalysisResult;
@@ -364,6 +370,14 @@ export async function runWriteChapterOrchestration(
           } catch {
             datasetMarkdown = null;
           }
+        } else if (
+          hasUserExperimentalData({
+            userInstructions: chapter.userInstructions,
+            userDataSummaryMarkdown: chapter.userDataSummaryMarkdown,
+          })
+        ) {
+          resultsMode = "user_dataset";
+          datasetMarkdown = null;
         } else if (
           settingsRow?.isExperimental &&
           settingsRow?.experimentalDataMode === "published_benchmarks"
@@ -489,11 +503,11 @@ export async function runWriteChapterOrchestration(
         }
       }
 
-      // Load verified project figures; if the user requested a specific image in revision notes,
-      // fetch real openly licensed images from Wikimedia Commons (never AI-generated).
+      // Load verified project figures; if the user requested a specific image in revision notes
+      // or pre-start chapter instructions, fetch real openly licensed images from Wikimedia Commons.
       const requestedFigureQuery = extractRequestedFigureQuery(
         project.title,
-        payload.revisionNotes
+        payload.revisionNotes || chapterGuidance
       );
       if (requestedFigureQuery && deps.citationFetchFn) {
         try {
@@ -563,6 +577,7 @@ export async function runWriteChapterOrchestration(
         glossaryText,
         resultsMode,
         datasetMarkdown,
+        chapterGuidance,
         existingProseBySectionId,
         targetedSectionIds,
         availableFigures: availableFigures.length > 0 ? availableFigures : undefined,
@@ -789,6 +804,7 @@ export async function runWriteChapterOrchestration(
             spelling: context.spelling,
             priorSummaryText: context.priorSummaryText,
             glossaryText: context.glossaryText,
+            chapterGuidance: context.chapterGuidance,
             revisionInstructions: payload.revisionNotes,
             existingSectionProse,
             isSingleSectionSurgical: isTargetedSectionRevision,
@@ -1190,6 +1206,8 @@ export async function runWriteChapterOrchestration(
         const originalityAttention = buildOriginalityAttention({
           overlapScore: originalityOutcome.evaluation.overlapScore,
           quoteSharePct: originalityOutcome.evaluation.quoteSharePct,
+          semanticScore: originalityOutcome.evaluation.semanticScore,
+          crossUserScore: originalityOutcome.evaluation.crossUserScore,
         });
         await recordChapterNeedsAttentionAudit(deps.db, {
           userId: context.userId,
@@ -1841,6 +1859,8 @@ export async function runWriteAssignmentOrchestration(
         const originalityAttention = buildOriginalityAttention({
           overlapScore: originalityOutcome.evaluation.overlapScore,
           quoteSharePct: originalityOutcome.evaluation.quoteSharePct,
+          semanticScore: originalityOutcome.evaluation.semanticScore,
+          crossUserScore: originalityOutcome.evaluation.crossUserScore,
         });
         await recordChapterNeedsAttentionAudit(deps.db, {
           userId: context.userId,
