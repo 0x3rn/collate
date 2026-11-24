@@ -10,8 +10,23 @@
   "vars": {
     "APP_NAME": "Collate",
     "APP_ENV": "prod",
-    "EMAIL_FROM": "collate@corstack.dev",
+    "APP_URL": "https://collate.corstack.dev",
+    "EMAIL_PROVIDER": "resend",
+    "EMAIL_FROM": "Collate <collate@corstack.dev>",
+    "ADMIN_EMAILS": "somto.ike.dev@gmail.com",
+    "SCHOLARLY_CONTACT_EMAIL": "collate@corstack.dev",
     "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFSFBv33VMh4DpXy",
+    "GEMINI_API_BACKEND": "vertex-express",
+    "GOOGLE_CLOUD_PROJECT": "545937744162",
+    // Each LLM_MODEL_* accepts any mix of Google (gemini-4-neon, gemini-4-hydrogen, gemini-4-argon, gemini-4-carbon, gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash-lite),
+    // DeepSeek (deepseek-flash, deepseek-v4-pro), OpenAI (gpt-6.1-sol, gpt-6-luna, gpt-5.4), or Anthropic (claude-sonnet-5-5, claude-haiku-5-5).
+    // Only the provider(s) referenced below need their API key secret set.
+    // Set USE_CLOUDFLARE_AI_GATEWAY to "true" to route LLM calls through Cloudflare AI Gateway (defaults to "false").
+    "USE_CLOUDFLARE_AI_GATEWAY": "false",
+    "LLM_MODEL_DRAFT": "gemini-4-neon",
+    "LLM_MODEL_VERIFY": "gemini-4-hydrogen",
+    "LLM_MODEL_EXTRACT": "deepseek-flash",
+    "LLM_MODEL_CLASSIFY": "gemini-4-hydrogen",
   },
   "assets": {
     "directory": "dist/client",

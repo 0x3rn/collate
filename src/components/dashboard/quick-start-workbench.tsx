@@ -152,7 +152,7 @@ export function QuickStartWorkbench() {
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder={activeSpec.placeholder}
-            className="flex-1 min-h-[42px] px-3 py-2 text-sm sm:text-[0.9375rem] text-[var(--neutral-900)] placeholder:text-[var(--neutral-400)] bg-transparent border-0 focus:outline-none focus-visible:outline-none"
+            className="flex-1 min-h-[42px] px-3 py-2 rounded-[var(--radius-sm)] text-sm sm:text-[0.9375rem] text-[var(--neutral-900)] placeholder:text-[var(--neutral-400)] bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none"
           />
           <Button
             type="submit"

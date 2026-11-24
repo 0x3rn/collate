@@ -39,8 +39,13 @@ export class LLMError extends Error {
 export function sanitizeErrorMessage(raw: string): string {
   const redacted = raw
     .replace(/sk-ant-[A-Za-z0-9_-]+/g, "[REDACTED_ANTHROPIC_KEY]")
+    .replace(/\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}/g, "[REDACTED_API_KEY]")
+    .replace(/\bAIza[A-Za-z0-9_-]{20,}/g, "[REDACTED_GOOGLE_KEY]")
+    .replace(/\bAQ\.[A-Za-z0-9_-]{16,}/g, "[REDACTED_GOOGLE_KEY]")
     .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [REDACTED_TOKEN]")
-    .replace(/x-api-key\s*[:=]\s*[^\s,;]+/gi, "x-api-key: [REDACTED]");
+    .replace(/x-api-key\s*[:=]\s*[^\s,;]+/gi, "x-api-key: [REDACTED]")
+    .replace(/x-goog-api-key\s*[:=]\s*[^\s,;]+/gi, "x-goog-api-key: [REDACTED]")
+    .replace(/([?&]key=)[^&\s"']+/gi, "$1[REDACTED]");
 
   return redacted.length > 1000 ? `${redacted.slice(0, 997)}...` : redacted;
 }

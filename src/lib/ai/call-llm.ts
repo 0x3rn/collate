@@ -2,13 +2,41 @@ import { z } from "zod";
 import {
   AI_TASKS,
   estimateCostUsd,
+  parseModelSpec,
   resolveModelForTask,
+  type LLMProvider,
   type ModelEnvOverrides,
   type TokenUsage,
 } from "@/config/ai-models";
 import type { AppDb } from "@/db/client";
 import { recordJobLog, sumWorkflowCostUsd } from "@/db/queries/jobs-log";
 import { LLMError, sanitizeErrorMessage } from "./errors";
+import {
+  isCloudflareAiGatewayEnabled,
+  requireCloudflareGatewayCoords,
+  type CloudflareGatewayEnv,
+} from "./gateway";
+import {
+  buildDeepSeekRequestBody,
+  parseDeepSeekResponse,
+  resolveDeepSeekEndpoint,
+  type DeepSeekEndpointUsed,
+  type DeepSeekProviderEnv,
+} from "./providers/deepseek";
+import {
+  buildGoogleRequestBody,
+  parseGoogleResponse,
+  resolveGoogleEndpoint,
+  type GoogleEndpointUsed,
+  type GoogleProviderEnv,
+} from "./providers/google";
+import {
+  buildOpenAIRequestBody,
+  parseOpenAIResponse,
+  resolveOpenAIEndpoint,
+  type OpenAIEndpointUsed,
+  type OpenAIProviderEnv,
+} from "./providers/openai";
 
 const ANTHROPIC_API_VERSION = "2023-06-01";
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -34,10 +62,13 @@ export const CallLLMInputSchema = z.object({
 
 export type CallLLMInput = z.input<typeof CallLLMInputSchema>;
 
-export interface AIGatewayEnv extends ModelEnvOverrides {
-  CLOUDFLARE_ACCOUNT_ID?: string;
-  CLOUDFLARE_AI_GATEWAY_ID?: string;
-  CLOUDFLARE_AI_GATEWAY_TOKEN?: string;
+export interface AIGatewayEnv
+  extends
+    ModelEnvOverrides,
+    CloudflareGatewayEnv,
+    GoogleProviderEnv,
+    OpenAIProviderEnv,
+    DeepSeekProviderEnv {
   ANTHROPIC_API_KEY?: string;
   APP_ENV?: string;
   ALLOW_DIRECT_ANTHROPIC?: string;
@@ -51,15 +82,23 @@ export interface CallLLMContext {
   idGenerator?: () => string;
 }
 
+export type EndpointUsed =
+  | "cloudflare-ai-gateway"
+  | "anthropic-direct"
+  | GoogleEndpointUsed
+  | OpenAIEndpointUsed
+  | DeepSeekEndpointUsed;
+
 export interface CallLLMResult {
   text: string;
+  provider: LLMProvider;
   model: string;
   stopReason: string | null;
   usage: Required<TokenUsage>;
   costEstimateUsd: number;
   latencyMs: number;
   jobLogId: string;
-  endpointUsed: "cloudflare-ai-gateway" | "anthropic-direct";
+  endpointUsed: EndpointUsed;
 }
 
 const AnthropicResponseSchema = z.object({
@@ -83,16 +122,13 @@ const AnthropicResponseSchema = z.object({
 export interface ResolvedEndpoint {
   url: string;
   headers: Record<string, string>;
-  endpointUsed: "cloudflare-ai-gateway" | "anthropic-direct";
+  endpointUsed: EndpointUsed;
 }
 
 export function resolveAnthropicEndpoint(
   env: AIGatewayEnv,
   metadata: Record<string, string>
 ): ResolvedEndpoint {
-  const accountId = env.CLOUDFLARE_ACCOUNT_ID?.trim();
-  const gatewayId = env.CLOUDFLARE_AI_GATEWAY_ID?.trim();
-  const gatewayToken = env.CLOUDFLARE_AI_GATEWAY_TOKEN?.trim();
   const apiKey = env.ANTHROPIC_API_KEY?.trim();
 
   const baseHeaders: Record<string, string> = {
@@ -100,7 +136,8 @@ export function resolveAnthropicEndpoint(
     "anthropic-version": ANTHROPIC_API_VERSION,
   };
 
-  if (accountId && gatewayId) {
+  if (isCloudflareAiGatewayEnabled(env)) {
+    const { accountId, gatewayId, gatewayToken } = requireCloudflareGatewayCoords(env);
     if (!apiKey && !gatewayToken) {
       throw new LLMError({
         code: "CONFIG_ERROR",
@@ -128,15 +165,7 @@ export function resolveAnthropicEndpoint(
     };
   }
 
-  const allowDirect = env.ALLOW_DIRECT_ANTHROPIC === "true" && (env.APP_ENV ?? "dev") === "dev";
-  if (allowDirect) {
-    if (!apiKey) {
-      throw new LLMError({
-        code: "CONFIG_ERROR",
-        message: "ANTHROPIC_API_KEY is required when ALLOW_DIRECT_ANTHROPIC=true.",
-        retryable: false,
-      });
-    }
+  if (apiKey) {
     return {
       url: "https://api.anthropic.com/v1/messages",
       headers: {
@@ -150,9 +179,156 @@ export function resolveAnthropicEndpoint(
   throw new LLMError({
     code: "CONFIG_ERROR",
     message:
-      "Cloudflare AI Gateway is not configured (set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_GATEWAY_ID).",
+      "ANTHROPIC_API_KEY is required for Anthropic Claude models (or set USE_CLOUDFLARE_AI_GATEWAY=true with CLOUDFLARE_AI_GATEWAY_TOKEN).",
     retryable: false,
   });
+}
+
+/**
+ * Returns true when at least one configured LLM provider can serve requests in the given runtime env.
+ */
+export function hasConfiguredLlmProvider(env: AIGatewayEnv): boolean {
+  if (
+    env.GEMINI_API_KEY?.trim() ||
+    env.OPENAI_API_KEY?.trim() ||
+    env.DEEPSEEK_API_KEY?.trim() ||
+    env.ANTHROPIC_API_KEY?.trim()
+  ) {
+    return true;
+  }
+
+  return (
+    isCloudflareAiGatewayEnabled(env) &&
+    Boolean(
+      env.CLOUDFLARE_ACCOUNT_ID?.trim() &&
+      env.CLOUDFLARE_AI_GATEWAY_ID?.trim() &&
+      env.CLOUDFLARE_AI_GATEWAY_TOKEN?.trim()
+    )
+  );
+}
+
+function parseAnthropicResponse(
+  rawJson: unknown,
+  requestedModel: string
+): {
+  text: string;
+  model: string;
+  stopReason: string | null;
+  usage: Required<TokenUsage>;
+} {
+  const validated = AnthropicResponseSchema.safeParse(rawJson);
+  if (!validated.success) {
+    throw new LLMError({
+      code: "BAD_RESPONSE",
+      message: `Unexpected provider response schema: ${validated.error.issues.map((i) => i.path.join(".")).join(", ")}`,
+      retryable: false,
+      cause: validated.error,
+    });
+  }
+
+  const data = validated.data;
+  const text = data.content
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text ?? "")
+    .join("");
+
+  if (!text.trim()) {
+    throw new LLMError({
+      code: "BAD_RESPONSE",
+      message: "Provider returned no text content blocks",
+      retryable: true,
+    });
+  }
+
+  return {
+    text,
+    model: data.model || requestedModel,
+    stopReason: data.stop_reason ?? null,
+    usage: {
+      inputTokens: data.usage.input_tokens,
+      outputTokens: data.usage.output_tokens,
+      cacheReadTokens: data.usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: data.usage.cache_creation_input_tokens ?? 0,
+    },
+  };
+}
+
+function resolveProviderEndpoint(
+  provider: LLMProvider,
+  model: string,
+  env: AIGatewayEnv,
+  metadata: Record<string, string>
+): ResolvedEndpoint {
+  switch (provider) {
+    case "google":
+      return resolveGoogleEndpoint(model, env, metadata);
+    case "openai":
+      return resolveOpenAIEndpoint(env, metadata);
+    case "deepseek":
+      return resolveDeepSeekEndpoint(env, metadata);
+    case "anthropic":
+      return resolveAnthropicEndpoint(env, metadata);
+  }
+}
+
+function buildProviderRequestBody(
+  provider: LLMProvider,
+  model: string,
+  input: z.output<typeof CallLLMInputSchema>
+): Record<string, unknown> {
+  switch (provider) {
+    case "google":
+      return buildGoogleRequestBody({
+        system: input.system,
+        messages: input.messages,
+        maxTokens: input.maxTokens,
+        temperature: input.temperature,
+      });
+    case "openai":
+      return buildOpenAIRequestBody(model, {
+        system: input.system,
+        messages: input.messages,
+        maxTokens: input.maxTokens,
+        temperature: input.temperature,
+      });
+    case "deepseek":
+      return buildDeepSeekRequestBody(model, {
+        system: input.system,
+        messages: input.messages,
+        maxTokens: input.maxTokens,
+        temperature: input.temperature,
+      });
+    case "anthropic":
+      return {
+        model,
+        max_tokens: input.maxTokens,
+        temperature: input.temperature,
+        messages: input.messages,
+        ...(input.system ? { system: input.system } : {}),
+      };
+  }
+}
+
+function parseProviderResponse(
+  provider: LLMProvider,
+  rawJson: unknown,
+  requestedModel: string
+): {
+  text: string;
+  model: string;
+  stopReason: string | null;
+  usage: Required<TokenUsage>;
+} {
+  switch (provider) {
+    case "google":
+      return parseGoogleResponse(rawJson, requestedModel);
+    case "openai":
+      return parseOpenAIResponse(rawJson, requestedModel);
+    case "deepseek":
+      return parseDeepSeekResponse(rawJson, requestedModel);
+    case "anthropic":
+      return parseAnthropicResponse(rawJson, requestedModel);
+  }
 }
 
 function parseRetryAfterMs(headerValue: string | null): number | undefined {
@@ -213,9 +389,16 @@ function defaultId(): string {
   return `job_${crypto.randomUUID()}`;
 }
 
+export { isCloudflareAiGatewayEnabled } from "./gateway";
+export { resolveDeepSeekEndpoint } from "./providers/deepseek";
+export { resolveGoogleEndpoint } from "./providers/google";
+export { resolveOpenAIEndpoint } from "./providers/openai";
+
 /**
  * Single centralized helper every AI call in Collate must pass through.
- * Enforces input validation, spend caps, AI Gateway routing, timeouts, and jobs_log cost auditing.
+ * Enforces input validation, per-task multi-provider model routing
+ * (Google Gemini, OpenAI, DeepSeek, Anthropic Claude), spend caps, timeouts,
+ * secret redaction, and jobs_log cost auditing.
  */
 export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Promise<CallLLMResult> {
   const parsed = CallLLMInputSchema.safeParse(rawInput);
@@ -229,7 +412,22 @@ export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Prom
   }
   const input = parsed.data;
 
-  const model = input.modelOverride ?? resolveModelForTask(input.task, ctx.env);
+  const rawModel = input.modelOverride ?? resolveModelForTask(input.task, ctx.env);
+  let provider: LLMProvider;
+  let model: string;
+  try {
+    const spec = parseModelSpec(rawModel);
+    provider = spec.provider;
+    model = spec.model;
+  } catch (err) {
+    throw new LLMError({
+      code: "CONFIG_ERROR",
+      message: err instanceof Error ? err.message : String(err),
+      retryable: false,
+      cause: err,
+    });
+  }
+
   const jobLogId = (ctx.idGenerator ?? defaultId)();
   const nowFn = ctx.nowFn ?? (() => Date.now());
   const fetchFn = ctx.fetchFn ?? globalThis.fetch;
@@ -248,7 +446,7 @@ export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Prom
         workflowId: input.workflowId,
         projectId: input.projectId ?? null,
         step: input.step,
-        provider: "anthropic",
+        provider,
         model,
         status: "failed",
         tokensIn: 0,
@@ -262,22 +460,15 @@ export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Prom
     }
   }
 
-  const endpoint = resolveAnthropicEndpoint(ctx.env, {
+  const metadata: Record<string, string> = {
     workflowId: input.workflowId,
     step: input.step,
     task: input.task,
     ...(input.projectId ? { projectId: input.projectId } : {}),
-  });
-
-  const body: Record<string, unknown> = {
-    model,
-    max_tokens: input.maxTokens,
-    temperature: input.temperature,
-    messages: input.messages,
   };
-  if (input.system) {
-    body.system = input.system;
-  }
+
+  const endpoint = resolveProviderEndpoint(provider, model, ctx.env, metadata);
+  const body = buildProviderRequestBody(provider, model, input);
 
   const startedAt = nowFn();
   const controller = new AbortController();
@@ -298,7 +489,7 @@ export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Prom
         code: isAbort ? "TIMEOUT" : "PROVIDER_UNAVAILABLE",
         message: isAbort
           ? `LLM request timed out after ${input.timeoutMs}ms`
-          : `Network error contacting AI Gateway: ${err instanceof Error ? err.message : String(err)}`,
+          : `Network error contacting ${provider} LLM endpoint: ${err instanceof Error ? err.message : String(err)}`,
         retryable: true,
         cause: err,
       });
@@ -321,39 +512,8 @@ export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Prom
       });
     }
 
-    const validated = AnthropicResponseSchema.safeParse(rawJson);
-    if (!validated.success) {
-      throw new LLMError({
-        code: "BAD_RESPONSE",
-        message: `Unexpected provider response schema: ${validated.error.issues.map((i) => i.path.join(".")).join(", ")}`,
-        retryable: false,
-        cause: validated.error,
-      });
-    }
-
-    const data = validated.data;
-    const text = data.content
-      .filter((block) => block.type === "text" && typeof block.text === "string")
-      .map((block) => block.text ?? "")
-      .join("");
-
-    if (!text.trim()) {
-      throw new LLMError({
-        code: "BAD_RESPONSE",
-        message: "Provider returned no text content blocks",
-        retryable: true,
-      });
-    }
-
-    const usage: Required<TokenUsage> = {
-      inputTokens: data.usage.input_tokens,
-      outputTokens: data.usage.output_tokens,
-      cacheReadTokens: data.usage.cache_read_input_tokens ?? 0,
-      cacheWriteTokens: data.usage.cache_creation_input_tokens ?? 0,
-    };
-
-    const actualModel = data.model || model;
-    const costEstimateUsd = estimateCostUsd(actualModel, usage);
+    const parsedResponse = parseProviderResponse(provider, rawJson, model);
+    const costEstimateUsd = estimateCostUsd(parsedResponse.model, parsedResponse.usage);
     const latencyMs = Math.max(0, Math.round(nowFn() - startedAt));
 
     await recordJobLog(ctx.db, {
@@ -361,21 +521,22 @@ export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Prom
       workflowId: input.workflowId,
       projectId: input.projectId ?? null,
       step: input.step,
-      provider: "anthropic",
-      model: actualModel,
+      provider,
+      model: parsedResponse.model,
       status: "succeeded",
-      tokensIn: usage.inputTokens,
-      tokensOut: usage.outputTokens,
+      tokensIn: parsedResponse.usage.inputTokens,
+      tokensOut: parsedResponse.usage.outputTokens,
       costEstimateUsd,
       latencyMs,
       error: null,
     });
 
     return {
-      text,
-      model: actualModel,
-      stopReason: data.stop_reason ?? null,
-      usage,
+      text: parsedResponse.text,
+      provider,
+      model: parsedResponse.model,
+      stopReason: parsedResponse.stopReason,
+      usage: parsedResponse.usage,
       costEstimateUsd,
       latencyMs,
       jobLogId,
@@ -399,7 +560,7 @@ export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Prom
       workflowId: input.workflowId,
       projectId: input.projectId ?? null,
       step: input.step,
-      provider: "anthropic",
+      provider,
       model,
       status: "failed",
       tokensIn: 0,

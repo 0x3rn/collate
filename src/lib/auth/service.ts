@@ -7,6 +7,7 @@ import {
   buildVerificationEmail,
   type EmailSender,
 } from "@/lib/email/mailer";
+import { logEvent } from "@/lib/observability/logger";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import {
   hashPassword,
@@ -230,7 +231,12 @@ export async function signUpUser(
 
   const verifyUrl = `${normalizeBaseUrl(ctx.appUrl)}/verify-email?token=${encodeURIComponent(rawToken)}`;
   const emailContent = buildVerificationEmail({ name, verifyUrl });
-  await ctx.mailer.send({ to: email, ...emailContent });
+  const delivery = await ctx.mailer.send({ to: email, ...emailContent });
+  if (!delivery.ok) {
+    logEvent("error", "auth_email_delivery_failed", {
+      data: { userId, flow: "signup", provider: delivery.provider, error: delivery.error },
+    });
+  }
 
   return {
     message: "Check your inbox for a verification link to activate your account.",
@@ -328,7 +334,17 @@ export async function resendVerificationEmail(
 
     const verifyUrl = `${normalizeBaseUrl(ctx.appUrl)}/verify-email?token=${encodeURIComponent(rawToken)}`;
     const emailContent = buildVerificationEmail({ name: user.name, verifyUrl });
-    await ctx.mailer.send({ to: user.email, ...emailContent });
+    const delivery = await ctx.mailer.send({ to: user.email, ...emailContent });
+    if (!delivery.ok) {
+      logEvent("error", "auth_email_delivery_failed", {
+        data: {
+          userId: user.id,
+          flow: "resend_verification",
+          provider: delivery.provider,
+          error: delivery.error,
+        },
+      });
+    }
   }
 
   return {
@@ -550,7 +566,17 @@ export async function requestPasswordReset(
 
     const resetUrl = `${normalizeBaseUrl(ctx.appUrl)}/reset-password?token=${encodeURIComponent(rawToken)}`;
     const emailContent = buildPasswordResetEmail({ name: user.name, resetUrl });
-    await ctx.mailer.send({ to: user.email, ...emailContent });
+    const delivery = await ctx.mailer.send({ to: user.email, ...emailContent });
+    if (!delivery.ok) {
+      logEvent("error", "auth_email_delivery_failed", {
+        data: {
+          userId: user.id,
+          flow: "password_reset",
+          provider: delivery.provider,
+          error: delivery.error,
+        },
+      });
+    }
   }
 
   // Anti-enumeration: always return the same neutral message
