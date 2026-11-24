@@ -91,7 +91,7 @@ export function ChapterPipelinePanel({
         return;
       }
       setNotice(
-        "Chapter queued for evidence-bound drafting. You will be notified when it is ready."
+        "Chapter queued for drafting. You will receive an email as soon as it is ready to review."
       );
       router.refresh();
     } catch {
@@ -219,20 +219,20 @@ export function ChapterPipelinePanel({
       {notice ? <FormAlert tone="success">{notice}</FormAlert> : null}
 
       {hasResultsChapter ? (
-        <section className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
-              <h3 className="text-base font-medium m-0">
-                Empirical dataset for Results (Rule NN-4)
+        <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <h3 className="text-base font-semibold text-[var(--neutral-900)]">
+                Results data (optional)
               </h3>
-              <p className="text-xs text-[var(--neutral-600)] m-0">
-                Upload a CSV file so Collate computes real statistics and tables. Without uploaded
-                or public dataset evidence, Collate generates a clearly labelled results
-                framework—never invented numbers.
+              <p className="text-sm text-[var(--neutral-600)] leading-relaxed max-w-[62ch]">
+                Upload a CSV file from your survey or lab work so Collate calculates real tables
+                automatically. Without one, it uses cited public data or clearly marked placeholders
+                — never invented numbers.
               </p>
             </div>
-            <label className="inline-flex items-center justify-center min-h-[44px] px-4 py-2 text-sm font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] cursor-pointer shrink-0">
-              {uploadingCsv ? "Analyzing CSV..." : "Upload CSV dataset"}
+            <label className="inline-flex items-center justify-center min-h-[42px] px-4 py-2 text-sm font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] cursor-pointer shrink-0 whitespace-nowrap transition-colors">
+              {uploadingCsv ? "Analyzing file..." : "Upload CSV file"}
               <input
                 type="file"
                 accept=".csv,text/csv"
@@ -243,19 +243,23 @@ export function ChapterPipelinePanel({
             </label>
           </div>
           {datasets.length > 0 ? (
-            <p className="text-xs text-[var(--neutral-700)] m-0 tabular-nums">
-              Attached dataset{datasets.length === 1 ? "" : "s"}:{" "}
-              {datasets.map((d) => `${d.filename} (${d.rowCount} rows)`).join(", ")}
+            <p className="text-xs text-[var(--neutral-700)] tabular-nums pt-2 border-t border-[var(--neutral-200)]">
+              Attached file{datasets.length === 1 ? "" : "s"}:{" "}
+              {datasets
+                .map((d) => `${d.filename} (${d.rowCount.toLocaleString("en-US")} rows)`)
+                .join(", ")}
             </p>
           ) : null}
         </section>
       ) : null}
 
-      <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xl font-medium m-0">Chapters ({chapters.length})</h2>
-          <p className="text-xs text-[var(--neutral-500)] m-0">
-            Chapter N+1 unlocks only after Chapter N is ready (Rule NN-8)
+      <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] overflow-hidden">
+        <div className="px-5 sm:px-6 py-4 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 className="text-lg font-medium text-[var(--neutral-900)]">
+            Chapters ({chapters.length})
+          </h2>
+          <p className="text-xs text-[var(--neutral-600)]">
+            Chapters unlock one at a time as each draft is ready
           </p>
         </div>
 
@@ -266,51 +270,77 @@ export function ChapterPipelinePanel({
             const isBusy = busyChapterId === ch.id;
 
             return (
-              <li key={ch.id} className="py-5 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-semibold text-[var(--neutral-500)] tabular-nums">
-                        {ch.isAutoReferences ? "AUTO" : `Chapter ${ch.number}`}
-                      </span>
-                      <span className="text-base font-medium text-[var(--neutral-900)]">
-                        {ch.title}
-                      </span>
-                      {!ch.isAutoReferences ? (
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 text-xs font-medium border rounded-[var(--radius-sm)] ${badge.classes}`}
+              <li
+                key={ch.id}
+                className="px-5 sm:px-6 py-5 space-y-3 hover:bg-[var(--neutral-50)]/60 transition-colors"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div className="flex items-start gap-3.5 min-w-0">
+                    <span
+                      aria-hidden="true"
+                      className={`mt-0.5 w-8 h-8 rounded-[var(--radius-sm)] text-xs font-semibold tabular-nums grid place-items-center shrink-0 ${
+                        ch.isAutoReferences
+                          ? "bg-[var(--neutral-100)] text-[var(--neutral-600)] border border-[var(--neutral-200)]"
+                          : ch.status === "approved" || ch.status === "ready"
+                            ? "bg-[var(--success-bg)] text-[var(--success-text)] border border-[var(--success-border)]"
+                            : "bg-[var(--accent-100)] text-[var(--accent-600)]"
+                      }`}
+                    >
+                      {ch.isAutoReferences ? "Ref" : String(ch.number).padStart(2, "0")}
+                    </span>
+
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <h3
+                          className="text-base font-semibold text-[var(--neutral-900)] leading-snug"
+                          style={{ fontFamily: "var(--font-sans)" }}
                         >
-                          {badge.label}
-                        </span>
+                          {ch.isAutoReferences ? ch.title : `Chapter ${ch.number}: ${ch.title}`}
+                        </h3>
+
+                        {ch.isAutoReferences ? (
+                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium border rounded-[4px] bg-[var(--neutral-100)] text-[var(--neutral-600)] border-[var(--neutral-200)]">
+                            Automatic
+                          </span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 text-xs font-medium border rounded-[4px] ${badge.classes}`}
+                          >
+                            {badge.label}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs text-[var(--neutral-600)] tabular-nums leading-relaxed">
+                        {ch.isAutoReferences
+                          ? "Built automatically from the verified sources cited across your chapters."
+                          : `Target: ~${(ch.pageBudget ?? 0).toLocaleString("en-US")} pages (~${(ch.wordBudget ?? 0).toLocaleString("en-US")} words)`}
+                      </p>
+
+                      {ch.sectionHeadings.length > 0 ? (
+                        <p className="text-xs text-[var(--neutral-500)] leading-relaxed">
+                          Sections: {ch.sectionHeadings.join(" · ")}
+                        </p>
+                      ) : null}
+
+                      {ch.originalityReport ? (
+                        <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] pt-0.5">
+                          Similarity report:{" "}
+                          <span
+                            className={
+                              ch.originalityReport.passed
+                                ? "text-[var(--success-text)]"
+                                : "text-[var(--error-text)]"
+                            }
+                          >
+                            {ch.originalityReport.passed ? "Passed" : "Flagged"}
+                          </span>{" "}
+                          · Source overlap {ch.originalityReport.overlapScore}% · Quotes{" "}
+                          {ch.originalityReport.quoteSharePct}% · Cross-user{" "}
+                          {ch.originalityReport.crossUserScore}%
+                        </p>
                       ) : null}
                     </div>
-                    <p className="text-xs text-[var(--neutral-600)] tabular-nums m-0">
-                      {ch.isAutoReferences
-                        ? "Assembled automatically from verified cited sources by the CSL citation engine."
-                        : `Target: ~${ch.pageBudget ?? 0} pages (~${(ch.wordBudget ?? 0).toLocaleString()} words)`}
-                    </p>
-                    {ch.sectionHeadings.length > 0 ? (
-                      <p className="text-xs text-[var(--neutral-500)] m-0">
-                        Sections: {ch.sectionHeadings.join(" · ")}
-                      </p>
-                    ) : null}
-                    {ch.originalityReport ? (
-                      <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] m-0">
-                        Similarity report:{" "}
-                        <span
-                          className={
-                            ch.originalityReport.passed
-                              ? "text-[var(--success-text)]"
-                              : "text-[var(--error-text)]"
-                          }
-                        >
-                          {ch.originalityReport.passed ? "Passed" : "Flagged"}
-                        </span>{" "}
-                        · Source overlap {ch.originalityReport.overlapScore}% · Quotes{" "}
-                        {ch.originalityReport.quoteSharePct}% · Cross-user{" "}
-                        {ch.originalityReport.crossUserScore}%
-                      </p>
-                    ) : null}
                   </div>
 
                   {!ch.isAutoReferences ? (

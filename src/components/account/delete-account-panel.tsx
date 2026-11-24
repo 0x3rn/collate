@@ -44,18 +44,14 @@ export function DeleteAccountPanel() {
   }
 
   return (
-    <section className="bg-white border border-[var(--error-border)] rounded-[var(--radius-md)] p-6 space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-xl font-medium text-[var(--error-text)] m-0">Delete account</h2>
-        <p className="text-sm text-[var(--neutral-600)] m-0">
-          Permanently deletes your account, projects, chapters, uploaded files, and saved exports.
-          This cannot be undone.
-        </p>
-      </div>
+    <div className="bg-white border border-[var(--error-border)] rounded-[var(--radius-md)] p-5 sm:p-6 space-y-4">
+      <p className="text-sm text-[var(--neutral-700)] leading-relaxed">
+        This permanently deletes your account and all saved work. This action cannot be undone.
+      </p>
 
       {error ? <FormAlert tone="error">{error}</FormAlert> : null}
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-4 max-w-[480px]">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4 max-w-[440px]">
         <FormField
           id="delete-password"
           label="Your password"
@@ -83,6 +79,6 @@ export function DeleteAccountPanel() {
           Delete my account
         </Button>
       </form>
-    </section>
+    </div>
   );
 }

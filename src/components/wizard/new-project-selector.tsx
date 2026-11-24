@@ -44,16 +44,11 @@ const WORK_TYPES: Array<{
 
 export function NewProjectSelector() {
   const router = useRouter();
-  const [selected, setSelected] = useState<ProjectType | null>(null);
+  const [selected, setSelected] = useState<ProjectType>("project");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleStart() {
-    if (!selected) {
-      setError("Select what you are working on before continuing.");
-      return;
-    }
-
     setError(null);
     setSubmitting(true);
     try {
@@ -102,21 +97,33 @@ export function NewProjectSelector() {
                 setSelected(item.type);
                 setError(null);
               }}
-              className={`text-left p-5 rounded-[var(--radius-md)] border transition-colors duration-150 cursor-pointer min-h-[120px] ${
+              className={`text-left p-5 rounded-[var(--radius-md)] border transition-all duration-150 cursor-pointer min-h-[124px] ${
                 isSelected
-                  ? "border-[var(--accent-600)] bg-[var(--accent-100)]"
-                  : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-400)]"
+                  ? "border-[var(--accent-600)] ring-1 ring-[var(--accent-600)] bg-[var(--accent-100)]/45 shadow-[var(--shadow-subtle)]"
+                  : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-lg font-semibold text-[var(--neutral-900)]">
-                  {item.title}
-                </span>
-                <span className="text-xs font-medium text-[var(--neutral-600)] tabular-nums">
-                  {item.typicalPages}
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <span className="text-lg font-semibold text-[var(--neutral-900)] block leading-snug">
+                    {item.title}
+                  </span>
+                  <span className="text-xs font-medium text-[var(--accent-600)] tabular-nums">
+                    {item.typicalPages}
+                  </span>
+                </div>
+                <span
+                  aria-hidden="true"
+                  className={`mt-1 w-4 h-4 rounded-full border grid place-items-center shrink-0 transition-colors ${
+                    isSelected
+                      ? "border-[var(--accent-600)] bg-[var(--accent-600)]"
+                      : "border-[var(--neutral-300)] bg-white"
+                  }`}
+                >
+                  {isSelected ? <span className="w-1.5 h-1.5 rounded-full bg-white" /> : null}
                 </span>
               </div>
-              <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+              <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
                 {item.description}
               </p>
             </button>

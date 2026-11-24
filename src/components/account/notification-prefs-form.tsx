@@ -63,42 +63,39 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
   }
 
   return (
-    <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-5">
-      <div className="space-y-1">
-        <h2 className="text-xl font-medium m-0">Email updates</h2>
-        <p className="text-sm text-[var(--neutral-600)] m-0">
-          Choose which project and receipt emails we send to your inbox.
-        </p>
-      </div>
+    <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] overflow-hidden">
+      {error || savedNotice ? (
+        <div className="px-5 pt-4">
+          {error ? <FormAlert tone="error">{error}</FormAlert> : null}
+          {savedNotice ? <FormAlert tone="success">{savedNotice}</FormAlert> : null}
+        </div>
+      ) : null}
 
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-      {savedNotice ? <FormAlert tone="success">{savedNotice}</FormAlert> : null}
-
-      <div className="space-y-3">
+      <div className="divide-y divide-[var(--neutral-200)]">
         {PREF_ROWS.map((row) => (
           <label
             key={row.key}
-            className="flex items-start gap-3 p-3.5 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] cursor-pointer hover:border-[var(--neutral-300)] transition-colors"
+            className="px-5 py-4 flex items-start gap-3.5 cursor-pointer hover:bg-[var(--neutral-50)] transition-colors"
           >
             <input
               type="checkbox"
               checked={prefs[row.key]}
               onChange={() => toggle(row.key)}
-              className="mt-1 w-4 h-4 accent-[var(--accent-600)]"
+              className="mt-0.5 w-4 h-4 accent-[var(--accent-600)] shrink-0"
             />
             <div>
               <p className="text-sm font-medium text-[var(--neutral-900)]">{row.label}</p>
-              <p className="text-xs text-[var(--neutral-600)] mt-1">{row.description}</p>
+              <p className="text-xs text-[var(--neutral-600)] mt-0.5">{row.description}</p>
             </div>
           </label>
         ))}
       </div>
 
-      <div className="flex justify-end">
+      <div className="px-5 py-3.5 bg-[var(--neutral-50)] border-t border-[var(--neutral-200)] flex justify-end">
         <Button type="button" loading={saving} loadingLabel="Saving..." onClick={handleSave}>
           Save email settings
         </Button>
       </div>
-    </section>
+    </div>
   );
 }

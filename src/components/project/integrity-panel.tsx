@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DownloadIcon } from "@/components/layout/workspace-icons";
 import { Button } from "@/components/ui/button";
 
 export function IntegrityPanel({
@@ -25,26 +26,36 @@ export function IntegrityPanel({
 
   return (
     <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--neutral-200)] pb-4">
-        <div className="space-y-1">
-          <h2 className="text-xl font-medium m-0">Originality &amp; academic integrity tools</h2>
-          <p className="text-xs text-[var(--neutral-600)] m-0">
-            No tool can guarantee a university detector&apos;s score. Export your real
-            writing-process log and adapt this disclosure statement to your institution&apos;s
-            rules.
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[var(--neutral-200)] pb-5">
+        <div className="space-y-1.5">
+          <h2 className="text-lg font-medium text-[var(--neutral-900)]">
+            Academic integrity &amp; disclosure
+          </h2>
+          <p className="text-sm text-[var(--neutral-600)] leading-relaxed max-w-[60ch]">
+            No tool can guarantee a university detector&apos;s score. Download a readable summary of
+            your research and drafting history, or adapt the disclosure note below to fit your
+            school&apos;s guidelines.
           </p>
         </div>
-        <a
-          href={`/api/projects/${projectId}/integrity`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center min-h-[44px] px-4 py-2 text-sm font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] shrink-0"
-        >
-          Export process log (JSON)
-        </a>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <a
+            href={`/api/projects/${projectId}/integrity?format=txt`}
+            className="inline-flex items-center justify-center gap-1.5 min-h-[40px] px-3.5 py-2 text-sm font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] whitespace-nowrap transition-colors"
+          >
+            <DownloadIcon className="w-4 h-4 text-[var(--accent-600)]" />
+            <span>Writing log (.txt)</span>
+          </a>
+          <a
+            href={`/api/projects/${projectId}/integrity?format=md`}
+            className="inline-flex items-center justify-center min-h-[40px] px-3 py-2 text-xs font-medium bg-[var(--neutral-50)] text-[var(--neutral-700)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] hover:text-[var(--neutral-900)] whitespace-nowrap transition-colors"
+          >
+            Markdown (.md)
+          </a>
+        </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <label
             htmlFor="ai-disclosure-box"

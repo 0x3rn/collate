@@ -34,8 +34,9 @@ export function ReviseOutlineButton({
       loading={working}
       loadingLabel="Opening outline..."
       onClick={handleClick}
+      className="whitespace-nowrap shrink-0"
     >
-      {outlineLocked ? "Revise outline (unlock)" : "Edit outline"}
+      {outlineLocked ? "Revise outline" : "Edit outline"}
     </Button>
   );
 }

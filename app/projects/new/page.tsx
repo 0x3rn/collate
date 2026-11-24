@@ -17,17 +17,20 @@ export default async function NewProjectPage() {
   return (
     <WorkspaceShell user={user} maxWidthClassName="max-w-[820px]">
       <div className="space-y-6">
-        <div className="space-y-2">
+        <div className="space-y-4">
           <Link
             href="/projects"
-            className="text-sm text-[var(--neutral-600)] hover:text-[var(--neutral-900)] underline underline-offset-4"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
           >
-            Back to projects
+            <span aria-hidden="true">←</span>
+            <span>Back to projects</span>
           </Link>
-          <h1 className="text-[2rem] font-medium m-0">What are you working on?</h1>
-          <p className="text-[var(--neutral-600)] m-0">
-            Your progress is saved after every step so you can leave and resume at any time.
-          </p>
+          <div className="space-y-1.5">
+            <h1 className="text-[1.875rem] sm:text-[2rem] font-medium">What are you working on?</h1>
+            <p className="text-sm sm:text-base text-[var(--neutral-600)]">
+              Your progress is saved after every step so you can leave and resume at any time.
+            </p>
+          </div>
         </div>
 
         <NewProjectSelector />

@@ -335,4 +335,18 @@ describe("Phase 2 Setup Wizard — D1 persistence, validation, and isolation", (
       })
     ).rejects.toMatchObject({ code: "NOT_FOUND", status: 404 });
   });
+
+  it("persists an optional initial working title from the Overview quick-start workbench", async () => {
+    const withTitle = await createWizardDraftProject(
+      db,
+      "usr_alice",
+      "project",
+      fixedNow,
+      "  Solar Microgrid Reliability in Rural Clinics  "
+    );
+    expect(withTitle.project.title).toBe("Solar Microgrid Reliability in Rural Clinics");
+
+    const blankTitle = await createWizardDraftProject(db, "usr_alice", "thesis", fixedNow, "   ");
+    expect(blankTitle.project.title).toBe("Untitled thesis");
+  });
 });

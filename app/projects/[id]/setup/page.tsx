@@ -30,21 +30,20 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
   return (
     <WorkspaceShell user={user} maxWidthClassName="max-w-[860px]">
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-          <div className="space-y-1">
-            <Link
-              href="/projects"
-              className="text-sm text-[var(--neutral-600)] hover:text-[var(--neutral-900)] underline underline-offset-4"
-            >
-              Back to projects
-            </Link>
-            <h1 className="text-[1.875rem] font-medium m-0">
+        <div className="space-y-3">
+          <Link
+            href="/projects"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Back to projects</span>
+          </Link>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+            <h1 className="text-[1.875rem] font-medium">
               {formatProjectType(serialized.project.type)} setup
             </h1>
+            <p className="text-xs text-[var(--neutral-500)]">Saved automatically after each step</p>
           </div>
-          <p className="text-xs text-[var(--neutral-500)] m-0">
-            Saved automatically to your account after each step
-          </p>
         </div>
 
         <SetupWizardClient initialWizard={serialized} allowDevPreview={allowDevPreview} />

@@ -294,7 +294,7 @@ export function StepOutlineConfirm({
                     className="text-xs font-medium text-[var(--neutral-500)]"
                   >
                     {ch.isAutoReferences
-                      ? "Automatic chapter (CSL citation engine)"
+                      ? "Automatic reference list"
                       : `Chapter ${ch.number} · ${ch.chapterType.replace("_", " ")}`}
                   </label>
                   <input

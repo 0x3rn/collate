@@ -144,6 +144,7 @@ const CreateDraftBodySchema = z.object({
   type: z.enum(PROJECT_TYPES, {
     message: "Choose Project, Research paper, Thesis, or Assignment.",
   }),
+  title: z.string().trim().max(300).optional(),
 });
 
 const ProjectIdSchema = z.string().trim().min(1).max(120);
@@ -216,7 +217,8 @@ export async function handleCreateProjectDraft(
       deps.db,
       session.user.id,
       validated.data.type,
-      now
+      now,
+      validated.data.title
     );
     return jsonNoStore({ ok: true, wizard: serializeWizardState(state) }, 201);
   } catch (err) {

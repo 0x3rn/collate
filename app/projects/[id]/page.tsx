@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { asc, desc, eq } from "drizzle-orm";
+import { STATUS_BADGE_CLASSES } from "@/components/dashboard/project-card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { AssignmentPipelinePanel } from "@/components/project/assignment-pipeline-panel";
 import {
@@ -17,7 +18,13 @@ import { ExportControls } from "@/components/project/export-controls";
 import { IntegrityPanel } from "@/components/project/integrity-panel";
 import { generateAiDisclosureStatement } from "@/lib/originality/integrity-exports";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
-import { formatProjectStatus, formatProjectType, formatShortDate } from "@/lib/ui/formatters";
+import {
+  formatCitationStyle,
+  formatNumber,
+  formatProjectStatus,
+  formatProjectType,
+  formatShortDate,
+} from "@/lib/ui/formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -89,58 +96,103 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const statusDisplay = formatProjectStatus(project.status);
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[960px]">
-      <div className="space-y-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-[var(--neutral-200)] pb-6">
-          <div className="space-y-1.5">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[980px]">
+      <div className="space-y-7">
+        {/* Clean separated breadcrumb + structured project header */}
+        <header className="space-y-4 border-b border-[var(--neutral-200)] pb-6">
+          <div>
             <Link
               href="/projects"
-              className="text-sm text-[var(--neutral-600)] hover:text-[var(--neutral-900)] underline underline-offset-4"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
             >
-              Back to projects
+              <span aria-hidden="true">←</span>
+              <span>Back to projects</span>
             </Link>
-            <p className="text-xs font-medium text-[var(--accent-600)] m-0">
-              {formatProjectType(project.type)} · {statusDisplay.label}
-              {outlineData?.outlineLocked ? " · Outline locked" : ""}
-            </p>
-            <h1 className="text-[2rem] font-medium m-0">{project.title}</h1>
-            <p className="text-sm text-[var(--neutral-600)] tabular-nums m-0">
-              Target: {project.targetPages ?? project.idealPages ?? "—"} pages · Updated{" "}
-              {formatShortDate(project.updatedAt)}
-            </p>
           </div>
-          <ReviseOutlineButton
-            projectId={project.id}
-            outlineLocked={Boolean(outlineData?.outlineLocked)}
-          />
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-2">
-            <h2 className="text-lg font-medium m-0">Citations</h2>
-            <p className="text-sm text-[var(--neutral-700)] m-0">
-              Style: <strong>{settings.citationStyle.toUpperCase()}</strong>
-            </p>
-            <p className="text-sm text-[var(--neutral-600)] m-0">
-              Mode:{" "}
-              {settings.inlineMode === "inline_and_list"
-                ? "Inline citations + reference list"
-                : "Reference list only"}
-            </p>
-          </section>
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="space-y-3 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-semibold text-[var(--neutral-700)]">
+                  {formatProjectType(project.type)}
+                </span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 font-medium border rounded-[4px] ${STATUS_BADGE_CLASSES[statusDisplay.tone]}`}
+                >
+                  {statusDisplay.label}
+                </span>
+                {outlineData?.outlineLocked ? (
+                  <span className="text-[var(--neutral-500)]">Outline locked</span>
+                ) : null}
+              </div>
 
-          <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-2">
-            <h2 className="text-lg font-medium m-0">Formatting</h2>
-            <p className="text-sm text-[var(--neutral-700)] m-0">
-              {settings.font}, {settings.fontSizePt}pt, {settings.lineSpacing.replace("_", " ")}{" "}
-              spacing, {settings.marginsMm}mm margins
-            </p>
-            <p className="text-sm text-[var(--neutral-600)] m-0">
-              Spelling: {settings.spelling.toUpperCase()} English · Page numbers:{" "}
-              {settings.pageNumbering ? "On" : "Off"}
-            </p>
-          </section>
-        </div>
+              <h1 className="text-2xl sm:text-[1.875rem] font-medium leading-[1.25] text-[var(--neutral-900)]">
+                {project.title}
+              </h1>
+
+              <p className="text-sm text-[var(--neutral-600)] tabular-nums">
+                Target:{" "}
+                {(project.targetPages ?? project.idealPages)
+                  ? `${formatNumber((project.targetPages ?? project.idealPages)!)} pages`
+                  : "—"}
+                {" · "}Updated {formatShortDate(project.updatedAt)}
+              </p>
+            </div>
+
+            <div className="shrink-0 sm:pt-1">
+              <ReviseOutlineButton
+                projectId={project.id}
+                outlineLocked={Boolean(outlineData?.outlineLocked)}
+              />
+            </div>
+          </div>
+        </header>
+
+        {/* Single-surface horizontal Citations & Formatting bar */}
+        <section
+          aria-label="Project style and formatting"
+          className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[var(--neutral-200)]"
+        >
+          <div className="p-5 sm:p-6 space-y-3">
+            <h2 className="text-base font-semibold text-[var(--neutral-900)]">Citations</h2>
+            <dl className="space-y-2 text-sm m-0">
+              <div className="flex items-baseline justify-between gap-4">
+                <dt className="text-[var(--neutral-500)]">Style</dt>
+                <dd className="font-medium text-[var(--neutral-900)] m-0">
+                  {formatCitationStyle(settings.citationStyle)}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4">
+                <dt className="text-[var(--neutral-500)]">Format</dt>
+                <dd className="text-[var(--neutral-800)] text-right m-0">
+                  {settings.inlineMode === "inline_and_list"
+                    ? "In-text citations + reference list"
+                    : "Reference list only"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="p-5 sm:p-6 space-y-3">
+            <h2 className="text-base font-semibold text-[var(--neutral-900)]">Formatting</h2>
+            <dl className="space-y-2 text-sm m-0">
+              <div className="flex items-baseline justify-between gap-4">
+                <dt className="text-[var(--neutral-500)]">Typography</dt>
+                <dd className="text-[var(--neutral-900)] text-right tabular-nums m-0">
+                  {settings.font}, {settings.fontSizePt}pt, {settings.lineSpacing.replace("_", " ")}{" "}
+                  spacing
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4">
+                <dt className="text-[var(--neutral-500)]">Layout</dt>
+                <dd className="text-[var(--neutral-800)] text-right tabular-nums m-0">
+                  {settings.marginsMm}mm margins · {settings.spelling.toUpperCase()} English · Page
+                  numbers {settings.pageNumbering ? "on" : "off"}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </section>
 
         {project.type === "assignment" ? (
           <AssignmentPipelinePanel

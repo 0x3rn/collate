@@ -45,12 +45,11 @@ export function ExportControls({
 
   return (
     <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-xl font-medium m-0">Downloads</h2>
-        <p className="text-xs text-[var(--neutral-600)] m-0">
-          PDFs are typeset server-side with Roman front matter, Arabic body numbering, and verified
-          Table of Contents page numbers. Word (.docx) matches the same structure for university
-          template edits.
+      <div className="space-y-1.5">
+        <h2 className="text-lg font-medium text-[var(--neutral-900)]">Downloads</h2>
+        <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
+          Print-ready PDFs include Roman front matter, Arabic body numbering, and an accurate Table
+          of Contents. Word (.docx) matches the same structure for school template edits.
         </p>
       </div>
 

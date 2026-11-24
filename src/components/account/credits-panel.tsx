@@ -4,7 +4,12 @@ import { useState } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { CREDIT_PACKS } from "@/config/pricing";
-import { formatCreditLedgerType, formatShortDate } from "@/lib/ui/formatters";
+import {
+  formatCreditLedgerType,
+  formatCredits,
+  formatNumber,
+  formatShortDate,
+} from "@/lib/ui/formatters";
 
 export interface LedgerEntryDisplay {
   id: string;
@@ -55,27 +60,26 @@ export function CreditsPanel({
 
   return (
     <div className="space-y-6">
-      {/* Credit packs selector */}
-      <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--neutral-200)] pb-4">
-          <div className="space-y-1">
-            <h2 className="text-xl font-medium m-0">Buy credit packs</h2>
-            <p className="text-sm text-[var(--neutral-600)] m-0">
-              Credits stay in your account until you use them. If a chapter run fails, your credits
-              are returned automatically.
+      {/* Unified Hunter-style 3-column Credit Pack Matrix */}
+      <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] overflow-hidden">
+        <div className="px-6 py-4 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <h2 className="text-lg font-medium text-[var(--neutral-900)]">Credit packs</h2>
+            <p className="text-xs text-[var(--neutral-600)]">
+              One-time packs with no recurring subscription. Failed chapters are refunded in full.
             </p>
           </div>
 
           <div
             role="group"
             aria-label="Choose currency"
-            className="inline-flex rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] p-1 shrink-0 w-fit"
+            className="inline-flex rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-100)] p-0.5 shrink-0 w-fit"
           >
             <button
               type="button"
               onClick={() => setCurrency("ngn")}
               aria-pressed={currency === "ngn"}
-              className={`min-h-[34px] px-3 py-1 rounded-[4px] text-xs font-semibold transition-colors cursor-pointer ${
+              className={`min-h-[32px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
                 currency === "ngn"
                   ? "bg-white text-[var(--neutral-900)] shadow-[var(--shadow-subtle)]"
                   : "text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"
@@ -87,7 +91,7 @@ export function CreditsPanel({
               type="button"
               onClick={() => setCurrency("usd")}
               aria-pressed={currency === "usd"}
-              className={`min-h-[34px] px-3 py-1 rounded-[4px] text-xs font-semibold transition-colors cursor-pointer ${
+              className={`min-h-[32px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
                 currency === "usd"
                   ? "bg-white text-[var(--neutral-900)] shadow-[var(--shadow-subtle)]"
                   : "text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"
@@ -98,9 +102,13 @@ export function CreditsPanel({
           </div>
         </div>
 
-        {error ? <FormAlert tone="error">{error}</FormAlert> : null}
+        {error ? (
+          <div className="px-6 pt-5">
+            <FormAlert tone="error">{error}</FormAlert>
+          </div>
+        ) : null}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[var(--neutral-200)]">
           {CREDIT_PACKS.map((pack, index) => {
             const featured = index === 1;
             const formattedPrice =
@@ -112,27 +120,37 @@ export function CreditsPanel({
             return (
               <div
                 key={pack.id}
-                className={`p-5 rounded-[var(--radius-md)] border flex flex-col justify-between gap-5 ${
-                  featured
-                    ? "bg-white border-[var(--accent-600)] shadow-[var(--shadow-subtle)]"
-                    : "bg-[var(--neutral-50)] border-[var(--neutral-200)]"
+                className={`relative p-6 flex flex-col justify-between gap-6 ${
+                  featured ? "bg-[var(--accent-100)]/25" : "bg-white"
                 }`}
               >
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
-                      {pack.label}
-                    </p>
+                {featured ? (
+                  <span
+                    aria-hidden="true"
+                    className="hidden md:block absolute top-0 left-0 right-0 h-[2px] bg-[var(--accent-600)]"
+                  />
+                ) : null}
+
+                <div className="space-y-3">
+                  <div className="min-h-[22px] flex items-center">
                     {featured ? (
-                      <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[var(--radius-sm)] bg-[var(--accent-100)] text-[var(--accent-600)]">
+                      <span className="px-2 py-0.5 text-[11px] font-semibold rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-600)]">
                         Popular
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className="text-[11px] font-medium text-[var(--neutral-500)]">
+                        {index === 0 ? "Light use" : "Extended research"}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-2xl font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+                  <p className="text-sm font-semibold text-[var(--neutral-900)]">{pack.label}</p>
+                  <p
+                    className="text-3xl font-medium text-[var(--neutral-900)] tabular-nums"
+                    style={{ fontFamily: "var(--font-serif)" }}
+                  >
                     {formattedPrice}
                   </p>
-                  <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+                  <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
                     {pack.description}
                   </p>
                 </div>
@@ -153,16 +171,18 @@ export function CreditsPanel({
           })}
         </div>
 
-        <p className="text-xs text-[var(--neutral-500)] m-0 tabular-nums">
-          Current balance: {balance} credits · Secure checkout via{" "}
-          {currency === "ngn" ? "Paystack (Naira)" : "Stripe (USD)"}.
-        </p>
+        <div className="px-6 py-3 bg-[var(--neutral-50)] border-t border-[var(--neutral-200)] flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--neutral-500)] tabular-nums">
+          <span>Current balance: {formatCredits(balance)}</span>
+          <span>
+            Secure checkout via {currency === "ngn" ? "Paystack (Naira)" : "Stripe (USD)"}
+          </span>
+        </div>
       </section>
 
-      {/* Plain-English credit history */}
+      {/* Tabular Credit History Ledger */}
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] overflow-hidden">
         <div className="px-6 py-4 border-b border-[var(--neutral-200)]">
-          <h2 className="text-lg font-medium m-0">Credit history</h2>
+          <h2 className="text-lg font-medium text-[var(--neutral-900)]">Credit history</h2>
         </div>
 
         {recentLedger.length === 0 ? (
@@ -170,39 +190,51 @@ export function CreditsPanel({
             No credit activity yet. Purchases, chapter runs, and automatic refunds will appear here.
           </div>
         ) : (
-          <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
-            {recentLedger.map((item) => (
-              <li
-                key={item.id}
-                className="px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm"
-              >
-                <div className="space-y-0.5 min-w-0">
-                  <p className="font-medium text-[var(--neutral-900)] m-0">
-                    {formatCreditLedgerType(item.entryType)}
-                  </p>
-                  <p className="text-xs text-[var(--neutral-600)] m-0">
-                    {item.note ? `${item.note} · ` : ""}
+          <>
+            <div className="hidden sm:grid sm:grid-cols-12 gap-4 px-6 py-2.5 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
+              <div className="col-span-6">Activity</div>
+              <div className="col-span-2">Date</div>
+              <div className="col-span-2 text-right">Change</div>
+              <div className="col-span-2 text-right">Balance</div>
+            </div>
+            <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+              {recentLedger.map((item) => (
+                <li
+                  key={item.id}
+                  className="px-6 py-3.5 grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 items-center text-sm hover:bg-[var(--neutral-50)] transition-colors"
+                >
+                  <div className="sm:col-span-6 min-w-0">
+                    <p className="font-medium text-[var(--neutral-900)]">
+                      {formatCreditLedgerType(item.entryType)}
+                    </p>
+                    {item.note ? (
+                      <p className="text-xs text-[var(--neutral-500)] truncate mt-0.5">
+                        {item.note}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="sm:col-span-2 text-xs text-[var(--neutral-500)] tabular-nums">
                     {formatShortDate(item.createdAt)}
-                  </p>
-                </div>
-
-                <div className="flex sm:flex-col items-baseline sm:items-end justify-between gap-2 sm:gap-0.5 tabular-nums shrink-0">
-                  <span
-                    className={
+                  </div>
+                  <div
+                    className={`sm:col-span-2 sm:text-right font-semibold tabular-nums ${
                       item.creditsDelta >= 0
-                        ? "font-semibold text-[var(--success-text)]"
-                        : "font-semibold text-[var(--neutral-900)]"
-                    }
+                        ? "text-[var(--success-text)]"
+                        : "text-[var(--neutral-900)]"
+                    }`}
                   >
-                    {item.creditsDelta > 0 ? `+${item.creditsDelta}` : item.creditsDelta} credits
-                  </span>
-                  <span className="text-xs text-[var(--neutral-500)]">
-                    Balance: {item.balanceAfter}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
+                    {item.creditsDelta > 0
+                      ? `+${formatNumber(item.creditsDelta)}`
+                      : formatNumber(item.creditsDelta)}{" "}
+                    credits
+                  </div>
+                  <div className="sm:col-span-2 sm:text-right text-xs text-[var(--neutral-600)] tabular-nums">
+                    {formatNumber(item.balanceAfter)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
     </div>

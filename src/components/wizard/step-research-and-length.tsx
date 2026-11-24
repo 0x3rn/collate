@@ -168,11 +168,11 @@ export function StepResearchSweep({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-2xl font-medium">Source sweep and feasibility gate</h2>
-        <p className="text-sm text-[var(--neutral-600)]">
-          Collate searches scholarly and web sources first to verify your topic can be written
-          without guessing (Rule NN-1).
+      <div className="space-y-1.5">
+        <h2 className="text-2xl font-medium">Source check and length</h2>
+        <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
+          Collate searches scholarly databases and credible publications first to verify your topic
+          has enough real evidence before any writing starts.
         </p>
       </div>
 
@@ -181,13 +181,11 @@ export function StepResearchSweep({
       <div className="p-5 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
-              Live scholarly &amp; web research sweep
-            </p>
+            <p className="text-sm font-semibold text-[var(--neutral-900)]">Check topic sources</p>
             <p className="text-xs text-[var(--neutral-600)] mt-1">
               {activeRun
                 ? RUN_STAGE_LABELS[activeRun.status]
-                : "Runs OpenAlex, Crossref, Semantic Scholar, arXiv, Europe PMC, DOAJ, Unpaywall, and configured web APIs."}
+                : "Searches peer-reviewed journals, scholarly indexes, institutional reports, and credible publications."}
             </p>
           </div>
           <Button

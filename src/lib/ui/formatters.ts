@@ -102,6 +102,16 @@ export function formatFileSize(bytes: number): string {
   return `${mb.toFixed(1)} MB`;
 }
 
+export function formatNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+export function formatCredits(value: number): string {
+  const formatted = formatNumber(value);
+  return `${formatted} ${Math.abs(value) === 1 ? "credit" : "credits"}`;
+}
+
 export function formatShortDate(date: Date | string): string {
   const value = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("en-GB", {

@@ -127,14 +127,21 @@ export async function createWizardDraftProject(
   db: AppDb,
   userId: string,
   type: ProjectType,
-  now: Date = new Date()
+  now: Date = new Date(),
+  initialTitle?: string
 ): Promise<HydratedWizardState> {
   if (!userId.trim()) {
     throw new WizardError("VALIDATION_ERROR", "Authenticated userId is required.", 400);
   }
 
   const projectId = `prj_${crypto.randomUUID()}`;
-  const defaultTitle = type === "assignment" ? "Untitled assignment" : `Untitled ${type}`;
+  const cleanedTitle = initialTitle?.trim().slice(0, 300) ?? "";
+  const defaultTitle =
+    cleanedTitle.length > 0
+      ? cleanedTitle
+      : type === "assignment"
+        ? "Untitled assignment"
+        : `Untitled ${type}`;
 
   await db.insert(projects).values({
     id: projectId,

@@ -195,23 +195,6 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
-export function BookMarkIcon(props: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.6}
-      aria-hidden="true"
-      {...props}
-    >
-      <path d="M4.5 4.25A1.25 1.25 0 0 1 5.75 3h8.5a1.25 1.25 0 0 1 1.25 1.25v11.5a1.25 1.25 0 0 1-1.25 1.25h-8.5a1.25 1.25 0 0 1-1.25-1.25V4.25Z" />
-      <path d="M7.5 3v4.5l1.75-1.25L11 7.5V3" strokeLinejoin="round" />
-      <path d="M7.5 11.25h5M7.5 13.75h3.5" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 export function DownloadIcon(props: IconProps) {
   return (
     <svg

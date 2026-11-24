@@ -5,10 +5,19 @@ import { CreditsPanel } from "@/components/account/credits-panel";
 import { DeleteAccountPanel } from "@/components/account/delete-account-panel";
 import { NotificationPrefsForm } from "@/components/account/notification-prefs-form";
 import { ExportsLibraryClient } from "@/components/dashboard/exports-library-client";
+import { OverviewLedgerClient } from "@/components/dashboard/overview-ledger-client";
 import { ProjectCard } from "@/components/dashboard/project-card";
 import { ProjectsDirectoryClient } from "@/components/dashboard/projects-directory-client";
+import { QuickStartWorkbench } from "@/components/dashboard/quick-start-workbench";
 import { AppShell } from "@/components/layout/app-shell";
+import { AutoHideScrollbar } from "@/components/layout/auto-hide-scrollbar";
+import { ChapterPipelinePanel } from "@/components/project/chapter-pipeline-panel";
+import { IntegrityPanel } from "@/components/project/integrity-panel";
+import { Button } from "@/components/ui/button";
+import { LedgerRowsSkeleton } from "@/components/ui/skeleton";
 import type { DashboardProjectSummary, UserExportItem } from "@/db/queries/dashboard";
+import { formatCredits, formatNumber } from "@/lib/ui/formatters";
+import { computeScrollbarMetrics, computeScrollTopFromDrag } from "@/lib/ui/scrollbar";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -85,7 +94,7 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
           isAdmin: false,
         }}
       >
-        <h1>Workspace content</h1>
+        <h1>Dashboard content</h1>
       </AppShell>
     );
 
@@ -95,6 +104,8 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(html).toContain('href="/billing"');
     expect(html).toContain('href="/account"');
     expect(html).toContain('href="/projects/new"');
+    expect(html).toContain("Research");
+    expect(html).not.toMatch(/workspace/i);
     expect(html).toContain("80 credits");
     expect(html).toContain("Adaeze Okonkwo");
     expect(html).not.toContain("<footer");
@@ -184,12 +195,221 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
         }}
       />
     );
-    expect(prefsHtml).toContain("Email updates");
+    expect(prefsHtml).toContain("Chapter ready");
+    expect(prefsHtml).toContain("Save email settings");
     expect(prefsHtml).not.toContain("originality checks, timeouts, or errors");
 
     const deleteHtml = renderToStaticMarkup(<DeleteAccountPanel />);
-    expect(deleteHtml).toContain("Delete account");
+    expect(deleteHtml).toContain("Delete my account");
     expect(deleteHtml).not.toContain("NDPA");
     expect(deleteHtml).not.toContain("GDPR");
+  });
+
+  it("renders QuickStartWorkbench, OverviewLedgerClient, Button spinner, and shimmer skeletons", () => {
+    const workbenchHtml = renderToStaticMarkup(<QuickStartWorkbench />);
+    expect(workbenchHtml).toContain("Start a new project");
+    expect(workbenchHtml).toContain("Research paper");
+    expect(workbenchHtml).toContain("Thesis");
+    expect(workbenchHtml).toContain("Assignment");
+    expect(workbenchHtml).toContain("Start project");
+
+    const overviewHtml = renderToStaticMarkup(
+      <OverviewLedgerClient
+        recentProjects={[SAMPLE_PROJECT]}
+        totalProjects={1}
+        attentionItems={[]}
+        freeSweepsRemaining={3}
+      />
+    );
+    expect(overviewHtml).toContain("Recent work");
+    expect(overviewHtml).toContain("Needs review");
+    expect(overviewHtml).toContain("Solar Microgrid Reliability in Rural Clinics");
+
+    const loadingBtnHtml = renderToStaticMarkup(
+      <Button loading loadingLabel="Creating draft...">
+        Start project
+      </Button>
+    );
+    expect(loadingBtnHtml).toContain("animate-spin");
+    expect(loadingBtnHtml).toContain("Creating draft...");
+
+    const skeletonHtml = renderToStaticMarkup(<LedgerRowsSkeleton rows={3} />);
+    expect(skeletonHtml).toContain("skeleton-shimmer");
+  });
+
+  it("formats large credit balances with commas and removes jargon/JSON from project views", () => {
+    expect(formatNumber(16_000_000)).toBe("16,000,000");
+    expect(formatCredits(16_000_000)).toBe("16,000,000 credits");
+    expect(formatCredits(1)).toBe("1 credit");
+
+    const shellHtml = renderToStaticMarkup(
+      <AppShell
+        user={{
+          name: "Somtochukwu Ike",
+          email: "somto@uni.edu",
+          creditsBalance: 16_000_000,
+        }}
+      >
+        <p>Main</p>
+      </AppShell>
+    );
+    expect(shellHtml).toContain("16,000,000 credits");
+    expect(shellHtml).not.toContain("16,000,000 cr<");
+    expect(shellHtml).not.toContain("16000000");
+
+    const chaptersHtml = renderToStaticMarkup(
+      <ChapterPipelinePanel
+        projectId="prj_001"
+        datasets={[]}
+        chapters={[
+          {
+            id: "ch_1",
+            number: 1,
+            title: "Introduction",
+            chapterType: "introduction",
+            pageBudget: 7,
+            wordBudget: 1925,
+            isAutoReferences: false,
+            status: "not_started",
+            sectionHeadings: ["Background of the study"],
+          },
+          {
+            id: "ch_4",
+            number: 4,
+            title: "Results",
+            chapterType: "results",
+            pageBudget: 12,
+            wordBudget: 3300,
+            isAutoReferences: false,
+            status: "not_started",
+            sectionHeadings: [],
+          },
+          {
+            id: "ch_6",
+            number: 6,
+            title: "References",
+            chapterType: "references",
+            pageBudget: null,
+            wordBudget: null,
+            isAutoReferences: true,
+            status: "not_started",
+            sectionHeadings: [],
+          },
+        ]}
+      />
+    );
+    expect(chaptersHtml).toContain("Chapter 1: Introduction");
+    expect(chaptersHtml).toContain("Results data (optional)");
+    expect(chaptersHtml).toContain("Chapters unlock one at a time");
+    expect(chaptersHtml).toContain("Automatic");
+    expect(chaptersHtml).not.toContain("Rule NN-");
+    expect(chaptersHtml).not.toContain("Chapter N+1");
+    expect(chaptersHtml).not.toContain("CSL");
+    expect(chaptersHtml).not.toContain(">AUTO<");
+
+    const integrityHtml = renderToStaticMarkup(
+      <IntegrityPanel projectId="prj_001" disclosureStatement="Sample disclosure statement" />
+    );
+    expect(integrityHtml).toContain('href="/api/projects/prj_001/integrity?format=txt"');
+    expect(integrityHtml).toContain('href="/api/projects/prj_001/integrity?format=md"');
+    expect(integrityHtml).toContain("Writing log (.txt)");
+    expect(integrityHtml).not.toContain("JSON");
+  });
+
+  it("uses student-friendly Research copy without Workspace and computes auto-hide scrollbar metrics accurately", () => {
+    const emptyOverviewHtml = renderToStaticMarkup(
+      <OverviewLedgerClient
+        recentProjects={[]}
+        totalProjects={0}
+        attentionItems={[]}
+        freeSweepsRemaining={3}
+      />
+    );
+    expect(emptyOverviewHtml).toContain("Ready for your first topic");
+    expect(emptyOverviewHtml).not.toMatch(/workspace/i);
+
+    const scrollbarHtml = renderToStaticMarkup(<AutoHideScrollbar />);
+    expect(scrollbarHtml).toContain('aria-hidden="true"');
+    expect(scrollbarHtml).toContain('data-visible="false"');
+    expect(scrollbarHtml).toContain('data-scrollable="false"');
+
+    // Non-scrollable document
+    expect(
+      computeScrollbarMetrics({
+        scrollTop: 0,
+        scrollHeight: 800,
+        clientHeight: 800,
+        trackHeight: 788,
+      }).scrollable
+    ).toBe(false);
+
+    // Invalid / boundary inputs
+    expect(
+      computeScrollbarMetrics({
+        scrollTop: Number.NaN,
+        scrollHeight: 0,
+        clientHeight: 800,
+        trackHeight: -10,
+      }).scrollable
+    ).toBe(false);
+
+    // Normal scroll midpoint
+    const mid = computeScrollbarMetrics({
+      scrollTop: 500,
+      scrollHeight: 2000,
+      clientHeight: 1000,
+      trackHeight: 800,
+    });
+    expect(mid.scrollable).toBe(true);
+    expect(mid.thumbHeight).toBe(400);
+    expect(mid.maxScrollTop).toBe(1000);
+    expect(mid.maxThumbTop).toBe(400);
+    expect(mid.thumbTop).toBe(200);
+
+    // Extremely long document clamps thumb to minThumbHeight
+    const longDoc = computeScrollbarMetrics({
+      scrollTop: 100_000,
+      scrollHeight: 50_000,
+      clientHeight: 1000,
+      trackHeight: 800,
+      minThumbHeight: 36,
+    });
+    expect(longDoc.scrollable).toBe(true);
+    expect(longDoc.thumbHeight).toBe(36);
+    expect(longDoc.thumbTop).toBe(764);
+
+    // Drag-to-scroll math + clamping
+    expect(
+      computeScrollTopFromDrag({
+        startScrollTop: 200,
+        deltaY: 100,
+        maxScrollTop: 1000,
+        maxThumbTop: 400,
+      })
+    ).toBe(450);
+    expect(
+      computeScrollTopFromDrag({
+        startScrollTop: 900,
+        deltaY: 500,
+        maxScrollTop: 1000,
+        maxThumbTop: 400,
+      })
+    ).toBe(1000);
+    expect(
+      computeScrollTopFromDrag({
+        startScrollTop: 50,
+        deltaY: -500,
+        maxScrollTop: 1000,
+        maxThumbTop: 400,
+      })
+    ).toBe(0);
+    expect(
+      computeScrollTopFromDrag({
+        startScrollTop: 100,
+        deltaY: 10,
+        maxScrollTop: 0,
+        maxThumbTop: 0,
+      })
+    ).toBe(0);
   });
 });

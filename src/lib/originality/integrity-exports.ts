@@ -185,3 +185,148 @@ export function generateAiDisclosureStatement(params: {
     "All empirical data (where included), analytical interpretations, citations, and final edits were reviewed and approved by the author in accordance with institutional academic-integrity guidelines. No experimental, survey, or interview data were fabricated by automated tools.",
   ].join("\n");
 }
+
+function formatReadableDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function formatVersionCreator(createdBy: string): string {
+  if (createdBy === "user") return "Author edit";
+  if (createdBy === "revision") return "Requested revision";
+  return "AI draft";
+}
+
+function formatVerificationLabel(status: string): string {
+  if (status === "verified") return "Verified";
+  if (status === "unverified") return "Pending check";
+  if (status === "title_mismatch") return "Needs title check";
+  if (status === "dead_url") return "Link unreachable";
+  return "Flagged";
+}
+
+function formatWorkTypeLabel(type: string): string {
+  if (type === "research") return "Research paper";
+  if (type === "thesis") return "Thesis";
+  if (type === "assignment") return "Assignment";
+  return "Project";
+}
+
+export function sanitizeProcessLogFilename(title: string, ext: "txt" | "md"): string {
+  const slug =
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "collate-project";
+  return `${slug}-writing-log.${ext}`;
+}
+
+/**
+ * Formats the project writing-process log into a student-readable Plain Text (.txt)
+ * or Markdown (.md) document suitable for submitting alongside an academic paper.
+ */
+export function formatWritingProcessLogReport(
+  log: WritingProcessLogExport,
+  disclosureStatement: string,
+  format: "txt" | "md" = "txt"
+): string {
+  const isMd = format === "md";
+  const h1 = (t: string) => (isMd ? `# ${t}` : `${t.toUpperCase()}\n${"=".repeat(t.length)}`);
+  const h2 = (t: string) => (isMd ? `## ${t}` : `${t}\n${"-".repeat(t.length)}`);
+  const lines: string[] = [];
+
+  lines.push(h1("Writing Process Log"));
+  lines.push("");
+  lines.push(`- **Work title:** ${log.project.title}`.replaceAll("**", isMd ? "**" : ""));
+  lines.push(
+    `- **Work type:** ${formatWorkTypeLabel(log.project.type)}`.replaceAll("**", isMd ? "**" : "")
+  );
+  if (log.project.level) {
+    lines.push(`- **Academic level:** ${log.project.level}`.replaceAll("**", isMd ? "**" : ""));
+  }
+  if (log.project.institution) {
+    lines.push(`- **Institution:** ${log.project.institution}`.replaceAll("**", isMd ? "**" : ""));
+  }
+  lines.push(
+    `- **Citation style:** ${log.project.citationStyle.toUpperCase()}`.replaceAll(
+      "**",
+      isMd ? "**" : ""
+    )
+  );
+  lines.push(
+    `- **Generated:** ${formatReadableDate(log.generatedAt)}`.replaceAll("**", isMd ? "**" : "")
+  );
+  lines.push("");
+
+  lines.push(h2("1. Research and Source Verification History"));
+  lines.push("");
+  if (log.researchHistory.length === 0) {
+    lines.push("No source checks recorded yet.");
+  } else {
+    log.researchHistory.forEach((run, idx) => {
+      lines.push(
+        `${idx + 1}. Source check on ${formatReadableDate(run.startedAt)} — Status: ${run.status} | Sources found: ${run.sourcesFound.toLocaleString("en-US")} | Retrieved: ${run.sourcesFetched.toLocaleString("en-US")} | Subtopics covered: ${run.subtopicsCovered}`
+      );
+    });
+  }
+  lines.push("");
+
+  lines.push(h2(`2. Verified Sources (${log.verifiedSourcesUsed.length})`));
+  lines.push("");
+  if (log.verifiedSourcesUsed.length === 0) {
+    lines.push("No verified source records saved yet.");
+  } else {
+    log.verifiedSourcesUsed.forEach((src, idx) => {
+      const yearPart = src.year ? ` (${src.year})` : "";
+      const idPart = src.doi ? `DOI: ${src.doi}` : src.url || "No link recorded";
+      lines.push(
+        `${idx + 1}. ${src.title}${yearPart} — ${formatVerificationLabel(src.verificationStatus)} | ${idPart} | Retrieved ${formatReadableDate(src.retrievedAt)}`
+      );
+    });
+  }
+  lines.push("");
+
+  lines.push(h2("3. Chapter Drafting and Revision History"));
+  lines.push("");
+  if (log.chapterDraftingHistory.length === 0) {
+    lines.push("No chapters drafted yet.");
+  } else {
+    for (const ch of log.chapterDraftingHistory) {
+      lines.push(
+        isMd
+          ? `### Chapter ${ch.chapterNumber}: ${ch.chapterTitle} (${ch.status.replace("_", " ")})`
+          : `Chapter ${ch.chapterNumber}: ${ch.chapterTitle} (${ch.status.replace("_", " ")})`
+      );
+      if (ch.versions.length === 0) {
+        lines.push("  - Not drafted yet.");
+      } else {
+        for (const v of ch.versions) {
+          const checkText =
+            v.originalityPassed === null
+              ? "Similarity check not run"
+              : `${v.originalityPassed ? "Similarity check passed" : "Flagged for review"}${
+                  v.overlapScore !== null ? ` (${v.overlapScore}% source overlap)` : ""
+                }`;
+          lines.push(
+            `  - Version ${v.version} (${formatVersionCreator(v.createdBy)}, ${formatReadableDate(v.createdAt)}): ${v.wordCount.toLocaleString("en-US")} words, ${v.pageCount.toLocaleString("en-US")} pages — ${checkText}`
+          );
+        }
+      }
+      lines.push("");
+    }
+  }
+
+  lines.push(h2("4. AI-Use Disclosure Statement"));
+  lines.push("");
+  lines.push(disclosureStatement);
+  lines.push("");
+
+  return lines.join("\n");
+}

@@ -127,14 +127,15 @@ export default async function ChapterReaderPage({
   return (
     <WorkspaceShell user={user} maxWidthClassName="max-w-[1120px]">
       <div className="space-y-6">
-        <div className="space-y-1 border-b border-[var(--neutral-200)] pb-5">
+        <div className="space-y-3 border-b border-[var(--neutral-200)] pb-5">
           <Link
             href={`/projects/${id}`}
-            className="text-sm text-[var(--neutral-600)] hover:text-[var(--neutral-900)] underline underline-offset-4"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
           >
-            Back to {state.project.title}
+            <span aria-hidden="true">←</span>
+            <span>Back to {state.project.title}</span>
           </Link>
-          <h1 className="text-[1.875rem] font-medium m-0">
+          <h1 className="text-[1.75rem] sm:text-[1.875rem] font-medium">
             Chapter {chapter.number}: {chapter.title}
           </h1>
         </div>

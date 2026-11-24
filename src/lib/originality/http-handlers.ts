@@ -4,7 +4,12 @@ import { originalityReports, projectSettings } from "@/db/schema";
 import { jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { getSessionFromToken } from "@/lib/auth/service";
-import { buildWritingProcessLog, generateAiDisclosureStatement } from "./integrity-exports";
+import {
+  buildWritingProcessLog,
+  formatWritingProcessLogReport,
+  generateAiDisclosureStatement,
+  sanitizeProcessLogFilename,
+} from "./integrity-exports";
 
 export async function handleGetProjectIntegrity(
   request: Request,
@@ -57,6 +62,23 @@ export async function handleGetProjectIntegrity(
     citationStyle: processLog.project.citationStyle,
     verifiedSourceCount: processLog.verifiedSourcesUsed.length,
   });
+
+  const requestedFormat = new URL(request.url).searchParams.get("format")?.trim().toLowerCase();
+  if (requestedFormat === "txt" || requestedFormat === "md" || requestedFormat === "markdown") {
+    const ext = requestedFormat === "txt" ? "txt" : "md";
+    const body = formatWritingProcessLogReport(processLog, disclosureStatement, ext);
+    const filename = sanitizeProcessLogFilename(project.title, ext);
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "content-type":
+          ext === "txt" ? "text/plain; charset=utf-8" : "text/markdown; charset=utf-8",
+        "content-disposition": `attachment; filename="${filename}"`,
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }
 
   return jsonNoStore(
     {

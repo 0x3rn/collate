@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
-import { getUserInitials } from "@/lib/ui/formatters";
+import { SpinnerIcon } from "@/components/ui/button";
+import { formatCredits, getUserInitials } from "@/lib/ui/formatters";
 import {
   BillingIcon,
-  BookMarkIcon,
   CloseIcon,
   ExportsIcon,
   LogOutIcon,
@@ -32,7 +32,7 @@ interface NavItem {
   match: (pathname: string) => boolean;
 }
 
-const WORKSPACE_NAV: readonly NavItem[] = [
+const RESEARCH_NAV: readonly NavItem[] = [
   {
     href: "/dashboard",
     label: "Overview",
@@ -77,7 +77,7 @@ function SidebarContent({
 }: {
   user: AppShellUser;
   pathname: string;
-  onNavigate?: () => void;
+  onNavigate?: (targetHref: string) => void;
   onSignOut: () => void;
   signingOut: boolean;
 }) {
@@ -86,7 +86,7 @@ function SidebarContent({
   function renderNavGroup(heading: string, items: readonly NavItem[]) {
     return (
       <div className="space-y-1">
-        <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+        <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-400)]">
           {heading}
         </p>
         <ul className="space-y-0.5 list-none p-0 m-0">
@@ -97,16 +97,16 @@ function SidebarContent({
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  onClick={onNavigate}
+                  onClick={() => onNavigate?.(item.href)}
                   aria-current={active ? "page" : undefined}
-                  className={`min-h-[40px] px-2.5 py-2 rounded-[var(--radius-sm)] flex items-center gap-2.5 text-sm transition-colors duration-150 ${
+                  className={`relative min-h-[38px] px-2.5 py-2 rounded-[var(--radius-sm)] flex items-center gap-2.5 text-sm transition-colors duration-150 ${
                     active
                       ? "bg-[var(--accent-100)] text-[var(--accent-600)] font-semibold"
                       : "text-[var(--neutral-700)] font-medium hover:bg-[var(--neutral-100)] hover:text-[var(--neutral-900)]"
                   }`}
                 >
                   <Icon
-                    className={`w-[18px] h-[18px] shrink-0 ${
+                    className={`w-[17px] h-[17px] shrink-0 transition-colors ${
                       active ? "text-[var(--accent-600)]" : "text-[var(--neutral-500)]"
                     }`}
                   />
@@ -122,40 +122,33 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Brand header */}
-      <div className="h-16 px-5 border-b border-[var(--neutral-200)] flex items-center justify-between gap-2 shrink-0">
+      {/* Brand header — clean typographic wordmark */}
+      <div className="h-15 px-5 border-b border-[var(--neutral-200)] flex items-center justify-between gap-2 shrink-0">
         <Link
           href="/dashboard"
-          onClick={onNavigate}
-          className="inline-flex items-center gap-2.5 text-[var(--neutral-900)]"
+          onClick={() => onNavigate?.("/dashboard")}
+          className="text-xl font-semibold tracking-tight leading-none text-[var(--neutral-900)]"
+          style={{ fontFamily: "var(--font-serif)" }}
         >
-          <span className="w-7 h-7 rounded-[var(--radius-sm)] bg-[var(--accent-600)] text-white grid place-items-center shrink-0">
-            <BookMarkIcon className="w-4 h-4" />
-          </span>
-          <span
-            className="text-xl font-semibold tracking-tight leading-none"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            Collate
-          </span>
+          Collate
         </Link>
       </div>
 
-      {/* Primary create action */}
-      <div className="px-4 pt-4 pb-2 shrink-0">
+      {/* Subtle new-project action */}
+      <div className="px-3.5 pt-3.5 pb-1 shrink-0">
         <Link
           href="/projects/new"
-          onClick={onNavigate}
-          className="w-full min-h-[42px] px-3.5 py-2 rounded-[var(--radius-sm)] bg-[var(--accent-600)] hover:bg-[var(--accent-700)] text-white text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors duration-150"
+          onClick={() => onNavigate?.("/projects/new")}
+          className="w-full min-h-[38px] px-3 py-1.5 rounded-[var(--radius-sm)] border border-[var(--neutral-300)] bg-[var(--neutral-50)] hover:bg-white hover:border-[var(--accent-600)] text-[var(--neutral-900)] text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-all duration-150"
         >
-          <PlusIcon className="w-4 h-4 shrink-0" />
+          <PlusIcon className="w-4 h-4 text-[var(--accent-600)] shrink-0" />
           <span>New project</span>
         </Link>
       </div>
 
-      {/* Grouped workspace navigation */}
-      <nav aria-label="Workspace navigation" className="flex-1 overflow-y-auto px-3 py-3 space-y-6">
-        {renderNavGroup("Workspace", WORKSPACE_NAV)}
+      {/* Grouped main navigation */}
+      <nav aria-label="Main navigation" className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+        {renderNavGroup("Research", RESEARCH_NAV)}
         {renderNavGroup("Account", ACCOUNT_NAV)}
         {user.isAdmin
           ? renderNavGroup("Operations", [
@@ -170,27 +163,32 @@ function SidebarContent({
       </nav>
 
       {/* Bottom credits & user utility bar */}
-      <div className="p-3.5 border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-3 shrink-0">
+      <div className="p-3.5 border-t border-[var(--neutral-200)] bg-[var(--neutral-50)]/70 space-y-3 shrink-0">
         <Link
           href="/billing"
-          onClick={onNavigate}
-          className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-[var(--radius-sm)] bg-white border border-[var(--neutral-200)] hover:border-[var(--neutral-300)] transition-colors"
+          onClick={() => onNavigate?.("/billing")}
+          className="block px-3 py-2.5 rounded-[var(--radius-sm)] bg-white border border-[var(--neutral-200)] hover:border-[var(--neutral-300)] transition-colors group space-y-1"
         >
-          <div>
+          <div className="flex items-center justify-between gap-2">
             <p className="text-[11px] font-medium text-[var(--neutral-500)] leading-tight">
               Available credits
             </p>
-            <p className="text-sm font-semibold text-[var(--neutral-900)] tabular-nums mt-0.5">
-              {user.creditsBalance} credits
-            </p>
+            <span className="text-[11px] font-semibold text-[var(--accent-600)] group-hover:underline underline-offset-4 shrink-0">
+              Top up
+            </span>
           </div>
-          <span className="text-xs font-medium text-[var(--accent-600)] shrink-0">Top up</span>
+          <p
+            title={formatCredits(user.creditsBalance)}
+            className="text-sm font-semibold text-[var(--neutral-900)] tabular-nums truncate"
+          >
+            {formatCredits(user.creditsBalance)}
+          </p>
         </Link>
 
-        <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center justify-between gap-2 px-0.5">
           <Link
             href="/account"
-            onClick={onNavigate}
+            onClick={() => onNavigate?.("/account")}
             className="flex items-center gap-2.5 min-w-0 group"
           >
             <span
@@ -200,10 +198,10 @@ function SidebarContent({
               {initials}
             </span>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-[var(--neutral-900)] truncate m-0 group-hover:text-[var(--accent-600)] transition-colors">
+              <p className="text-xs font-semibold text-[var(--neutral-900)] truncate group-hover:text-[var(--accent-600)] transition-colors">
                 {user.name}
               </p>
-              <p className="text-[11px] text-[var(--neutral-500)] truncate m-0">{user.email}</p>
+              <p className="text-[11px] text-[var(--neutral-500)] truncate">{user.email}</p>
             </div>
           </Link>
 
@@ -215,11 +213,11 @@ function SidebarContent({
             aria-label="Sign out"
             className="w-9 h-9 rounded-[var(--radius-sm)] text-[var(--neutral-500)] hover:text-[var(--neutral-900)] hover:bg-[var(--neutral-200)]/60 grid place-items-center shrink-0 transition-colors cursor-pointer disabled:opacity-50"
           >
-            <LogOutIcon className="w-4 h-4" />
+            {signingOut ? <SpinnerIcon className="w-4 h-4" /> : <LogOutIcon className="w-4 h-4" />}
           </button>
         </div>
 
-        <div className="flex items-center gap-3 px-1 text-[11px] text-[var(--neutral-500)]">
+        <div className="flex items-center gap-3 px-0.5 text-[11px] text-[var(--neutral-500)]">
           <Link href="/terms" className="hover:text-[var(--neutral-800)]">
             Terms
           </Link>
@@ -246,10 +244,18 @@ export function AppShell({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [navigating, setNavigating] = useState(false);
 
   useEffect(() => {
     setMobileOpen(false);
+    setNavigating(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!navigating) return;
+    const timeout = setTimeout(() => setNavigating(false), 4500);
+    return () => clearTimeout(timeout);
+  }, [navigating]);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -259,6 +265,13 @@ export function AppShell({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mobileOpen]);
+
+  function handleNavigate(targetHref: string) {
+    setMobileOpen(false);
+    if (targetHref !== pathname) {
+      setNavigating(true);
+    }
+  }
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -272,12 +285,23 @@ export function AppShell({
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[var(--neutral-50)]">
+      {/* Subtle top route-transition progress hairline */}
+      {navigating ? (
+        <div
+          aria-hidden="true"
+          className="fixed top-0 left-0 right-0 z-50 h-[2px] bg-[var(--accent-100)] overflow-hidden pointer-events-none"
+        >
+          <div className="h-full w-1/2 bg-[var(--accent-600)] route-progress-sweep" />
+        </div>
+      ) : null}
+
       {/* Desktop persistent left sidebar */}
-      <aside className="hidden lg:block lg:w-[252px] lg:shrink-0 border-r border-[var(--neutral-200)] bg-white">
+      <aside className="hidden lg:block lg:w-[244px] lg:shrink-0 border-r border-[var(--neutral-200)] bg-white">
         <div className="sticky top-0 h-screen">
           <SidebarContent
             user={user}
             pathname={pathname}
+            onNavigate={handleNavigate}
             onSignOut={handleSignOut}
             signingOut={signingOut}
           />
@@ -298,35 +322,22 @@ export function AppShell({
           </button>
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-2 text-[var(--neutral-900)]"
+            onClick={() => handleNavigate("/dashboard")}
+            className="text-lg font-semibold tracking-tight text-[var(--neutral-900)]"
+            style={{ fontFamily: "var(--font-serif)" }}
           >
-            <span className="w-6 h-6 rounded-[var(--radius-sm)] bg-[var(--accent-600)] text-white grid place-items-center shrink-0">
-              <BookMarkIcon className="w-3.5 h-3.5" />
-            </span>
-            <span
-              className="text-lg font-semibold tracking-tight"
-              style={{ fontFamily: "var(--font-serif)" }}
-            >
-              Collate
-            </span>
+            Collate
           </Link>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <Link
-            href="/billing"
-            className="min-h-[36px] px-2.5 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] text-xs font-semibold text-[var(--neutral-800)] tabular-nums inline-flex items-center"
-          >
-            {user.creditsBalance} cr
-          </Link>
-          <Link
-            href="/projects/new"
-            className="min-h-[36px] px-3 rounded-[var(--radius-sm)] bg-[var(--accent-600)] text-white text-xs font-medium inline-flex items-center gap-1"
-          >
-            <PlusIcon className="w-3.5 h-3.5" />
-            <span>New</span>
-          </Link>
-        </div>
+        <Link
+          href="/projects/new"
+          onClick={() => handleNavigate("/projects/new")}
+          className="min-h-[36px] px-3 rounded-[var(--radius-sm)] bg-[var(--accent-600)] hover:bg-[var(--accent-700)] text-white text-xs font-medium inline-flex items-center gap-1 shrink-0 transition-colors"
+        >
+          <PlusIcon className="w-3.5 h-3.5" />
+          <span>New project</span>
+        </Link>
       </header>
 
       {/* Mobile slide-over navigation drawer */}
@@ -335,13 +346,13 @@ export function AppShell({
           className="lg:hidden fixed inset-0 z-50 flex"
           role="dialog"
           aria-modal="true"
-          aria-label="Workspace navigation"
+          aria-label="Main navigation"
         >
           <div
             className="fixed inset-0 bg-[var(--neutral-900)]/35"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="relative z-10 w-[280px] max-w-[85vw] bg-white h-full border-r border-[var(--neutral-200)] shadow-[var(--shadow-raised)] flex flex-col">
+          <div className="relative z-10 w-[276px] max-w-[85vw] bg-white h-full border-r border-[var(--neutral-200)] shadow-[var(--shadow-raised)] flex flex-col">
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
@@ -353,7 +364,7 @@ export function AppShell({
             <SidebarContent
               user={user}
               pathname={pathname}
-              onNavigate={() => setMobileOpen(false)}
+              onNavigate={handleNavigate}
               onSignOut={handleSignOut}
               signingOut={signingOut}
             />
@@ -361,9 +372,12 @@ export function AppShell({
         </div>
       ) : null}
 
-      {/* Workspace main canvas — no public marketing footer */}
+      {/* Main page canvas — no public marketing footer */}
       <main className="flex-1 min-w-0">
-        <div className={`mx-auto w-full ${maxWidthClassName} px-4 sm:px-6 lg:px-8 py-7 sm:py-9`}>
+        <div
+          key={pathname}
+          className={`page-enter mx-auto w-full ${maxWidthClassName} px-4 sm:px-6 lg:px-8 py-7 sm:py-9`}
+        >
           {children}
         </div>
       </main>

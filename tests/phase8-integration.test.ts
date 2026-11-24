@@ -302,6 +302,39 @@ describe("Phase 8 — NN-6 Originality Gate wired into WriteChapterWorkflow & In
     expect(data.processLog.project.title).toBe("Clean Energy Access");
     expect(data.disclosureStatement).toContain("Clean Energy Access");
 
+    const txtRes = await handleGetProjectIntegrity(
+      new Request("https://collate.app/api/projects/prj_alice_int/integrity?format=txt", {
+        headers: { cookie: alice.cookie },
+      }),
+      "prj_alice_int",
+      authDeps
+    );
+    expect(txtRes.status).toBe(200);
+    expect(txtRes.headers.get("content-type")).toContain("text/plain");
+    expect(txtRes.headers.get("content-disposition")).toContain(
+      "clean-energy-access-writing-log.txt"
+    );
+    const txtBody = await txtRes.text();
+    expect(txtBody).toContain("WRITING PROCESS LOG");
+    expect(txtBody).toContain("Clean Energy Access");
+    expect(txtBody).toContain("AI-Use Disclosure Statement");
+
+    const mdRes = await handleGetProjectIntegrity(
+      new Request("https://collate.app/api/projects/prj_alice_int/integrity?format=md", {
+        headers: { cookie: alice.cookie },
+      }),
+      "prj_alice_int",
+      authDeps
+    );
+    expect(mdRes.status).toBe(200);
+    expect(mdRes.headers.get("content-type")).toContain("text/markdown");
+    expect(mdRes.headers.get("content-disposition")).toContain(
+      "clean-energy-access-writing-log.md"
+    );
+    const mdBody = await mdRes.text();
+    expect(mdBody).toContain("# Writing Process Log");
+    expect(mdBody).toContain("## 1. Research and Source Verification History");
+
     const bobRes = await handleGetProjectIntegrity(
       new Request("https://collate.app/api/projects/prj_alice_int/integrity", {
         headers: { cookie: bob.cookie },

@@ -103,7 +103,11 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
         return;
       }
       setRefundReason("");
-      setNotice(`Granted ${creditsNum} credits. Updated balance: ${json.balanceAfter ?? "—"}.`);
+      setNotice(
+        `Granted ${creditsNum.toLocaleString("en-US")} credits. Updated balance: ${
+          typeof json.balanceAfter === "number" ? json.balanceAfter.toLocaleString("en-US") : "—"
+        }.`
+      );
       router.refresh();
     } catch {
       setError("Network error while issuing manual refund.");
@@ -192,7 +196,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
               >
                 {initial.users.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.email} ({u.creditsBalance} credits)
+                    {u.email} ({u.creditsBalance.toLocaleString("en-US")} credits)
                   </option>
                 ))}
               </select>
