@@ -3,6 +3,7 @@ import {
   Document,
   Footer,
   HeadingLevel,
+  ImageRun,
   Packer,
   PageBreak,
   PageNumber,
@@ -13,6 +14,9 @@ import {
   TextRun,
   WidthType,
 } from "docx";
+import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
+import type { ResolvedExportFigureAsset } from "./figure-assets";
+import { computeControlledFigureDimensions } from "./figure-layout";
 import type { ThesisExportDocument } from "./templates";
 
 function lineSpacingTwips(spacing: ThesisExportDocument["formatting"]["lineSpacing"]): number {
@@ -21,105 +25,213 @@ function lineSpacingTwips(spacing: ThesisExportDocument["formatting"]["lineSpaci
   return 480;
 }
 
+function parseInlineMarkdownRuns(
+  raw: string,
+  font: string,
+  sizeHalfPt: number,
+  baseBold = false
+): TextRun[] {
+  const segments = raw.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).filter((s) => s.length > 0);
+  if (segments.length === 0) {
+    return [new TextRun({ text: raw, font, size: sizeHalfPt, bold: baseBold })];
+  }
+  return segments.map((seg) => {
+    if (seg.startsWith("**") && seg.endsWith("**") && seg.length > 4) {
+      return new TextRun({ text: seg.slice(2, -2), font, size: sizeHalfPt, bold: true });
+    }
+    if (seg.startsWith("*") && seg.endsWith("*") && seg.length > 2) {
+      return new TextRun({
+        text: seg.slice(1, -1),
+        font,
+        size: sizeHalfPt,
+        bold: baseBold,
+        italics: true,
+      });
+    }
+    return new TextRun({ text: seg, font, size: sizeHalfPt, bold: baseBold });
+  });
+}
+
 function markdownToDocxBlocks(
   markdown: string,
   font: string,
   sizeHalfPt: number,
-  lineTwips: number
+  lineTwips: number,
+  resolvedFigures?: Record<string, ResolvedExportFigureAsset>
 ): Array<Paragraph | Table> {
-  const lines = markdown.split(/\r?\n/);
+  const parsedBlocks = parseMarkdownToBlocks(markdown);
   const blocks: Array<Paragraph | Table> = [];
-  let tableRows: string[][] = [];
 
-  const flushTable = () => {
-    if (tableRows.length === 0) return;
-    const filtered = tableRows.filter((r) => !r.every((cell) => /^:?-{2,}:?$/.test(cell.trim())));
-    if (filtered.length > 0) {
-      blocks.push(
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: filtered.map(
-            (row, rowIdx) =>
-              new TableRow({
-                children: row.map(
-                  (cell) =>
-                    new TableCell({
-                      children: [
-                        new Paragraph({
+  for (const block of parsedBlocks) {
+    switch (block.type) {
+      case "page_break": {
+        blocks.push(new Paragraph({ children: [new PageBreak()] }));
+        break;
+      }
+      case "heading": {
+        if (block.level === 1) {
+          blocks.push(
+            new Paragraph({
+              heading: HeadingLevel.HEADING_1,
+              spacing: { before: 240, after: 160 },
+              children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt + 6, true),
+            })
+          );
+        } else if (block.level === 2) {
+          blocks.push(
+            new Paragraph({
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 260, after: 120 },
+              children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt + 2, true),
+            })
+          );
+        } else {
+          blocks.push(
+            new Paragraph({
+              heading: HeadingLevel.HEADING_3,
+              spacing: { before: 200, after: 100 },
+              children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt, true),
+            })
+          );
+        }
+        break;
+      }
+      case "paragraph": {
+        blocks.push(
+          new Paragraph({
+            spacing: { after: 140, line: lineTwips },
+            children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt),
+          })
+        );
+        break;
+      }
+      case "blockquote": {
+        blocks.push(
+          new Paragraph({
+            indent: { left: 720 },
+            spacing: { after: 140, line: lineTwips },
+            children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt),
+          })
+        );
+        break;
+      }
+      case "bullet_list": {
+        for (const item of block.items) {
+          blocks.push(
+            new Paragraph({
+              bullet: { level: 0 },
+              spacing: { after: 100, line: lineTwips },
+              children: parseInlineMarkdownRuns(item, font, sizeHalfPt),
+            })
+          );
+        }
+        break;
+      }
+      case "table": {
+        const tableRows = block.raw
+          .split(/\r?\n/)
+          .map((line) =>
+            line
+              .trim()
+              .slice(1, -1)
+              .split("|")
+              .map((c) => c.trim())
+          )
+          .filter((r) => !r.every((cell) => /^:?-{2,}:?$/.test(cell.trim())));
+
+        if (tableRows.length > 0) {
+          blocks.push(
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: tableRows.map(
+                (row, rowIdx) =>
+                  new TableRow({
+                    children: row.map(
+                      (cell) =>
+                        new TableCell({
                           children: [
-                            new TextRun({
-                              text: cell,
-                              bold: rowIdx === 0,
-                              font,
-                              size: Math.max(18, sizeHalfPt - 2),
+                            new Paragraph({
+                              children: parseInlineMarkdownRuns(
+                                cell,
+                                font,
+                                Math.max(18, sizeHalfPt - 2),
+                                rowIdx === 0
+                              ),
                             }),
                           ],
-                        }),
-                      ],
-                    })
-                ),
-              })
-          ),
-        })
-      );
-    }
-    tableRows = [];
-  };
+                        })
+                    ),
+                  })
+              ),
+            })
+          );
+        }
+        break;
+      }
+      case "figure": {
+        const asset = resolvedFigures?.[block.figure.url];
+        const natW = asset?.naturalWidth ?? block.figure.width;
+        const natH = asset?.naturalHeight ?? block.figure.height;
+        const dims = computeControlledFigureDimensions(natW, natH, {
+          maxWidthPx: 540,
+          maxHeightPx: 360,
+        });
 
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim();
-    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
-      tableRows.push(
-        trimmed
-          .slice(1, -1)
-          .split("|")
-          .map((c) => c.trim())
-      );
-      continue;
-    }
-    flushTable();
-    if (!trimmed) continue;
+        if (asset) {
+          blocks.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              keepNext: true,
+              spacing: { before: 220, after: 100 },
+              children: [
+                new ImageRun({
+                  type: asset.docxType,
+                  data: asset.bytes,
+                  transformation: {
+                    width: dims.widthPx,
+                    height: dims.heightPx,
+                  },
+                  altText: {
+                    name: block.figure.alt.slice(0, 100),
+                    title: block.figure.caption.slice(0, 140),
+                    description: block.figure.alt.slice(0, 200),
+                  },
+                }),
+              ],
+            })
+          );
+        }
 
-    if (trimmed.startsWith("### ")) {
-      blocks.push(
-        new Paragraph({
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 200, after: 100 },
-          children: [new TextRun({ text: trimmed.slice(4), bold: true, font, size: sizeHalfPt })],
-        })
-      );
-    } else if (trimmed.startsWith("## ")) {
-      blocks.push(
-        new Paragraph({
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 260, after: 120 },
-          children: [
-            new TextRun({ text: trimmed.slice(3), bold: true, font, size: sizeHalfPt + 2 }),
-          ],
-        })
-      );
-    } else if (trimmed.startsWith("# ")) {
-      blocks.push(
-        new Paragraph({
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 240, after: 160 },
-          children: [
-            new TextRun({ text: trimmed.slice(2), bold: true, font, size: sizeHalfPt + 6 }),
-          ],
-        })
-      );
-    } else {
-      const cleanText = trimmed.replace(/^[-*>]\s+/, "");
-      blocks.push(
-        new Paragraph({
-          spacing: { after: 140, line: lineTwips },
-          children: [new TextRun({ text: cleanText, font, size: sizeHalfPt })],
-        })
-      );
+        blocks.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            keepNext: Boolean(block.figure.attribution),
+            spacing: { before: asset ? 40 : 180, after: block.figure.attribution ? 40 : 180 },
+            children: parseInlineMarkdownRuns(block.figure.caption, font, 20),
+          })
+        );
+
+        if (block.figure.attribution) {
+          blocks.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 180 },
+              children: [
+                new TextRun({
+                  text: block.figure.attribution,
+                  font,
+                  size: 16, // 8pt fine print
+                  color: "555555",
+                }),
+              ],
+            })
+          );
+        }
+        break;
+      }
     }
   }
 
-  flushTable();
   return blocks;
 }
 
@@ -216,7 +328,9 @@ export async function buildThesisDocx(
     if (idx > 0) {
       children.push(new Paragraph({ children: [new PageBreak()] }));
     }
-    children.push(...markdownToDocxBlocks(ch.markdown, font, sizeHalfPt, lineTwips));
+    children.push(
+      ...markdownToDocxBlocks(ch.markdown, font, sizeHalfPt, lineTwips, doc.resolvedFigures)
+    );
   });
 
   if (includeReferences && doc.bibliographyEntries.length > 0) {

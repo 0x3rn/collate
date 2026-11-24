@@ -1,5 +1,8 @@
 import type { LineSpacing } from "@/db/schema";
 import type { CoverDetails, FrontMatterToggles } from "@/lib/wizard/schema";
+import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
+import type { ResolvedExportFigureAsset } from "./figure-assets";
+import { computeControlledFigureDimensions } from "./figure-layout";
 
 export interface ExportFormattingSettings {
   font: string;
@@ -32,6 +35,7 @@ export interface ThesisExportDocument {
   chapters: ExportChapterContent[];
   bibliographyEntries: string[];
   appendicesMarkdown?: string;
+  resolvedFigures?: Record<string, ResolvedExportFigureAsset>;
 }
 
 export function escapeHtml(raw: string): string {
@@ -56,84 +60,95 @@ function formatInlineMarkdown(raw: string): string {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>");
 }
 
-export function markdownToPrintHtml(markdown: string): string {
-  const lines = markdown.split(/\r?\n/);
+export function markdownToPrintHtml(
+  markdown: string,
+  resolvedFigures?: Record<string, ResolvedExportFigureAsset>
+): string {
+  const blocks = parseMarkdownToBlocks(markdown);
   const htmlParts: string[] = [];
-  let inList = false;
-  let tableRows: string[][] = [];
 
-  const flushList = () => {
-    if (inList) {
-      htmlParts.push("</ul>");
-      inList = false;
-    }
-  };
-
-  const flushTable = () => {
-    if (tableRows.length === 0) return;
-    const header = tableRows[0]!;
-    const body = tableRows
-      .slice(1)
-      .filter((r) => !r.every((cell) => /^:?-{2,}:?$/.test(cell.trim())));
-    htmlParts.push(
-      "<table><thead><tr>" +
-        header.map((c) => `<th>${formatInlineMarkdown(c)}</th>`).join("") +
-        "</tr></thead><tbody>" +
-        body
-          .map(
-            (r) => "<tr>" + r.map((c) => `<td>${formatInlineMarkdown(c)}</td>`).join("") + "</tr>"
-          )
-          .join("") +
-        "</tbody></table>"
-    );
-    tableRows = [];
-  };
-
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim();
-
-    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
-      flushList();
-      const cells = trimmed
-        .slice(1, -1)
-        .split("|")
-        .map((c) => c.trim());
-      tableRows.push(cells);
-      continue;
-    }
-    flushTable();
-
-    if (!trimmed) {
-      flushList();
-      continue;
-    }
-
-    if (trimmed.startsWith("### ")) {
-      flushList();
-      htmlParts.push(`<h3>${formatInlineMarkdown(trimmed.slice(4))}</h3>`);
-    } else if (trimmed.startsWith("## ")) {
-      flushList();
-      htmlParts.push(`<h2>${formatInlineMarkdown(trimmed.slice(3))}</h2>`);
-    } else if (trimmed.startsWith("# ")) {
-      flushList();
-      htmlParts.push(`<h1>${formatInlineMarkdown(trimmed.slice(2))}</h1>`);
-    } else if (trimmed.startsWith("> ")) {
-      flushList();
-      htmlParts.push(`<blockquote>${formatInlineMarkdown(trimmed.slice(2))}</blockquote>`);
-    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      if (!inList) {
-        htmlParts.push("<ul>");
-        inList = true;
+  for (const block of blocks) {
+    switch (block.type) {
+      case "page_break": {
+        htmlParts.push('<div class="page-break"></div>');
+        break;
       }
-      htmlParts.push(`<li>${formatInlineMarkdown(trimmed.slice(2))}</li>`);
-    } else {
-      flushList();
-      htmlParts.push(`<p>${formatInlineMarkdown(trimmed)}</p>`);
+      case "heading": {
+        const tag = block.level === 1 ? "h1" : block.level === 2 ? "h2" : "h3";
+        htmlParts.push(`<${tag}>${formatInlineMarkdown(block.text)}</${tag}>`);
+        break;
+      }
+      case "paragraph": {
+        htmlParts.push(`<p>${formatInlineMarkdown(block.text)}</p>`);
+        break;
+      }
+      case "blockquote": {
+        htmlParts.push(`<blockquote>${formatInlineMarkdown(block.text)}</blockquote>`);
+        break;
+      }
+      case "bullet_list": {
+        htmlParts.push(
+          "<ul>" +
+            block.items.map((item) => `<li>${formatInlineMarkdown(item)}</li>`).join("") +
+            "</ul>"
+        );
+        break;
+      }
+      case "table": {
+        const rows = block.raw
+          .split(/\r?\n/)
+          .map((line) =>
+            line
+              .trim()
+              .slice(1, -1)
+              .split("|")
+              .map((c) => c.trim())
+          )
+          .filter((r) => r.length > 0);
+        if (rows.length === 0) break;
+        const header = rows[0]!;
+        const body = rows
+          .slice(1)
+          .filter((r) => !r.every((cell) => /^:?-{2,}:?$/.test(cell.trim())));
+        htmlParts.push(
+          "<table><thead><tr>" +
+            header.map((c) => `<th>${formatInlineMarkdown(c)}</th>`).join("") +
+            "</tr></thead><tbody>" +
+            body
+              .map(
+                (r) =>
+                  "<tr>" + r.map((c) => `<td>${formatInlineMarkdown(c)}</td>`).join("") + "</tr>"
+              )
+              .join("") +
+            "</tbody></table>"
+        );
+        break;
+      }
+      case "figure": {
+        const asset = resolvedFigures?.[block.figure.url];
+        const natW = asset?.naturalWidth ?? block.figure.width;
+        const natH = asset?.naturalHeight ?? block.figure.height;
+        const dims = computeControlledFigureDimensions(natW, natH, {
+          maxWidthPx: 560,
+          maxHeightPx: 370,
+        });
+        const imgSrc = asset ? asset.dataUrl : escapeHtml(block.figure.url);
+        const captionHtml = `<div class="figure-caption">${formatInlineMarkdown(block.figure.caption)}</div>`;
+        const attrHtml = block.figure.attribution
+          ? `<div class="figure-attribution">${escapeHtml(block.figure.attribution)}</div>`
+          : "";
+
+        htmlParts.push(
+          `<figure class="academic-figure">` +
+            `<img src="${imgSrc}" alt="${escapeHtml(block.figure.alt)}" width="${dims.widthPx}" height="${dims.heightPx}" style="width:${dims.widthPx}px;max-width:100%;height:auto;max-height:105mm;" />` +
+            `<figcaption>${captionHtml}${attrHtml}</figcaption>` +
+            `</figure>`
+        );
+        break;
+      }
     }
   }
 
-  flushList();
-  flushTable();
   return htmlParts.join("\n");
 }
 
@@ -152,6 +167,37 @@ function buildPrintCss(fmt: ExportFormattingSettings): string {
       margin: 0;
     }
     .page-break { page-break-before: always; break-before: page; }
+    figure.academic-figure {
+      margin: 16pt auto;
+      text-align: center;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    figure.academic-figure img {
+      display: block;
+      margin: 0 auto;
+      max-width: 100%;
+      max-height: 105mm;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+    }
+    figure.academic-figure figcaption {
+      margin-top: 6pt;
+      text-align: center;
+    }
+    figure.academic-figure .figure-caption {
+      font-size: 10pt;
+      color: #111111;
+      line-height: 1.4;
+    }
+    figure.academic-figure .figure-attribution {
+      margin-top: 2pt;
+      font-size: 8pt;
+      color: #555555;
+      line-height: 1.35;
+      word-break: break-word;
+    }
     .cover-page {
       min-height: 230mm;
       display: flex;
@@ -274,7 +320,8 @@ export function buildFrontMatterHtml(doc: ThesisExportDocument, tocEntries: TocE
 
 export function buildChapterHtmlDocument(
   chapter: ExportChapterContent,
-  formatting: ExportFormattingSettings
+  formatting: ExportFormattingSettings,
+  resolvedFigures?: Record<string, ResolvedExportFigureAsset>
 ): string {
   return `<!doctype html>
 <html lang="en">
@@ -284,7 +331,7 @@ export function buildChapterHtmlDocument(
     <style>${buildPrintCss(formatting)}</style>
   </head>
   <body>
-    <article>${markdownToPrintHtml(chapter.markdown)}</article>
+    <article>${markdownToPrintHtml(chapter.markdown, resolvedFigures)}</article>
   </body>
 </html>`;
 }

@@ -13,10 +13,13 @@ import { AppShell } from "@/components/layout/app-shell";
 import { AutoHideScrollbar } from "@/components/layout/auto-hide-scrollbar";
 import { ChapterPipelinePanel } from "@/components/project/chapter-pipeline-panel";
 import { ChapterReaderClient } from "@/components/project/chapter-reader-client";
+import { ChapterRichEditor } from "@/components/project/chapter-rich-editor";
 import { IntegrityPanel } from "@/components/project/integrity-panel";
 import { Button } from "@/components/ui/button";
 import { LedgerRowsSkeleton } from "@/components/ui/skeleton";
 import type { DashboardProjectSummary, UserExportItem } from "@/db/queries/dashboard";
+import type { CslItem } from "@/lib/citations/csl";
+import { buildReaderCitationLabels } from "@/lib/citations/reader-format";
 import { formatCredits, formatNumber } from "@/lib/ui/formatters";
 import { computeScrollbarMetrics, computeScrollTopFromDrag } from "@/lib/ui/scrollbar";
 import { buildOriginalityAttention, buildTechnicalErrorAttention } from "@/lib/writing/attention";
@@ -150,10 +153,18 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(dirHtml).toContain("3 of 5 chapters drafted");
     expect(dirHtml).toContain("60%");
     expect(dirHtml).toContain("Review Chapter 3");
+    // Clicking the project title navigates to the main project overview page, while the CTA opens Chapter 3
+    expect(dirHtml).toContain(
+      'href="/projects/prj_001" title="Solar Microgrid Reliability in Rural Clinics"'
+    );
+    expect(dirHtml).toContain('href="/projects/prj_001/chapters/ch_3"');
 
     const cardHtml = renderToStaticMarkup(<ProjectCard project={SAMPLE_PROJECT} />);
     expect(cardHtml).toContain("APA 7");
     expect(cardHtml).toContain("38 sources");
+    expect(cardHtml).toContain(
+      '<a href="/projects/prj_001" class="hover:text-[var(--accent-600)] transition-colors">Solar Microgrid Reliability in Rural Clinics</a>'
+    );
 
     const exportsHtml = renderToStaticMarkup(
       <ExportsLibraryClient exportsList={[SAMPLE_EXPORT]} />
@@ -226,6 +237,9 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(overviewHtml).toContain("Recent work");
     expect(overviewHtml).toContain("Needs review");
     expect(overviewHtml).toContain("Solar Microgrid Reliability in Rural Clinics");
+    expect(overviewHtml).toContain(
+      'href="/projects/prj_001" title="Solar Microgrid Reliability in Rural Clinics"'
+    );
 
     const loadingBtnHtml = renderToStaticMarkup(
       <Button loading loadingLabel="Creating draft...">
@@ -373,6 +387,47 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(attentionPipelineHtml).not.toContain("Start chapter");
     expect(attentionPipelineHtml).not.toContain("Resume chapter");
 
+    // Ready chapter button order: Read / edit -> Request changes -> Approve Chapter (3rd) -> Download (last)
+    const readyPipelineHtml = renderToStaticMarkup(
+      <ChapterPipelinePanel
+        projectId="prj_001"
+        datasets={[]}
+        chapters={[
+          {
+            id: "ch_1",
+            number: 1,
+            title: "Introduction",
+            chapterType: "introduction",
+            pageBudget: 7,
+            wordBudget: 1925,
+            isAutoReferences: false,
+            status: "ready",
+            sectionHeadings: ["Background"],
+          },
+          {
+            id: "ch_2",
+            number: 2,
+            title: "Literature Review",
+            chapterType: "literature_review",
+            pageBudget: 12,
+            wordBudget: 3300,
+            isAutoReferences: false,
+            status: "not_started",
+            sectionHeadings: ["Conceptual review"],
+          },
+        ]}
+      />
+    );
+    const readIdx = readyPipelineHtml.indexOf("Read / edit");
+    const reviseIdx = readyPipelineHtml.indexOf("Request changes");
+    const approveIdx = readyPipelineHtml.indexOf("Approve Chapter");
+    const downloadIdx = readyPipelineHtml.indexOf(">Download<");
+    expect(readIdx).toBeGreaterThan(-1);
+    expect(reviseIdx).toBeGreaterThan(readIdx);
+    expect(approveIdx).toBeGreaterThan(reviseIdx);
+    expect(downloadIdx).toBeGreaterThan(approveIdx);
+    expect(readyPipelineHtml).toContain("justify-end");
+
     const pausedReaderHtml = renderToStaticMarkup(
       <ChapterReaderClient
         initial={{
@@ -394,6 +449,156 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(pausedReaderHtml).not.toContain("@citeKey");
     expect(pausedReaderHtml).not.toMatch(/\bmetadata\b/i);
     expect(pausedReaderHtml).toContain("view its verified source details");
+
+    // Formatted Harvard inline citations, italicized species names, no duplicate H1, and plain-language checks
+    const cslRegistry = new Map<string, CslItem>([
+      [
+        "poncedvila2026",
+        {
+          id: "poncedvila2026",
+          type: "article-journal",
+          title: "Impact of beetroot juice on oxidative stress",
+          author: [
+            { family: "Ponce de Vila", given: "M." },
+            { family: "Lopez", given: "A." },
+            { family: "Ruiz", given: "C." },
+          ],
+          issued: { "date-parts": [[2026]] },
+          "container-title": "Nutrition and Health",
+          DOI: "10.1177/02601060261416845",
+        },
+      ],
+      [
+        "darvish2024",
+        {
+          id: "darvish2024",
+          type: "article-journal",
+          title: "Nitrate-rich beetroot juice alters ROS bioactivity",
+          author: [{ family: "Darvish", given: "S." }],
+          issued: { "date-parts": [[2024]] },
+          "container-title": "Physiology",
+        },
+      ],
+    ]);
+    const chapterMd = [
+      "# Chapter 1: Introduction",
+      "",
+      "## 1.1 Background of the study",
+      "",
+      "Beetroot (*Beta vulgaris*) lowers oxidative stress [@poncedvila2026] and improves redox balance [@poncedvila2026; @darvish2024].",
+      "",
+      ":::figure",
+      "url: https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Beetroot.jpg/800px-Beetroot.jpg",
+      "alt: Fresh Beta vulgaris roots",
+      "caption: Figure 1.1: Fresh *Beta vulgaris* (beetroot) roots.",
+      "attribution: Source: Wikimedia Commons · Photo by Example Author · CC BY-SA 4.0",
+      "width: 800",
+      "height: 533",
+      ":::",
+      "",
+      "<!-- pagebreak -->",
+      "",
+      "## 1.2 Statement of the problem",
+      "",
+      "Second page begins cleanly here.",
+    ].join("\n");
+    const readerLabels = buildReaderCitationLabels({
+      markdown: chapterMd,
+      registry: cslRegistry,
+      style: "harvard",
+    });
+    expect(readerLabels.clusters["[@poncedvila2026]"]?.label).toBe("(Ponce de Vila et al. 2026)");
+    expect(readerLabels.clusters["[@poncedvila2026; @darvish2024]"]?.label).toBe(
+      "(Ponce de Vila et al. 2026; Darvish 2024)"
+    );
+
+    const readyReaderHtml = renderToStaticMarkup(
+      <ChapterReaderClient
+        initial={{
+          projectId: "prj_001",
+          chapter: { id: "ch_1", number: 1, title: "Introduction", status: "ready" },
+          markdown: chapterMd,
+          headings: [{ id: "sec-1", text: "1.1 Background of the study", level: 2 }],
+          citationClusters: readerLabels.clusters,
+          citations: [
+            {
+              citeKey: "poncedvila2026",
+              inlineLabel: readerLabels.singleKeyLabels["poncedvila2026"],
+              title: "Impact of beetroot juice on oxidative stress",
+              year: 2026,
+              venue: "Nutrition and Health",
+              doi: "10.1177/02601060261416845",
+              url: null,
+            },
+            {
+              citeKey: "darvish2024",
+              inlineLabel: readerLabels.singleKeyLabels["darvish2024"],
+              title: "Nitrate-rich beetroot juice alters ROS bioactivity",
+              year: 2024,
+              venue: "Physiology",
+              doi: null,
+              url: null,
+            },
+          ],
+          versions: [
+            {
+              id: "ver_1",
+              version: 1,
+              wordCount: 1985,
+              pageCount: 7,
+              createdBy: "ai",
+              revisionNotes: null,
+              createdAt: "2026-11-24T10:28:53.000Z",
+            },
+          ],
+          verifiedClaimsCount: 12,
+          originalityReport: {
+            passed: true,
+            overlapScore: 1.4,
+            semanticScore: 75.2,
+            quoteSharePct: 0,
+            crossUserScore: 0,
+          },
+        }}
+      />
+    );
+    expect(readyReaderHtml).toContain("(Ponce de Vila et al. 2026)");
+    expect(readyReaderHtml).toContain("(Ponce de Vila et al. 2026; Darvish 2024)");
+    expect(readyReaderHtml).not.toContain("[@poncedvila2026]");
+    expect(readyReaderHtml).toContain("<em>Beta vulgaris</em>");
+    expect(readyReaderHtml).not.toContain("*Beta vulgaris*");
+    expect(readyReaderHtml).not.toContain("Chapter 1: Introduction");
+    expect(readyReaderHtml).toContain("Originality &amp; checks");
+    expect(readyReaderHtml).toContain("Originality check");
+    expect(readyReaderHtml).toContain("Matched source text");
+    expect(readyReaderHtml).toContain("Shared across projects");
+    expect(readyReaderHtml).not.toContain("Gate:");
+    expect(readyReaderHtml).toContain("Draft history (1)");
+    expect(readyReaderHtml).toContain("Version 1 · AI draft");
+    expect(readyReaderHtml).toContain("Current");
+    expect(readyReaderHtml).toContain("<figure");
+    expect(readyReaderHtml).toContain("CC BY-SA 4.0");
+    // Read mode stays clean without editor page-break chrome; page-break markers belong in Light edit only
+    expect(readyReaderHtml).not.toContain("Page break");
+    expect(readyReaderHtml).not.toContain("~Page");
+
+    const editorHtml = renderToStaticMarkup(
+      <ChapterRichEditor
+        projectId="prj_001"
+        projectTitle="Beetroot Oxidative Stress Study"
+        markdown={chapterMd}
+        wordsPerPage={275}
+        citationClusters={readerLabels.clusters}
+        singleKeyLabels={readerLabels.singleKeyLabels}
+        initialFigures={[]}
+        onChange={() => {}}
+      />
+    );
+    expect(editorHtml).toContain("+ Page break");
+    expect(editorHtml).toContain("+ Verified image");
+    expect(editorHtml).toContain("Markdown source");
+    expect(editorHtml).toContain("~Page 1");
+    expect(editorHtml).toContain("~Page 2");
   });
 
   it("uses student-friendly Research copy without Workspace and computes auto-hide scrollbar metrics accurately", () => {

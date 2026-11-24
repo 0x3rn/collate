@@ -163,62 +163,86 @@ export function OverviewLedgerClient({
                   ? `${doneChapters}/${project.chaptersTotal} chapters`
                   : "Outline ready";
 
+              const projectOverviewHref = inSetup
+                ? `/projects/${project.id}/setup`
+                : `/projects/${project.id}`;
+
               return (
                 <li
                   key={project.id}
-                  className="px-5 sm:px-6 py-4 hover:bg-[var(--neutral-50)] transition-colors duration-150 group"
+                  className="px-5 sm:px-6 py-5 sm:py-5 hover:bg-[var(--neutral-50)] transition-colors duration-150 group"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--neutral-500)]">
-                        <span className="font-medium text-[var(--neutral-700)]">
-                          {formatProjectType(project.type)}
-                        </span>
-                        <span aria-hidden="true">·</span>
-                        <span>{formatCitationStyle(project.citationStyle)}</span>
-                        {index === 0 && project.lifecycleTab === "active" ? (
-                          <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-600)]">
-                            Active
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-5">
+                    <div className="min-w-0 flex-1 flex flex-col gap-3 sm:gap-2">
+                      {/* Row 1: Work type, citation style, and status badge (anchored right on mobile) */}
+                      <div className="flex items-center justify-between sm:justify-start gap-2 text-xs text-[var(--neutral-500)]">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium text-[var(--neutral-700)]">
+                            {formatProjectType(project.type)}
                           </span>
-                        ) : null}
+                          <span aria-hidden="true">·</span>
+                          <span>{formatCitationStyle(project.citationStyle)}</span>
+                          {index === 0 && project.lifecycleTab === "active" ? (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-600)]">
+                              Active
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <span
+                          className={`sm:hidden shrink-0 inline-flex items-center px-2 py-0.5 text-[11px] font-medium border rounded-[4px] ${STATUS_BADGE_CLASSES[status.tone]}`}
+                        >
+                          {status.label}
+                        </span>
                       </div>
 
+                      {/* Row 2: Cleanly truncated single-line project title */}
                       <Link
-                        href={project.nextAction.href}
-                        className="block text-[0.9375rem] font-semibold text-[var(--neutral-900)] group-hover:text-[var(--accent-600)] transition-colors truncate"
+                        href={projectOverviewHref}
+                        title={project.title}
+                        className="block text-[0.9375rem] font-semibold leading-snug text-[var(--neutral-900)] group-hover:text-[var(--accent-600)] transition-colors truncate"
                       >
                         {project.title}
                       </Link>
 
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--neutral-500)] tabular-nums">
+                      {/* Row 3: Progress + quiet metadata split cleanly on mobile */}
+                      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-y-2 sm:gap-x-3 text-xs text-[var(--neutral-500)] tabular-nums">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium border rounded-[4px] ${STATUS_BADGE_CLASSES[status.tone]}`}
+                          className={`hidden sm:inline-flex items-center px-2 py-0.5 text-[11px] font-medium border rounded-[4px] ${STATUS_BADGE_CLASSES[status.tone]}`}
                         >
                           {status.label}
                         </span>
-                        <span className="inline-flex items-center gap-2">
-                          <span className="w-16 h-1.5 rounded-full bg-[var(--neutral-100)] overflow-hidden inline-block">
+                        <span className="inline-flex items-center gap-2.5">
+                          <span className="w-20 sm:w-16 h-1.5 rounded-full bg-[var(--neutral-100)] overflow-hidden inline-block">
                             <span
                               className="block h-full rounded-full bg-[var(--accent-600)]"
                               style={{ width: `${progressPct}%` }}
                             />
                           </span>
-                          <span>{progressText}</span>
+                          <span className="text-[var(--neutral-700)] font-medium sm:font-normal sm:text-[var(--neutral-500)]">
+                            {progressText}
+                          </span>
                         </span>
-                        <span>
-                          {project.sourcesCount} {project.sourcesCount === 1 ? "source" : "sources"}
-                        </span>
-                        <span>Updated {formatShortDate(project.updatedAt)}</span>
+                        <div className="flex items-center gap-2 text-[var(--neutral-500)]">
+                          <span>
+                            {project.sourcesCount}{" "}
+                            {project.sourcesCount === 1 ? "source" : "sources"}
+                          </span>
+                          <span aria-hidden="true">·</span>
+                          <span>Updated {formatShortDate(project.updatedAt)}</span>
+                        </div>
                       </div>
                     </div>
 
-                    <Link
-                      href={project.nextAction.href}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)] shrink-0"
-                    >
-                      <span>{project.nextAction.label}</span>
-                      <ArrowRightIcon className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" />
-                    </Link>
+                    <div className="pt-3 border-t border-[var(--neutral-100)] sm:border-t-0 sm:pt-0 shrink-0">
+                      <Link
+                        href={project.nextAction.href}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)]"
+                      >
+                        <span>{project.nextAction.label}</span>
+                        <ArrowRightIcon className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+                      </Link>
+                    </div>
                   </div>
                 </li>
               );
@@ -237,13 +261,13 @@ export function OverviewLedgerClient({
           {attentionItems.map((item) => (
             <li
               key={item.id}
-              className="px-5 sm:px-6 py-4 hover:bg-[var(--neutral-50)] transition-colors group"
+              className="px-5 sm:px-6 py-5 hover:bg-[var(--neutral-50)] transition-colors group"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-5">
+                <div className="min-w-0 flex-1 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span
-                      className={`px-2 py-0.5 text-[11px] font-medium border rounded-[4px] ${STATUS_BADGE_CLASSES[item.tone]}`}
+                      className={`shrink-0 px-2 py-0.5 text-[11px] font-medium border rounded-[4px] ${STATUS_BADGE_CLASSES[item.tone]}`}
                     >
                       {item.kind === "chapter_needs_attention"
                         ? "Paused"
@@ -257,17 +281,23 @@ export function OverviewLedgerClient({
                       {item.projectTitle}
                     </span>
                   </div>
-                  <p className="text-sm font-semibold text-[var(--neutral-900)]">{item.title}</p>
-                  <p className="text-xs text-[var(--neutral-600)]">{item.detail}</p>
+                  <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
+                    {item.title}
+                  </p>
+                  <p className="text-xs text-[var(--neutral-600)] leading-relaxed m-0">
+                    {item.detail}
+                  </p>
                 </div>
 
-                <Link
-                  href={item.href}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)] shrink-0"
-                >
-                  <span>{item.actionLabel}</span>
-                  <ArrowRightIcon className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" />
-                </Link>
+                <div className="pt-3 border-t border-[var(--neutral-100)] sm:border-t-0 sm:pt-0 shrink-0">
+                  <Link
+                    href={item.href}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)]"
+                  >
+                    <span>{item.actionLabel}</span>
+                    <ArrowRightIcon className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+                  </Link>
+                </div>
               </div>
             </li>
           ))}

@@ -324,5 +324,48 @@ describe("Phase 10 — Transactional Emails, Notification Preferences & Chapter 
       .from(projectMemory)
       .where(eq(projectMemory.projectId, projectId));
     expect(mem?.chapterSummariesJson).toContain("Clarified regional scope");
+
+    // Draft history: viewing an older version by versionId returns exact v1 Markdown and isolates users
+    const v1HistoryRes = await handleGetChapterReader(
+      new Request(
+        `https://collate.app/api/projects/${projectId}/chapters/${ch1.id}?versionId=ver_r1`,
+        { headers: { cookie: alice.cookie } }
+      ),
+      projectId,
+      ch1.id,
+      readerDeps
+    );
+    expect(v1HistoryRes.status).toBe(200);
+    const v1Json = (await v1HistoryRes.json()) as {
+      markdown: string;
+      selectedVersion: { id: string; version: number };
+      latestVersion: { version: number };
+    };
+    expect(v1Json.selectedVersion.id).toBe("ver_r1");
+    expect(v1Json.selectedVersion.version).toBe(1);
+    expect(v1Json.latestVersion.version).toBe(2);
+    expect(v1Json.markdown).toContain("Solar clinics improved uptime");
+
+    const missingVerRes = await handleGetChapterReader(
+      new Request(
+        `https://collate.app/api/projects/${projectId}/chapters/${ch1.id}?versionId=ver_does_not_exist`,
+        { headers: { cookie: alice.cookie } }
+      ),
+      projectId,
+      ch1.id,
+      readerDeps
+    );
+    expect(missingVerRes.status).toBe(404);
+
+    const bobHistoryRes = await handleGetChapterReader(
+      new Request(
+        `https://collate.app/api/projects/${projectId}/chapters/${ch1.id}?versionId=ver_r1`,
+        { headers: { cookie: bob.cookie } }
+      ),
+      projectId,
+      ch1.id,
+      readerDeps
+    );
+    expect(bobHistoryRes.status).toBe(404);
   });
 });

@@ -335,6 +335,7 @@ const ReviseBodySchema = z.object({
     .trim()
     .min(10, "Describe the requested changes in at least 10 characters.")
     .max(2000, "Keep revision instructions under 2000 characters."),
+  targetSectionHeadings: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
 });
 
 export async function handleRequestChapterChanges(
@@ -462,6 +463,9 @@ export async function handleRequestChapterChanges(
           reservationId,
           createdBy: "revision",
           revisionNotes: parsed.data.instructions,
+          ...(parsed.data.targetSectionHeadings && parsed.data.targetSectionHeadings.length > 0
+            ? { targetSectionHeadings: parsed.data.targetSectionHeadings }
+            : {}),
           spendCapUsd: WRITING_CONFIG.limits.maxRevisionSpendCapUsd,
         },
       });

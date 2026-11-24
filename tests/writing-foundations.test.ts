@@ -13,6 +13,11 @@ import {
 } from "@/db/schema";
 import { retrieveEvidencePassages } from "@/lib/writing/retrieval";
 import { analyzeCsvDataset, buildLabelledResultsFramework } from "@/lib/writing/results-data";
+import { draftAndVerifySection, normalizeCiteKey } from "@/lib/writing/section-pipeline";
+import {
+  matchExplicitRevisionTargets,
+  parseExistingChapterSections,
+} from "@/lib/writing/section-revision";
 import {
   assertChapterTransition,
   canStartChapter,
@@ -278,5 +283,245 @@ describe("Phase 7 — Verified Evidence Passage Retrieval & D1 Writing Constrain
         createdAt: now,
       })
     ).rejects.toThrow();
+  });
+
+  it("normalizes @-prefixed citeKeys and extracts multi-key prose claims for claim verification", async () => {
+    expect(normalizeCiteKey("@poncedvila2026")).toBe("poncedvila2026");
+    expect(normalizeCiteKey("[@darvish2024]")).toBe("darvish2024");
+    expect(normalizeCiteKey("karimzadeh2022")).toBe("karimzadeh2022");
+
+    const passages = [
+      {
+        passageId: "psg_1",
+        sourceId: "src_1",
+        citationId: "cit_1",
+        citeKey: "poncedvila2026",
+        sourceTitle: "Beetroot Juice Meta-Analysis",
+        year: 2026,
+        location: "results",
+        text: "Beetroot juice supplementation reduced oxidative stress markers across seven clinical trials.",
+        score: 0.95,
+      },
+      {
+        passageId: "psg_2",
+        sourceId: "src_2",
+        citationId: "cit_2",
+        citeKey: "darvish2024",
+        sourceTitle: "Nitrate Vascular Study",
+        year: 2024,
+        location: "abstract",
+        text: "Dietary nitrate lowered reactive oxygen species bioactivity by 25%.",
+        score: 0.9,
+      },
+    ];
+
+    // Case 1: Model returns @-prefixed citeKey in JSON claims AND one hallucinated key
+    let verifyCalls = 0;
+    const resultAtPrefix = await draftAndVerifySection(
+      {
+        workflowId: "wf_norm_1",
+        projectId: "prj_w",
+        topic: "Beetroot oxidative stress",
+        chapterTitle: "Introduction",
+        sectionHeading: "Background",
+        wordBudget: 200,
+        spelling: "uk",
+        priorSummaryText: "",
+        glossaryText: "",
+        passages,
+        spendCapUsd: 1,
+      },
+      {
+        db,
+        env: {
+          CLOUDFLARE_ACCOUNT_ID: "acct_1",
+          CLOUDFLARE_AI_GATEWAY_ID: "gw_1",
+          ANTHROPIC_API_KEY: "sk-ant-test",
+          APP_ENV: "dev",
+        },
+        fetchFn: async (_url, init) => {
+          const body = JSON.parse(String(init?.body ?? "{}")) as { system?: string };
+          if ((body.system ?? "").includes("fact-checker")) {
+            verifyCalls++;
+            return Response.json({
+              id: "msg_ver_1",
+              model: "claude-sonnet-4-5",
+              stop_reason: "end_turn",
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    results: [{ index: 0, verdict: "supported", notes: "Matches passage" }],
+                  }),
+                },
+              ],
+              usage: { input_tokens: 50, output_tokens: 30 },
+            });
+          }
+          return Response.json({
+            id: "msg_draft_1",
+            model: "claude-sonnet-4-5",
+            stop_reason: "end_turn",
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  prose:
+                    "Beetroot juice lowers oxidative stress markers [@poncedvila2026]. Dietary nitrate reduces ROS by 25% [@darvish2024].",
+                  claims: [
+                    {
+                      text: "Beetroot juice lowers oxidative stress markers.",
+                      citeKey: "@poncedvila2026",
+                      passageId: "psg_1",
+                    },
+                    {
+                      text: "Fabricated claim that must be ignored.",
+                      citeKey: "@hallucinated2099",
+                      passageId: "psg_1",
+                    },
+                  ],
+                }),
+              },
+            ],
+            usage: { input_tokens: 100, output_tokens: 80 },
+          });
+        },
+        nowFn: () => now.getTime(),
+      }
+    );
+
+    expect(verifyCalls).toBe(1);
+    expect(resultAtPrefix.claims).toHaveLength(1);
+    expect(resultAtPrefix.claims[0]?.citeKey).toBe("poncedvila2026");
+
+    // Case 2: Model omits claims array but cites multi-key bracket [@poncedvila2026; @darvish2024]
+    let multiVerifyCount = 0;
+    const resultMultiKey = await draftAndVerifySection(
+      {
+        workflowId: "wf_norm_2",
+        projectId: "prj_w",
+        topic: "Beetroot oxidative stress",
+        chapterTitle: "Introduction",
+        sectionHeading: "Background",
+        wordBudget: 200,
+        spelling: "uk",
+        priorSummaryText: "",
+        glossaryText: "",
+        passages,
+        spendCapUsd: 1,
+      },
+      {
+        db,
+        env: {
+          CLOUDFLARE_ACCOUNT_ID: "acct_1",
+          CLOUDFLARE_AI_GATEWAY_ID: "gw_1",
+          ANTHROPIC_API_KEY: "sk-ant-test",
+          APP_ENV: "dev",
+        },
+        fetchFn: async (_url, init) => {
+          const body = JSON.parse(String(init?.body ?? "{}")) as { system?: string };
+          if ((body.system ?? "").includes("fact-checker")) {
+            multiVerifyCount++;
+            return Response.json({
+              id: "msg_ver_2",
+              model: "claude-sonnet-4-5",
+              stop_reason: "end_turn",
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                    results: [
+                      { index: 0, verdict: "supported", notes: "Supported" },
+                      { index: 1, verdict: "supported", notes: "Supported" },
+                    ],
+                  }),
+                },
+              ],
+              usage: { input_tokens: 50, output_tokens: 30 },
+            });
+          }
+          return Response.json({
+            id: "msg_draft_2",
+            model: "claude-sonnet-4-5",
+            stop_reason: "end_turn",
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  prose:
+                    "Combined trials show nitrate-rich beetroot lowers oxidative stress [@poncedvila2026; @darvish2024].",
+                  claims: [],
+                }),
+              },
+            ],
+            usage: { input_tokens: 100, output_tokens: 80 },
+          });
+        },
+        nowFn: () => now.getTime(),
+      }
+    );
+
+    expect(multiVerifyCount).toBe(1);
+    expect(resultMultiKey.claims).toHaveLength(2);
+    expect(resultMultiKey.claims.map((c) => c.citeKey).sort()).toEqual([
+      "darvish2024",
+      "poncedvila2026",
+    ]);
+  });
+
+  it("parses existing chapter sections and targets ONLY affected sections for surgical revision", () => {
+    const plan = [
+      { sectionId: "sec_1", orderIndex: 1, heading: "Background of the study" },
+      { sectionId: "sec_2", orderIndex: 2, heading: "Statement of the problem" },
+      { sectionId: "sec_3", orderIndex: 3, heading: "Aim and objectives" },
+    ];
+    const existingMd = [
+      "# Chapter 1: Introduction",
+      "",
+      "## 1.1 Background of the study",
+      "",
+      "Original untouched background paragraph [@poncedvila2026].",
+      "",
+      "## 1.2 Statement of the problem",
+      "",
+      "Original problem paragraph needing expansion.",
+      "",
+      "## 1.3 Aim and objectives",
+      "",
+      "Original objectives list stays untouched.",
+    ].join("\n");
+
+    const parsed = parseExistingChapterSections(existingMd, plan);
+    expect(parsed.sec_1).toBe("Original untouched background paragraph [@poncedvila2026].");
+    expect(parsed.sec_2).toBe("Original problem paragraph needing expansion.");
+    expect(parsed.sec_3).toBe("Original objectives list stays untouched.");
+
+    // Explicit dotted section reference targets ONLY sec_2
+    expect(
+      matchExplicitRevisionTargets({
+        chapterNumber: 1,
+        revisionInstructions: "In section 1.2, add more context on ethanol hepatic stress.",
+        sectionPlan: plan,
+      })
+    ).toEqual(["sec_2"]);
+
+    // Explicit UI heading dropdown selection targets ONLY sec_3
+    expect(
+      matchExplicitRevisionTargets({
+        chapterNumber: 1,
+        revisionInstructions: "Tighten the wording slightly.",
+        sectionPlan: plan,
+        explicitTargetHeadings: ["Aim and objectives"],
+      })
+    ).toEqual(["sec_3"]);
+
+    // Whole-chapter request returns empty explicit match so classifier/all-section mode applies
+    expect(
+      matchExplicitRevisionTargets({
+        chapterNumber: 1,
+        revisionInstructions: "Make the tone more formal across the entire chapter.",
+        sectionPlan: plan,
+      })
+    ).toEqual([]);
   });
 });

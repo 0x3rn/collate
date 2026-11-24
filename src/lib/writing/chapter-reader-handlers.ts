@@ -6,6 +6,7 @@ import { chapters, chapterVersions, claims, originalityReports, projectMemory } 
 import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { getSessionFromToken } from "@/lib/auth/service";
+import { buildReaderCitationLabels } from "@/lib/citations/reader-format";
 import type { R2ReadWriteBucket } from "@/lib/export/http-handlers";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
 import { countWords } from "./section-pipeline";
@@ -79,10 +80,19 @@ export async function handleGetChapterReader(
     .where(eq(chapterVersions.chapterId, chapter.id))
     .orderBy(desc(chapterVersions.version));
 
+  const requestedVersionId = new URL(request.url).searchParams.get("versionId")?.trim() || null;
   const latest = versions[0] ?? null;
+  const selectedVersion = requestedVersionId
+    ? (versions.find((v) => v.id === requestedVersionId) ?? null)
+    : latest;
+
+  if (requestedVersionId && !selectedVersion) {
+    return jsonNoStore({ ok: false, error: "Draft version not found." }, 404);
+  }
+
   let markdown = "";
-  if (latest) {
-    const obj = await deps.bucket.get(latest.contentR2Key);
+  if (selectedVersion) {
+    const obj = await deps.bucket.get(selectedVersion.contentR2Key);
     if (obj) {
       markdown = await obj.text();
     }
@@ -96,12 +106,18 @@ export async function handleGetChapterReader(
         .filter((k) => citationMap.has(k))
     )
   );
+  const formattedReaderCitations = buildReaderCitationLabels({
+    markdown,
+    registry: citationMap,
+    style: wizard.settings.citationStyle,
+  });
 
   const citationCards = citedKeys.map((key) => {
     const item = citationMap.get(key)!;
     const year = item.issued?.["date-parts"]?.[0]?.[0] ?? null;
     return {
       citeKey: key,
+      inlineLabel: formattedReaderCitations.singleKeyLabels[key],
       title: item.title,
       year,
       venue: item["container-title"] ?? item.publisher ?? null,
@@ -137,7 +153,19 @@ export async function handleGetChapterReader(
             wordCount: latest.wordCount,
             pageCount: latest.pageCount,
             createdBy: latest.createdBy,
+            revisionNotes: latest.revisionNotes,
             createdAt: latest.createdAt.toISOString(),
+          }
+        : null,
+      selectedVersion: selectedVersion
+        ? {
+            id: selectedVersion.id,
+            version: selectedVersion.version,
+            wordCount: selectedVersion.wordCount,
+            pageCount: selectedVersion.pageCount,
+            createdBy: selectedVersion.createdBy,
+            revisionNotes: selectedVersion.revisionNotes,
+            createdAt: selectedVersion.createdAt.toISOString(),
           }
         : null,
       versions: versions.map((v) => ({
@@ -151,6 +179,7 @@ export async function handleGetChapterReader(
       })),
       markdown,
       headings: extractMarkdownHeadings(markdown),
+      citationClusters: formattedReaderCitations.clusters,
       citations: citationCards,
       verifiedClaimsCount: chapterClaims.filter((c) => c.verified).length,
       originalityReport: latestReport

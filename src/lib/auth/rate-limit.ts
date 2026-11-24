@@ -15,6 +15,7 @@ export const AUTH_RATE_LIMITS = {
   researchSweep: { maxAttempts: 10, windowMs: 60 * 60 * 1000 },
   chapterStart: { maxAttempts: 20, windowMs: 60 * 60 * 1000 },
   exportGenerate: { maxAttempts: 30, windowMs: 60 * 60 * 1000 },
+  figureSearch: { maxAttempts: 40, windowMs: 60 * 60 * 1000 },
   accountDelete: { maxAttempts: 5, windowMs: 60 * 60 * 1000 },
 } as const satisfies Record<string, RateLimitPolicy>;
 

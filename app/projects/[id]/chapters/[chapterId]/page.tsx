@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { and, desc, eq } from "drizzle-orm";
+import { ArrowLeftIcon } from "@/components/layout/workspace-icons";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import {
   ChapterReaderClient,
@@ -10,9 +11,11 @@ import {
 } from "@/components/project/chapter-reader-client";
 import { createDb } from "@/db/client";
 import { loadProjectCitationMap } from "@/db/queries/citations";
-import { chapters, chapterVersions, claims, originalityReports } from "@/db/schema";
+import { chapters, chapterVersions, claims, originalityReports, projectFigures } from "@/db/schema";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
+import { buildReaderCitationLabels } from "@/lib/citations/reader-format";
 import type { R2ReadWriteBucket } from "@/lib/export/http-handlers";
+import { calculateWordsPerPage } from "@/lib/outline/planner";
 import { loadChapterAttentionMap } from "@/lib/writing/attention";
 import { extractMarkdownHeadings } from "@/lib/writing/chapter-reader-handlers";
 
@@ -73,6 +76,11 @@ export default async function ChapterReaderPage({
         .filter((k) => citationMap.has(k))
     )
   );
+  const formattedReaderCitations = buildReaderCitationLabels({
+    markdown,
+    registry: citationMap,
+    style: state.settings.citationStyle,
+  });
 
   const [latestReport] = await db
     .select()
@@ -83,13 +91,24 @@ export default async function ChapterReaderPage({
 
   const chapterClaims = await db.select().from(claims).where(eq(claims.chapterId, chapter.id));
 
+  const storedFigures = await db
+    .select()
+    .from(projectFigures)
+    .where(eq(projectFigures.projectId, id))
+    .orderBy(desc(projectFigures.createdAt))
+    .limit(12);
+
   const attentionMap =
     chapter.status === "needs_attention"
       ? await loadChapterAttentionMap(db, [{ id: chapter.id, chapterType: chapter.chapterType }])
       : new Map();
 
+  const wordsPerPage = calculateWordsPerPage(state.settings.lineSpacing, state.settings.fontSizePt);
+
   const initial: ChapterReaderInitialData = {
     projectId: id,
+    projectTitle: state.project.title,
+    wordsPerPage,
     chapter: {
       id: chapter.id,
       number: chapter.number,
@@ -99,10 +118,12 @@ export default async function ChapterReaderPage({
     attention: attentionMap.get(chapter.id) ?? null,
     markdown,
     headings: extractMarkdownHeadings(markdown),
+    citationClusters: formattedReaderCitations.clusters,
     citations: citedKeys.map((key) => {
       const item = citationMap.get(key)!;
       return {
         citeKey: key,
+        inlineLabel: formattedReaderCitations.singleKeyLabels[key],
         title: item.title,
         year: item.issued?.["date-parts"]?.[0]?.[0] ?? null,
         venue: item["container-title"] ?? item.publisher ?? null,
@@ -110,6 +131,18 @@ export default async function ChapterReaderPage({
         url: item.URL ?? null,
       };
     }),
+    projectFigures: storedFigures.map((f) => ({
+      id: f.id,
+      url: f.url,
+      sourcePageUrl: f.sourcePageUrl,
+      title: f.title,
+      alt: f.alt,
+      caption: f.caption,
+      attribution: f.attribution,
+      license: f.license,
+      naturalWidth: f.naturalWidth,
+      naturalHeight: f.naturalHeight,
+    })),
     versions: versions.map((v) => ({
       id: v.id,
       version: v.version,
@@ -133,16 +166,17 @@ export default async function ChapterReaderPage({
 
   return (
     <WorkspaceShell user={user} maxWidthClassName="max-w-[1120px]">
-      <div className="space-y-6">
-        <div className="space-y-3 border-b border-[var(--neutral-200)] pb-5">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-3 border-b border-[var(--neutral-200)] pb-5">
           <Link
             href={`/projects/${id}`}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
+            title={`Back to ${state.project.title}`}
+            className="inline-flex items-center gap-2 max-w-full text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
           >
-            <span aria-hidden="true">←</span>
-            <span>Back to {state.project.title}</span>
+            <ArrowLeftIcon className="w-4 h-4 shrink-0" />
+            <span className="truncate">Back to {state.project.title}</span>
           </Link>
-          <h1 className="text-[1.75rem] sm:text-[1.875rem] font-medium">
+          <h1 className="text-[1.75rem] sm:text-[1.875rem] font-medium leading-tight m-0">
             Chapter {chapter.number}: {chapter.title}
           </h1>
         </div>

@@ -158,6 +158,7 @@ describe("Browser Run /pdf renderer and R2 storage", () => {
     const mockBrowser: BrowserRunPdfBinding = {
       async quickAction(action, options) {
         expect(action).toBe("pdf");
+        expect(options.pdfOptions?.format).toBe("a4");
         expect(options.html).toContain("Collate PDF Engine Verification");
         return new Response(fakePdfBytes, {
           status: 200,
@@ -177,6 +178,7 @@ describe("Browser Run /pdf renderer and R2 storage", () => {
       {
         html: buildPhase0SmokeHtml("2026-11-21T14:00:00.000Z"),
         r2Key: "smoke/test-01.pdf",
+        format: "A4",
       },
       { browser: mockBrowser, bucket: mockBucket }
     );

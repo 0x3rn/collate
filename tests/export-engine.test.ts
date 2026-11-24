@@ -2,6 +2,11 @@ import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { buildThesisDocx } from "@/lib/export/docx-builder";
 import {
+  detectImageFormatFromBytes,
+  extractImageDimensionsFromBytes,
+  resolveExportFiguresForChapters,
+} from "@/lib/export/figure-assets";
+import {
   buildThesisPdfTwoPass,
   createBrowserRunPageMeasurer,
   toRomanNumeral,
@@ -75,6 +80,7 @@ describe("Phase 9 — Two-Pass Thesis PDF & DOCX Export Engine", () => {
     const mockBrowser: BrowserRunPdfBinding = {
       async quickAction(action, options) {
         expect(action).toBe("pdf");
+        expect(options.pdfOptions?.format).toBe("a4");
         if (options.html.includes("Front Matter")) {
           capturedFrontMatterHtml = options.html;
           const fmPdf = await makeRealPdfWithPages(3);
@@ -117,12 +123,108 @@ describe("Phase 9 — Two-Pass Thesis PDF & DOCX Export Engine", () => {
     expect(measured).toBe(2);
   });
 
-  it("generates a valid Microsoft Word (.docx) OOXML archive with cover, chapters, tables & references", async () => {
+  it("generates a valid Microsoft Word (.docx) OOXML archive with cover, chapters, tables, italics & references", async () => {
     const docxBytes = await buildThesisDocx(SAMPLE_DOC);
     expect(docxBytes.byteLength).toBeGreaterThan(2000);
     expect(docxBytes[0]).toBe(0x50);
     expect(docxBytes[1]).toBe(0x4b);
     expect(docxBytes[2]).toBe(0x03);
     expect(docxBytes[3]).toBe(0x04);
+
+    // Single-chapter Word (.docx) export with italics, bold, and bullet items
+    const singleChapterDocx = await buildThesisDocx(
+      {
+        ...SAMPLE_DOC,
+        chapters: [
+          {
+            number: 1,
+            title: "Introduction",
+            markdown:
+              "# Chapter 1: Introduction\n\nBeetroot (*Beta vulgaris*) lowers **oxidative stress**.\n\n- Key biochemical marker",
+          },
+        ],
+      },
+      { includeFrontMatter: false, includeReferences: true }
+    );
+    expect(singleChapterDocx.byteLength).toBeGreaterThan(1500);
+    expect(singleChapterDocx[0]).toBe(0x50);
+    expect(singleChapterDocx[1]).toBe(0x4b);
+  });
+
+  it("embeds real figures with controlled dimensions, fine-print attribution, and explicit page breaks in PDF HTML and Word .docx", async () => {
+    // Minimal real 1x1 PNG (valid signature + IHDR chunk)
+    const realPngBytes = Uint8Array.from(
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64"
+      )
+    );
+    expect(detectImageFormatFromBytes(realPngBytes)).toEqual({
+      mimeType: "image/png",
+      docxType: "png",
+    });
+    expect(extractImageDimensionsFromBytes(realPngBytes, "png")).toEqual({ width: 1, height: 1 });
+
+    const figUrl = "https://upload.wikimedia.org/wikipedia/commons/4/45/Beetroot_sample.png";
+    const chapterWithFigureMd = [
+      "# Chapter 1: Introduction",
+      "",
+      "## 1.1 Background",
+      "",
+      "Beetroot (*Beta vulgaris*) contains abundant betalains.",
+      "",
+      ":::figure",
+      `url: ${figUrl}`,
+      "alt: Fresh Beta vulgaris root",
+      "caption: Figure 1.1: Fresh *Beta vulgaris* (beetroot) roots.",
+      "attribution: Source: Wikimedia Commons · Photo by Dr. Botanist · CC BY-SA 4.0",
+      "width: 1200",
+      "height: 800",
+      ":::",
+      "",
+      "<!-- pagebreak -->",
+      "",
+      "## 1.2 Statement of the problem",
+      "",
+      "This section begins cleanly on the next page.",
+    ].join("\n");
+
+    const resolvedFigures = await resolveExportFiguresForChapters(
+      [{ markdown: chapterWithFigureMd }],
+      {
+        fetchFn: async () =>
+          new Response(realPngBytes, {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          }),
+      }
+    );
+    expect(resolvedFigures[figUrl]?.dataUrl).toMatch(/^data:image\/png;base64,/);
+
+    // 1. Verify PDF HTML renders inline data URI, controlled dimensions, caption, attribution, and page-break
+    const printHtml = markdownToPrintHtml(chapterWithFigureMd, resolvedFigures);
+    expect(printHtml).toContain('<figure class="academic-figure">');
+    expect(printHtml).toContain("data:image/png;base64,");
+    expect(printHtml).toContain("<em>Beta vulgaris</em>");
+    expect(printHtml).toContain("figure-attribution");
+    expect(printHtml).toContain("CC BY-SA 4.0");
+    expect(printHtml).toContain('<div class="page-break"></div>');
+
+    // 2. Verify native Word (.docx) embeds real image bytes inside ZIP (word/media/) + page break
+    const docxWithImage = await buildThesisDocx(
+      {
+        ...SAMPLE_DOC,
+        chapters: [{ number: 1, title: "Introduction", markdown: chapterWithFigureMd }],
+        resolvedFigures,
+      },
+      { includeFrontMatter: false, includeReferences: true }
+    );
+    expect(docxWithImage.byteLength).toBeGreaterThan(2000);
+    expect(docxWithImage[0]).toBe(0x50);
+    expect(docxWithImage[1]).toBe(0x4b);
+    // ZIP directory entries contain the embedded media file inside word/media/
+    const zipAscii = Buffer.from(docxWithImage).toString("latin1");
+    expect(zipAscii).toContain("word/media/");
+    expect(zipAscii).toContain("word/document.xml");
   });
 });

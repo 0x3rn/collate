@@ -801,4 +801,194 @@ describe("Phase 7 — WriteChapterWorkflow (resumability, claim rewriting, 20-cl
     expect(attentionEvents[0]?.reason).not.toContain("Simulated provider crash");
     expect(attentionEvents[0]?.reason.toLowerCase()).toContain("temporary service issue");
   });
+
+  it("performs surgical Request changes: edits ONLY targeted section while preserving untouched section verbatim", async () => {
+    await db.insert(chapters).values({
+      id: "chp_surg",
+      projectId: "prj_p7",
+      number: 1,
+      title: "Introduction",
+      chapterType: "introduction",
+      pageBudget: 2,
+      wordBudget: 550,
+      isAutoReferences: false,
+      status: "ready",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(sections).values([
+      {
+        id: "sec_s1",
+        chapterId: "chp_surg",
+        orderIndex: 1,
+        heading: "Background of the study",
+        wordBudget: 275,
+        status: "verified",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "sec_s2",
+        chapterId: "chp_surg",
+        orderIndex: 2,
+        heading: "Statement of the problem",
+        wordBudget: 275,
+        status: "verified",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    const r2Map = new Map<string, string>();
+    const v1Key = "chapters/prj_p7/chp_surg/v1.md";
+    const untouchedText =
+      "Original section one prose that must remain completely untouched after revision.";
+    r2Map.set(
+      v1Key,
+      [
+        "# Chapter 1: Introduction",
+        "",
+        "## 1.1 Background of the study",
+        "",
+        untouchedText,
+        "",
+        "## 1.2 Statement of the problem",
+        "",
+        "Original problem statement before surgical update.",
+      ].join("\n")
+    );
+
+    await db.insert(chapterVersions).values({
+      id: "ver_s1",
+      chapterId: "chp_surg",
+      version: 1,
+      contentR2Key: v1Key,
+      wordCount: 25,
+      pageCount: 1,
+      createdBy: "ai",
+      createdAt: now,
+    });
+
+    const draftedSections: string[] = [];
+    const llmCtx: CallLLMContext = {
+      db,
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: "acct_1",
+        CLOUDFLARE_AI_GATEWAY_ID: "gw_1",
+        ANTHROPIC_API_KEY: "sk-ant-test",
+        APP_ENV: "dev",
+      },
+      fetchFn: async (_url, init) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          system?: string;
+          messages?: Array<{ content: string }>;
+        };
+        const systemText = body.system ?? "";
+        const userText = body.messages?.[0]?.content ?? "";
+
+        if (systemText.includes("fact-checker")) {
+          return Response.json({
+            id: "msg_v",
+            model: "claude-sonnet-4-5",
+            stop_reason: "end_turn",
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  results: [{ index: 0, verdict: "supported", notes: "Supported" }],
+                }),
+              },
+            ],
+            usage: { input_tokens: 100, output_tokens: 40 },
+          });
+        }
+        if (systemText.includes("Summarize the chapter")) {
+          return Response.json({
+            id: "msg_m",
+            model: "claude-haiku-4-5",
+            stop_reason: "end_turn",
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  summary: "Surgically updated section 1.2.",
+                  glossaryTerms: [],
+                }),
+              },
+            ],
+            usage: { input_tokens: 80, output_tokens: 30 },
+          });
+        }
+
+        const headingMatch = userText.match(/Section heading:\s*(.+)/);
+        if (headingMatch?.[1]) draftedSections.push(headingMatch[1].trim());
+        expect(systemText).toContain("SURGICAL REVISION MODE");
+        expect(userText).toContain("Original problem statement before surgical update.");
+
+        return Response.json({
+          id: "msg_d",
+          model: "claude-sonnet-4-5",
+          stop_reason: "end_turn",
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                prose:
+                  "Surgically revised problem statement clarifying diesel downtime in rural clinics.",
+                claims: [],
+              }),
+            },
+          ],
+          usage: { input_tokens: 200, output_tokens: 90 },
+        });
+      },
+    };
+
+    const out = await runWriteChapterOrchestration(
+      {
+        runId: "rev_surg_1",
+        projectId: "prj_p7",
+        chapterId: "chp_surg",
+        createdBy: "revision",
+        revisionNotes: "In section 1.2, clarify diesel generator downtime.",
+      },
+      {
+        loadContext: (fn) => fn(),
+        draftSection: (_idx, fn) => fn(),
+        assembleAndFinalize: (fn) => fn(),
+      },
+      {
+        db,
+        bucket: {
+          async put(key, val) {
+            r2Map.set(key, String(val));
+          },
+          async get(key) {
+            const val = r2Map.get(key);
+            return val === undefined
+              ? null
+              : {
+                  async text() {
+                    return val;
+                  },
+                };
+          },
+        },
+        llmCtx,
+        measurePagesFn: async () => 2,
+        waiveOriginalityGate: true,
+        nowFn: () => now,
+      }
+    );
+
+    expect(out.version).toBe(2);
+    // ONLY Section 2 was sent to the LLM — Section 1 was preserved verbatim!
+    expect(draftedSections).toEqual(["Statement of the problem"]);
+    const v2Text = r2Map.get(out.contentR2Key) ?? "";
+    expect(v2Text).toContain(untouchedText);
+    expect(v2Text).toContain(
+      "Surgically revised problem statement clarifying diesel downtime in rural clinics."
+    );
+  });
 });

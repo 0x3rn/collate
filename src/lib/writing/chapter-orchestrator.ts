@@ -10,6 +10,7 @@ import {
   claims,
   originalityReports,
   projectDatasets,
+  projectFigures,
   projectMemory,
   projects,
   projectSettings,
@@ -33,6 +34,10 @@ import {
 } from "@/lib/originality/checker";
 import { normalizeTitle } from "@/lib/research/dedupe";
 import {
+  extractRequestedFigureQuery,
+  searchWikimediaAcademicImages,
+} from "@/lib/research/connectors/wikimedia-images";
+import {
   CoverDetailsSchema,
   DEFAULT_COVER_DETAILS,
   DEFAULT_FRONT_MATTER,
@@ -52,8 +57,10 @@ import {
   draftAndVerifySection,
   enforceChapterLengthBand,
   summarizeChapterForMemory,
+  type DraftFigureContext,
   type MeasurePagesFn,
 } from "./section-pipeline";
+import { parseExistingChapterSections, selectSectionsForRevision } from "./section-revision";
 import { isChapterTimedOut } from "./state-machine";
 
 export const WriteChapterPayloadSchema = z.object({
@@ -64,6 +71,7 @@ export const WriteChapterPayloadSchema = z.object({
   reservationId: z.string().min(1).nullable().optional(),
   createdBy: z.enum(["ai", "revision"]).default("ai"),
   revisionNotes: z.string().trim().max(2000).nullable().optional(),
+  targetSectionHeadings: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
   spendCapUsd: z.number().positive().default(WRITING_CONFIG.limits.perChapterSpendCapUsd),
 });
 
@@ -87,6 +95,9 @@ export interface LoadedChapterContext {
   glossaryText: string;
   resultsMode: "standard" | "user_dataset" | "public_dataset" | "labelled_framework";
   datasetMarkdown: string | null;
+  existingProseBySectionId?: Record<string, string>;
+  targetedSectionIds?: string[];
+  availableFigures?: DraftFigureContext[];
   sectionPlan: Array<{
     sectionId: string;
     orderIndex: number;
@@ -125,7 +136,9 @@ export interface WriteChapterSteps {
 
 export interface WriteChapterDeps {
   db: AppDb;
-  bucket: R2WritableBucket;
+  bucket: R2WritableBucket & {
+    get?(key: string): Promise<{ text(): Promise<string> } | null>;
+  };
   llmCtx: CallLLMContext;
   embedder?: EmbeddingProvider;
   vectorStore?: VectorStore;
@@ -358,6 +371,105 @@ export async function runWriteChapterOrchestration(
         cover,
       };
 
+      const mappedSectionPlan = sectionRows.map((s) => ({
+        sectionId: s.id,
+        orderIndex: s.orderIndex,
+        heading: s.heading,
+        wordBudget: Math.max(150, s.wordBudget),
+      }));
+
+      let existingProseBySectionId: Record<string, string> | undefined;
+      let targetedSectionIds: string[] | undefined;
+
+      if (payload.createdBy === "revision" && payload.revisionNotes?.trim() && deps.bucket.get) {
+        const [latestVer] = await deps.db
+          .select()
+          .from(chapterVersions)
+          .where(eq(chapterVersions.chapterId, chapter.id))
+          .orderBy(desc(chapterVersions.version))
+          .limit(1);
+
+        if (latestVer) {
+          const prevObj = await deps.bucket.get(latestVer.contentR2Key);
+          if (prevObj) {
+            const prevMarkdown = await prevObj.text();
+            const parsedSections = parseExistingChapterSections(prevMarkdown, mappedSectionPlan);
+            if (Object.keys(parsedSections).length > 0) {
+              existingProseBySectionId = parsedSections;
+              targetedSectionIds = await selectSectionsForRevision(
+                {
+                  workflowId: payload.runId,
+                  projectId: project.id,
+                  chapterNumber: chapter.number,
+                  chapterTitle: chapter.title,
+                  revisionInstructions: payload.revisionNotes,
+                  sectionPlan: mappedSectionPlan,
+                  existingProseBySectionId: parsedSections,
+                  explicitTargetHeadings: payload.targetSectionHeadings,
+                  spendCapUsd: payload.spendCapUsd,
+                },
+                deps.llmCtx
+              );
+            }
+          }
+        }
+      }
+
+      // Load verified project figures; if the user requested a specific image in revision notes,
+      // fetch real openly licensed images from Wikimedia Commons (never AI-generated).
+      const requestedFigureQuery = extractRequestedFigureQuery(
+        project.title,
+        payload.revisionNotes
+      );
+      if (requestedFigureQuery && deps.citationFetchFn) {
+        try {
+          const freshImages = await searchWikimediaAcademicImages({
+            query: requestedFigureQuery,
+            limit: 4,
+            fetchFn: deps.citationFetchFn,
+          });
+          for (const img of freshImages) {
+            await deps.db
+              .insert(projectFigures)
+              .values({
+                id: `fig_${crypto.randomUUID()}`,
+                projectId: project.id,
+                url: img.url,
+                sourcePageUrl: img.sourcePageUrl,
+                title: img.title,
+                alt: img.alt,
+                caption: img.caption,
+                attribution: img.attribution,
+                license: img.license,
+                mimeType: img.mimeType,
+                naturalWidth: img.naturalWidth,
+                naturalHeight: img.naturalHeight,
+                createdAt: now,
+              })
+              .onConflictDoNothing();
+          }
+        } catch {
+          // Non-fatal if image search fails
+        }
+      }
+
+      const figureRows = await deps.db
+        .select()
+        .from(projectFigures)
+        .where(eq(projectFigures.projectId, project.id))
+        .orderBy(desc(projectFigures.createdAt))
+        .limit(4);
+
+      const availableFigures: DraftFigureContext[] = figureRows.map((f) => ({
+        id: f.id,
+        url: f.url,
+        alt: f.alt,
+        caption: f.caption,
+        attribution: f.attribution,
+        width: f.naturalWidth,
+        height: f.naturalHeight,
+      }));
+
       return {
         userId: project.userId,
         projectId: project.id,
@@ -376,12 +488,10 @@ export async function runWriteChapterOrchestration(
         glossaryText,
         resultsMode,
         datasetMarkdown,
-        sectionPlan: sectionRows.map((s) => ({
-          sectionId: s.id,
-          orderIndex: s.orderIndex,
-          heading: s.heading,
-          wordBudget: Math.max(150, s.wordBudget),
-        })),
+        existingProseBySectionId,
+        targetedSectionIds,
+        availableFigures: availableFigures.length > 0 ? availableFigures : undefined,
+        sectionPlan: mappedSectionPlan,
       };
     });
 
@@ -480,6 +590,10 @@ export async function runWriteChapterOrchestration(
       });
     }
 
+    const targetedSectionSet = context.targetedSectionIds
+      ? new Set(context.targetedSectionIds)
+      : null;
+
     for (let idx = 0; idx < context.sectionPlan.length; idx++) {
       const sec = context.sectionPlan[idx]!;
       await steps.draftSection(idx, async () => {
@@ -501,6 +615,51 @@ export async function runWriteChapterOrchestration(
             sectionId: sec.sectionId,
             reusedCheckpoint: true,
             wordCount: checkpoint.wordCount,
+            verifiedClaimsCount: 0,
+          };
+        }
+
+        const existingSectionProse = context.existingProseBySectionId?.[sec.sectionId] ?? null;
+
+        // Surgical revision: preserve untouched sections verbatim without re-drafting
+        if (
+          payload.createdBy === "revision" &&
+          existingSectionProse &&
+          targetedSectionSet &&
+          !targetedSectionSet.has(sec.sectionId)
+        ) {
+          const preservedWords = countWords(existingSectionProse);
+          await deps.db
+            .insert(sectionDrafts)
+            .values({
+              id: `sdr_${crypto.randomUUID()}`,
+              sectionId: sec.sectionId,
+              chapterId: context.chapterId,
+              runId: payload.runId,
+              draftText: existingSectionProse,
+              wordCount: preservedWords,
+              status: "verified",
+              updatedAt: nowFn(),
+            })
+            .onConflictDoUpdate({
+              target: [sectionDrafts.sectionId, sectionDrafts.runId],
+              set: {
+                draftText: existingSectionProse,
+                wordCount: preservedWords,
+                status: "verified",
+                updatedAt: nowFn(),
+              },
+            });
+
+          await deps.db
+            .update(sections)
+            .set({ status: "verified", updatedAt: nowFn() })
+            .where(eq(sections.id, sec.sectionId));
+
+          return {
+            sectionId: sec.sectionId,
+            reusedCheckpoint: true,
+            wordCount: preservedWords,
             verifiedClaimsCount: 0,
           };
         }
@@ -533,6 +692,8 @@ export async function runWriteChapterOrchestration(
             priorSummaryText: context.priorSummaryText,
             glossaryText: context.glossaryText,
             revisionInstructions: payload.revisionNotes,
+            existingSectionProse,
+            availableFigures: context.availableFigures,
             extraDataContext: context.datasetMarkdown,
             passages,
             spendCapUsd: payload.spendCapUsd,

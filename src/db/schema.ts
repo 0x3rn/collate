@@ -848,6 +848,36 @@ export const systemControls = sqliteTable("system_controls", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 
+export const projectFigures = sqliteTable(
+  "project_figures",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    sourcePageUrl: text("source_page_url").notNull(),
+    title: text("title").notNull(),
+    alt: text("alt").notNull(),
+    caption: text("caption").notNull(),
+    attribution: text("attribution").notNull(),
+    license: text("license").notNull(),
+    mimeType: text("mime_type").notNull(),
+    naturalWidth: integer("natural_width").notNull(),
+    naturalHeight: integer("natural_height").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("project_figures_project_url_unique").on(table.projectId, table.url),
+    index("project_figures_project_idx").on(table.projectId, table.createdAt),
+    check(
+      "project_figures_dimensions_positive",
+      sql`${table.naturalWidth} > 0 AND ${table.naturalHeight} > 0`
+    ),
+  ]
+);
+
+export type ProjectFigureRecord = typeof projectFigures.$inferSelect;
 export type UserRecord = typeof users.$inferSelect;
 export type PaymentRecord = typeof payments.$inferSelect;
 export type CreditLedgerRecord = typeof creditLedger.$inferSelect;

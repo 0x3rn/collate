@@ -9,7 +9,10 @@ export const RenderPdfInputSchema = z.object({
     .max(255)
     .regex(/^[a-zA-Z0-9/._-]+$/, "Invalid R2 object key")
     .refine((key) => !key.includes(".."), "Path traversal is not allowed in R2 keys"),
-  format: z.enum(["A4", "Letter"]).default("A4"),
+  format: z
+    .enum(["a4", "letter", "A4", "Letter"])
+    .default("a4")
+    .transform((v) => v.toLowerCase() as "a4" | "letter"),
   headerTemplate: z.string().optional(),
   footerTemplate: z.string().optional(),
 });
@@ -22,7 +25,7 @@ export interface BrowserRunPdfBinding {
     options: {
       html: string;
       pdfOptions?: {
-        format?: "A4" | "Letter";
+        format?: "a4" | "letter";
         printBackground?: boolean;
         displayHeaderFooter?: boolean;
         headerTemplate?: string;

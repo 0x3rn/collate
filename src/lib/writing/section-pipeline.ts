@@ -65,6 +65,44 @@ function buildEvidenceBlock(passages: RetrievedEvidencePassage[]): string {
     .join("\n\n");
 }
 
+export function normalizeCiteKey(raw: string): string {
+  return raw.trim().replace(/^\[/, "").replace(/\]$/, "").replace(/^@/, "").trim();
+}
+
+function extractClaimsFromProse(
+  prose: string,
+  passages: RetrievedEvidencePassage[]
+): DraftClaimOutput[] {
+  const byKey = new Map(passages.map((p) => [p.citeKey, p]));
+  const extractedClaims: DraftClaimOutput[] = [];
+  const seen = new Set<string>();
+  const sentences = prose.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 10);
+
+  for (const sentence of sentences) {
+    const trimmedSentence = sentence.trim();
+    const bracketMatches = trimmedSentence.match(/\[([^\]]*@[^\]]*)\]/g) ?? [];
+    for (const bracket of bracketMatches) {
+      const keyMatches = bracket.match(/@([a-zA-Z0-9_:-]+)/g) ?? [];
+      for (const rawKey of keyMatches) {
+        const key = normalizeCiteKey(rawKey);
+        const dedupeKey = `${trimmedSentence}::${key}`;
+        if (seen.has(dedupeKey)) continue;
+        const passage = byKey.get(key);
+        if (passage) {
+          seen.add(dedupeKey);
+          extractedClaims.push({
+            text: trimmedSentence,
+            citeKey: key,
+            passageId: passage.passageId,
+          });
+        }
+      }
+    }
+  }
+
+  return extractedClaims;
+}
+
 function parseDraftJsonOrFallback(
   rawText: string,
   passages: RetrievedEvidencePassage[]
@@ -74,36 +112,37 @@ function parseDraftJsonOrFallback(
     try {
       const parsed = SectionDraftOutputSchema.safeParse(JSON.parse(jsonSlice));
       if (parsed.success) {
-        return parsed.data;
+        const normalizedClaims = parsed.data.claims.map((c) => ({
+          ...c,
+          citeKey: normalizeCiteKey(c.citeKey),
+        }));
+        return {
+          prose: parsed.data.prose,
+          claims:
+            normalizedClaims.length > 0
+              ? normalizedClaims
+              : extractClaimsFromProse(parsed.data.prose, passages),
+        };
       }
     } catch {
       // Fallback below
     }
   }
 
-  const byKey = new Map(passages.map((p) => [p.citeKey, p]));
-  const extractedClaims: DraftClaimOutput[] = [];
-  const sentences = rawText.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 10);
-
-  for (const sentence of sentences) {
-    const matches = sentence.match(/\[@([a-zA-Z0-9_:-]+)\]/g) ?? [];
-    for (const m of matches) {
-      const key = m.slice(2, -1);
-      const passage = byKey.get(key);
-      if (passage) {
-        extractedClaims.push({
-          text: sentence.trim(),
-          citeKey: key,
-          passageId: passage.passageId,
-        });
-      }
-    }
-  }
-
   return {
     prose: rawText.trim(),
-    claims: extractedClaims,
+    claims: extractClaimsFromProse(rawText, passages),
   };
+}
+
+export interface DraftFigureContext {
+  id: string;
+  url: string;
+  alt: string;
+  caption: string;
+  attribution: string;
+  width: number;
+  height: number;
 }
 
 export async function draftAndVerifySection(
@@ -119,6 +158,8 @@ export async function draftAndVerifySection(
     priorSummaryText: string;
     glossaryText: string;
     revisionInstructions?: string | null;
+    existingSectionProse?: string | null;
+    availableFigures?: DraftFigureContext[];
     extraDataContext?: string | null;
     passages: RetrievedEvidencePassage[];
     spendCapUsd: number;
@@ -128,15 +169,38 @@ export async function draftAndVerifySection(
   const passageById = new Map(input.passages.map((p) => [p.passageId, p]));
   const passageByKey = new Map(input.passages.map((p) => [p.citeKey, p]));
   const allowedKeys = Array.from(passageByKey.keys());
+  const isSurgicalRevision = Boolean(
+    input.revisionInstructions?.trim() && input.existingSectionProse?.trim()
+  );
+
+  const figuresBlock =
+    input.availableFigures && input.availableFigures.length > 0
+      ? input.availableFigures
+          .map(
+            (f, idx) =>
+              `[FIGURE ${idx + 1}]\nurl: ${f.url}\nalt: ${f.alt}\ncaption: ${f.caption}\nattribution: ${f.attribution}\nwidth: ${f.width}\nheight: ${f.height}`
+          )
+          .join("\n\n")
+      : "";
 
   const systemPrompt = [
-    `You are an academic researcher drafting a section of "${input.chapterTitle}" (${WRITING_CONFIG.promptVersion}).`,
+    `You are an academic researcher ${isSurgicalRevision ? "performing a surgical revision of" : "drafting"} a section of "${input.chapterTitle}" (${WRITING_CONFIG.promptVersion}).`,
     `Academic level: ${input.level || "University"}. Spelling: ${input.spelling.toUpperCase()} English.`,
     "STRICT EVIDENCE RULES (NON-NEGOTIABLE):",
     "1. Use ONLY the provided passages and verified data tables. Never invent statistics, quotes, or sources.",
     `2. You may cite ONLY these registered citation keys using [@key] syntax: ${allowedKeys.map((k) => `@${k}`).join(", ") || "(none)"}.`,
     "3. Write in original academic prose without copying source sentences verbatim.",
-    '4. Return ONLY a valid JSON object: { "prose": "...", "claims": [{ "text": "...", "citeKey": "...", "passageId": "..." }] }.',
+    ...(isSurgicalRevision
+      ? [
+          "4. SURGICAL REVISION MODE: Preserve all unaffected sentences, existing verified [@key] citations, tables, page breaks (<!-- pagebreak -->), and :::figure blocks from CURRENT SECTION TEXT verbatim. Modify ONLY what the user's revision request specifically asks to add, fix, expand, or tighten.",
+        ]
+      : []),
+    ...(figuresBlock
+      ? [
+          `${isSurgicalRevision ? "5" : "4"}. VERIFIED FIGURES: Never invent or generate image URLs. When an illustration strengthens this section (or the user requested an image), insert ONLY from VERIFIED FIGURES using the exact fenced block syntax:\n:::figure\nurl: <exact url>\nalt: <alt text>\ncaption: <academic caption explaining the figure>\nattribution: <exact attribution>\nwidth: <exact width>\nheight: <exact height>\n:::`,
+        ]
+      : []),
+    `${isSurgicalRevision ? (figuresBlock ? "6" : "5") : figuresBlock ? "5" : "4"}. Return ONLY a valid JSON object: { "prose": "...", "claims": [{ "text": "...", "citeKey": "bare_key_without_at", "passageId": "..." }] }.`,
   ].join("\n");
 
   const baseUserPrompt = [
@@ -145,8 +209,14 @@ export async function draftAndVerifySection(
     `Target length: approximately ${input.wordBudget} words.`,
     input.priorSummaryText ? `Prior chapter memory:\n${input.priorSummaryText}` : "",
     input.glossaryText ? `Glossary terms:\n${input.glossaryText}` : "",
+    input.existingSectionProse
+      ? `CURRENT SECTION TEXT (preserve untouched sentences verbatim):\n${input.existingSectionProse}`
+      : "",
     input.revisionInstructions ? `Revision request from user:\n${input.revisionInstructions}` : "",
     input.extraDataContext ? `Verified empirical data (Rule NN-4):\n${input.extraDataContext}` : "",
+    figuresBlock
+      ? `VERIFIED FIGURES (open-license, real photographs/diagrams):\n${figuresBlock}`
+      : "",
     `VERIFIED EVIDENCE PASSAGES:\n${buildEvidenceBlock(input.passages)}`,
   ]
     .filter(Boolean)
@@ -172,15 +242,33 @@ export async function draftAndVerifySection(
   let rewriteAttempts = 0;
 
   for (let attempt = 0; attempt <= WRITING_CONFIG.retries.maxClaimVerifyRewrites; attempt++) {
-    const traceableClaims = currentDraft.claims
+    const resolvedFromModel = currentDraft.claims
       .map((c) => {
-        const psg = passageById.get(c.passageId) ?? passageByKey.get(c.citeKey);
-        if (!psg || psg.citeKey !== c.citeKey) return null;
-        return { claim: c, passage: psg };
+        const cleanKey = normalizeCiteKey(c.citeKey);
+        const byId = passageById.get(c.passageId.trim());
+        const byKey = passageByKey.get(cleanKey);
+        const psg = byId && byId.citeKey === cleanKey ? byId : byKey;
+        if (!psg) return null;
+        return {
+          claim: { ...c, citeKey: psg.citeKey, passageId: psg.passageId },
+          passage: psg,
+        };
       })
       .filter(
         (x): x is { claim: DraftClaimOutput; passage: RetrievedEvidencePassage } => x !== null
       );
+
+    const traceableClaims =
+      resolvedFromModel.length > 0
+        ? resolvedFromModel
+        : extractClaimsFromProse(currentDraft.prose, input.passages)
+            .map((c) => {
+              const psg = passageById.get(c.passageId) ?? passageByKey.get(c.citeKey);
+              return psg ? { claim: c, passage: psg } : null;
+            })
+            .filter(
+              (x): x is { claim: DraftClaimOutput; passage: RetrievedEvidencePassage } => x !== null
+            );
 
     if (traceableClaims.length === 0) {
       verifiedClaims = [];

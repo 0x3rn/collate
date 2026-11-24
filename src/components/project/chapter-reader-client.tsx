@@ -2,17 +2,29 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import {
+  ChapterRichEditor,
+  type ProjectFigureOption,
+} from "@/components/project/chapter-rich-editor";
 import { Button, LinkButton } from "@/components/ui/button";
+import {
+  DownloadMenuButton,
+  type DownloadExportFormat,
+} from "@/components/ui/download-menu-button";
 import { FormField } from "@/components/ui/field";
 import {
   InsufficientCreditsModal,
   type InsufficientCreditsDetails,
 } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
+import type { FormattedCitationCluster } from "@/lib/citations/reader-format";
+import { computeControlledFigureDimensions } from "@/lib/export/figure-layout";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
+import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
 
 export interface ReaderCitationCard {
   citeKey: string;
+  inlineLabel?: string;
   title: string;
   year: number | null;
   venue: string | null;
@@ -32,6 +44,8 @@ export interface ReaderVersionItem {
 
 export interface ChapterReaderInitialData {
   projectId: string;
+  projectTitle?: string;
+  wordsPerPage?: number;
   chapter: {
     id: string;
     number: number;
@@ -41,7 +55,9 @@ export interface ChapterReaderInitialData {
   attention?: ChapterAttentionInfo | null;
   markdown: string;
   headings: Array<{ id: string; text: string; level: number }>;
+  citationClusters?: Record<string, FormattedCitationCluster>;
   citations: ReaderCitationCard[];
+  projectFigures?: ProjectFigureOption[];
   versions: ReaderVersionItem[];
   verifiedClaimsCount: number;
   originalityReport: {
@@ -53,34 +69,73 @@ export interface ChapterReaderInitialData {
   } | null;
 }
 
+function formatVersionCreator(createdBy: string): string {
+  if (createdBy === "user") return "Your edit";
+  if (createdBy === "revision") return "AI revision";
+  return "AI draft";
+}
+
+function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
+  const segments = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return segments.map((seg, i) => {
+    if (seg.startsWith("**") && seg.endsWith("**") && seg.length > 4) {
+      return (
+        <strong key={`${keyPrefix}-b-${i}`} className="font-semibold text-[var(--neutral-900)]">
+          {seg.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (seg.startsWith("*") && seg.endsWith("*") && seg.length > 2) {
+      return <em key={`${keyPrefix}-i-${i}`}>{seg.slice(1, -1)}</em>;
+    }
+    return <span key={`${keyPrefix}-t-${i}`}>{seg}</span>;
+  });
+}
+
 function renderParagraphWithCitations(
   text: string,
   citationByKey: Map<string, ReaderCitationCard>,
-  onInspect: (card: ReaderCitationCard) => void
+  citationClusters: Record<string, FormattedCitationCluster> | undefined,
+  onInspect: (cards: ReaderCitationCard[]) => void
 ): ReactNode[] {
   const parts = text.split(/(\[@[^\]]+\])/g);
   return parts.map((part, idx) => {
     if (part.startsWith("[@") && part.endsWith("]")) {
-      const inner = part.slice(1, -1);
-      const firstKey = inner.split(";")[0]?.replace(/^@/, "").split(",")[0]?.trim() ?? "";
-      const card = citationByKey.get(firstKey);
-      if (card) {
+      const cluster = citationClusters?.[part];
+      const rawKeys =
+        cluster?.citeKeys ??
+        part
+          .slice(1, -1)
+          .split(";")
+          .map((seg) => seg.trim().replace(/^@/, "").split(",")[0]?.trim() ?? "")
+          .filter(Boolean);
+
+      const cards = rawKeys
+        .map((key) => citationByKey.get(key))
+        .filter((c): c is ReaderCitationCard => Boolean(c));
+
+      if (cards.length > 0) {
+        const displayLabel =
+          cluster?.label ??
+          (cards.length === 1 && cards[0]?.inlineLabel ? cards[0].inlineLabel : part);
+        const tooltip = cards.map((c) => `${c.title} (${c.year ?? "n.d."})`).join(" · ");
+
         return (
           <button
             key={idx}
             type="button"
-            title={`${card.title} (${card.year ?? "n.d."})`}
-            onMouseEnter={() => onInspect(card)}
-            onFocus={() => onInspect(card)}
-            onClick={() => onInspect(card)}
-            className="inline px-1.5 py-0.5 mx-0.5 text-xs font-medium rounded-[var(--radius-sm)] bg-[var(--accent-100)] text-[var(--accent-600)] hover:underline cursor-pointer"
+            title={tooltip}
+            onMouseEnter={() => onInspect(cards)}
+            onFocus={() => onInspect(cards)}
+            onClick={() => onInspect(cards)}
+            className="inline px-1 py-[1px] text-[0.94em] font-normal rounded-[4px] bg-[var(--accent-100)]/75 hover:bg-[var(--accent-100)] text-[var(--accent-700)] transition-colors cursor-pointer"
           >
-            {part}
+            {displayLabel}
           </button>
         );
       }
     }
-    return <span key={idx}>{part}</span>;
+    return <span key={idx}>{renderInlineFormatting(part, `p-${idx}`)}</span>;
   });
 }
 
@@ -90,15 +145,29 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
   const [mode, setMode] = useState<"read" | "edit">("read");
   const [markdown, setMarkdown] = useState(initial.markdown);
   const [editSummary, setEditSummary] = useState("");
-  const [inspectedCitation, setInspectedCitation] = useState<ReaderCitationCard | null>(
-    initial.citations[0] ?? null
+  const [inspectedCitations, setInspectedCitations] = useState<ReaderCitationCard[]>(
+    initial.citations[0] ? [initial.citations[0]] : []
   );
   const [saving, setSaving] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<DownloadExportFormat | null>(null);
   const [resuming, setResuming] = useState(false);
   const [creditsModal, setCreditsModal] = useState<InsufficientCreditsDetails | null>(null);
+  const [previewVersion, setPreviewVersion] = useState<{
+    version: ReaderVersionItem;
+    markdown: string;
+    citationClusters?: Record<string, FormattedCitationCluster>;
+  } | null>(null);
+  const [loadingVersionId, setLoadingVersionId] = useState<string | null>(null);
+  const [restoringVersion, setRestoringVersion] = useState(false);
 
   const citationByKey = new Map(initial.citations.map((c) => [c.citeKey, c]));
+  const singleKeyLabels: Record<string, string> = {};
+  for (const c of initial.citations) {
+    if (c.inlineLabel) singleKeyLabels[c.citeKey] = c.inlineLabel;
+  }
+  const latestVersionId = initial.versions[0]?.id ?? null;
+  const activeReadMarkdown = previewVersion ? previewVersion.markdown : markdown;
+  const activeCitationClusters = previewVersion?.citationClusters ?? initial.citationClusters;
   const hasDraft = markdown.trim().length > 0;
   const isPausedWithoutDraft = initial.chapter.status === "needs_attention" && !hasDraft;
   const isInFlight = initial.chapter.status === "queued" || initial.chapter.status === "writing";
@@ -206,15 +275,15 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
     }
   }
 
-  async function handleDownloadPdf() {
-    setExporting(true);
+  async function handleDownloadChapter(format: DownloadExportFormat) {
+    setExportingFormat(format);
     try {
       const res = await fetch(`/api/projects/${initial.projectId}/exports`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           scope: "chapter",
-          format: "pdf",
+          format,
           chapterId: initial.chapter.id,
         }),
       });
@@ -224,59 +293,159 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
         error?: string;
       };
       if (!res.ok || !data.ok || !data.export?.downloadUrl) {
-        toast.error(data.error ?? "Could not generate chapter PDF.", "Download unavailable");
+        toast.error(
+          data.error ??
+            (format === "docx"
+              ? "Could not generate chapter Word document."
+              : "Could not generate chapter PDF."),
+          "Download unavailable"
+        );
         return;
       }
       window.location.href = data.export.downloadUrl;
     } catch {
-      toast.error("Network error while building chapter PDF.", "Download unavailable");
+      toast.error(
+        format === "docx"
+          ? "Network error while building chapter Word document."
+          : "Network error while building chapter PDF.",
+        "Download unavailable"
+      );
     } finally {
-      setExporting(false);
+      setExportingFormat(null);
+    }
+  }
+
+  async function handleSelectHistoryVersion(versionItem: ReaderVersionItem) {
+    if (versionItem.id === latestVersionId) {
+      setPreviewVersion(null);
+      return;
+    }
+    setLoadingVersionId(versionItem.id);
+    try {
+      const res = await fetch(
+        `/api/projects/${initial.projectId}/chapters/${initial.chapter.id}?versionId=${encodeURIComponent(versionItem.id)}`
+      );
+      const data = (await res.json()) as {
+        ok: boolean;
+        markdown?: string;
+        citationClusters?: Record<string, FormattedCitationCluster>;
+        error?: string;
+      };
+      if (!res.ok || !data.ok || typeof data.markdown !== "string") {
+        toast.error(data.error ?? "Could not load that draft version.", "Draft unavailable");
+        return;
+      }
+      setMode("read");
+      setPreviewVersion({
+        version: versionItem,
+        markdown: data.markdown,
+        citationClusters: data.citationClusters,
+      });
+    } catch {
+      toast.error("Network error while loading draft version.", "Connection error");
+    } finally {
+      setLoadingVersionId(null);
+    }
+  }
+
+  async function handleRestorePreviewVersion() {
+    if (!previewVersion) return;
+    setRestoringVersion(true);
+    try {
+      const res = await fetch(`/api/projects/${initial.projectId}/chapters/${initial.chapter.id}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          markdown: previewVersion.markdown,
+          editSummary: `Restored from Version ${previewVersion.version.version}`,
+        }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        version?: { version: number };
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        toast.error(data.error ?? "Could not restore this draft.", "Restore failed");
+        return;
+      }
+      setMarkdown(previewVersion.markdown);
+      setPreviewVersion(null);
+      setMode("read");
+      toast.success(
+        `Restored Version ${previewVersion.version.version} as Version ${data.version?.version ?? ""}.`,
+        "Draft restored"
+      );
+      router.refresh();
+    } catch {
+      toast.error("Network error while restoring draft.", "Connection error");
+    } finally {
+      setRestoringVersion(false);
     }
   }
 
   let headingCounter = 0;
-  const blocks = markdown.split(/\r?\n\r?\n/).filter((b) => b.trim().length > 0);
+  const parsedReadBlocks = parseMarkdownToBlocks(activeReadMarkdown);
+  const pageTitleLower = `chapter ${initial.chapter.number}: ${initial.chapter.title}`
+    .trim()
+    .toLowerCase();
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {!isPausedWithoutDraft ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Button
+        <div className="flex items-center justify-between gap-2 sm:gap-3">
+          <div
+            role="tablist"
+            aria-label="Chapter view mode"
+            className="inline-flex items-center p-1 rounded-[var(--radius-sm)] bg-[var(--neutral-100)] border border-[var(--neutral-200)] shrink-0"
+          >
+            <button
               type="button"
-              variant={mode === "read" ? "primary" : "secondary"}
+              role="tab"
+              aria-selected={mode === "read"}
               disabled={!hasDraft}
               onClick={() => setMode("read")}
+              className={`min-h-[34px] px-3 sm:px-3.5 py-1.5 text-sm font-medium rounded-[4px] whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 ${
+                mode === "read"
+                  ? "bg-[var(--accent-600)] text-white shadow-xs"
+                  : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
+              }`}
             >
-              Read Chapter
-            </Button>
-            <Button
+              Read<span className="hidden sm:inline"> Chapter</span>
+            </button>
+            <button
               type="button"
-              variant={mode === "edit" ? "primary" : "secondary"}
+              role="tab"
+              aria-selected={mode === "edit"}
               disabled={!hasDraft}
-              onClick={() => setMode("edit")}
+              onClick={() => {
+                setPreviewVersion(null);
+                setMode("edit");
+              }}
+              className={`min-h-[34px] px-3 sm:px-3.5 py-1.5 text-sm font-medium rounded-[4px] whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 ${
+                mode === "edit"
+                  ? "bg-[var(--accent-600)] text-white shadow-xs"
+                  : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
+              }`}
             >
               Light edit
-            </Button>
+            </button>
           </div>
 
-          <Button
-            type="button"
-            variant="secondary"
+          <DownloadMenuButton
+            label="Download"
             disabled={!hasDraft}
-            loading={exporting}
-            loadingLabel="Building PDF..."
-            onClick={handleDownloadPdf}
-          >
-            Download Chapter PDF
-          </Button>
+            loadingFormat={exportingFormat}
+            onSelectFormat={handleDownloadChapter}
+            align="right"
+            className="shrink-0"
+          />
         </div>
       ) : null}
 
       {initial.chapter.status === "needs_attention" && hasDraft && initial.attention ? (
         <div className="rounded-[var(--radius-md)] border border-[var(--warning-border)] bg-[var(--warning-bg)] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1 text-sm text-[var(--warning-text)]">
+          <div className="flex flex-col gap-1.5 text-sm text-[var(--warning-text)]">
             <p className="font-semibold m-0">{initial.attention.title}</p>
             <p className="m-0 leading-relaxed">{initial.attention.userMessage}</p>
           </div>
@@ -300,13 +469,13 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         {/* Main reader / editor pane */}
-        <div className="lg:col-span-8 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-8 space-y-5">
+        <div className="xl:col-span-8 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-8 flex flex-col gap-5">
           {isPausedWithoutDraft ? (
-            <div className="space-y-5 py-2">
-              <div className="space-y-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-medium border rounded-[4px] bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]">
+            <div className="flex flex-col gap-5 py-2">
+              <div className="flex flex-col gap-2">
+                <span className="self-start inline-flex items-center px-2.5 py-0.5 text-xs font-medium border rounded-[4px] bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]">
                   Needs Attention
                 </span>
                 <h2 className="text-xl font-medium text-[var(--neutral-900)] m-0">
@@ -340,31 +509,30 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
               </div>
             </div>
           ) : mode === "edit" ? (
-            <div className="space-y-4">
-              <p className="text-sm text-[var(--neutral-600)] m-0">
-                Keep the bracketed citation markers intact so your references format automatically.
-                Saving creates a new version and updates your project notes.
-              </p>
-              <textarea
-                aria-label="Chapter markdown editor"
-                rows={22}
-                value={markdown}
-                onChange={(e) => setMarkdown(e.target.value)}
-                className="block w-full px-3.5 py-3 text-sm font-mono bg-[var(--neutral-50)] text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] leading-relaxed"
+            <div className="flex flex-col gap-4">
+              <ChapterRichEditor
+                projectId={initial.projectId}
+                projectTitle={initial.projectTitle ?? initial.chapter.title}
+                markdown={markdown}
+                wordsPerPage={initial.wordsPerPage ?? 275}
+                citationClusters={initial.citationClusters}
+                singleKeyLabels={singleKeyLabels}
+                initialFigures={initial.projectFigures ?? []}
+                onChange={setMarkdown}
               />
               <FormField
                 id="edit-summary"
                 label="Short edit note (optional)"
                 type="text"
-                placeholder="e.g. Clarified regional statistics in section 1.2"
+                placeholder="e.g. Added beetroot figure and clarified section 1.2"
                 value={editSummary}
                 onChange={(e) => setEditSummary(e.target.value)}
               />
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Button
                   type="button"
                   loading={saving}
-                  loadingLabel="Saving new version..."
+                  loadingLabel="Saving new draft..."
                   onClick={handleSaveEdit}
                 >
                   Save edits as new version
@@ -388,63 +556,190 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 : "No drafted text is stored for this chapter yet. Start the chapter from the project overview page."}
             </p>
           ) : (
-            <article className="space-y-4 max-w-[68ch]">
-              {blocks.map((block, idx) => {
-                const trimmed = block.trim();
-                if (trimmed.startsWith("# ")) {
-                  return (
-                    <h2 key={idx} className="text-2xl font-medium pt-2">
-                      {trimmed.slice(2)}
-                    </h2>
-                  );
-                }
-                if (trimmed.startsWith("## ")) {
-                  headingCounter++;
-                  return (
-                    <h3 key={idx} id={`sec-${headingCounter}`} className="text-xl font-medium pt-3">
-                      {trimmed.slice(3)}
-                    </h3>
-                  );
-                }
-                if (trimmed.startsWith("### ")) {
-                  headingCounter++;
-                  return (
-                    <h4
-                      key={idx}
-                      id={`sec-${headingCounter}`}
-                      className="text-base font-semibold text-[var(--neutral-900)] pt-2"
+            <div className="flex flex-col gap-5">
+              {previewVersion ? (
+                <div className="rounded-[var(--radius-sm)] border border-[var(--info-border)] bg-[var(--info-bg)] px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-col gap-0.5 text-xs text-[var(--info-text)]">
+                    <p className="font-semibold m-0">
+                      Viewing Version {previewVersion.version.version} (
+                      {formatVersionCreator(previewVersion.version.createdBy)}) — read-only preview
+                    </p>
+                    {previewVersion.version.revisionNotes ? (
+                      <p className="m-0 opacity-90">{previewVersion.version.revisionNotes}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      loading={restoringVersion}
+                      loadingLabel="Restoring..."
+                      onClick={() => void handleRestorePreviewVersion()}
                     >
-                      {trimmed.slice(4)}
-                    </h4>
-                  );
-                }
-                if (trimmed.startsWith("|")) {
-                  return (
-                    <pre
-                      key={idx}
-                      className="overflow-x-auto text-xs bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-3"
+                      Restore this version
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setPreviewVersion(null)}
                     >
-                      {trimmed}
-                    </pre>
+                      Back to latest
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              <article className="flex flex-col gap-4 max-w-[68ch]">
+                {parsedReadBlocks.map((block, idx) => {
+                  // Page break controls belong strictly in Light edit; Read mode flows cleanly like a finished document.
+                  if (block.type === "page_break") {
+                    return <div key={block.id} aria-hidden="true" className="h-2" />;
+                  }
+
+                  if (block.type === "heading") {
+                    if (block.level === 1 && block.text.trim().toLowerCase() === pageTitleLower) {
+                      return null;
+                    }
+                    if (block.level === 1) {
+                      return (
+                        <h2
+                          key={block.id}
+                          className="text-2xl font-medium leading-snug text-[var(--neutral-900)] mt-2 first:mt-0 m-0"
+                        >
+                          {renderInlineFormatting(block.text, `h1-${idx}`)}
+                        </h2>
+                      );
+                    }
+                    if (block.level === 2) {
+                      headingCounter++;
+                      return (
+                        <h3
+                          key={block.id}
+                          id={`sec-${headingCounter}`}
+                          className="text-xl font-medium leading-snug text-[var(--neutral-900)] mt-4 first:mt-0 m-0"
+                        >
+                          {renderInlineFormatting(block.text, `h2-${idx}`)}
+                        </h3>
+                      );
+                    }
+                    headingCounter++;
+                    return (
+                      <h4
+                        key={block.id}
+                        id={`sec-${headingCounter}`}
+                        className="text-base font-semibold leading-snug text-[var(--neutral-900)] mt-2 first:mt-0 m-0"
+                      >
+                        {renderInlineFormatting(block.text, `h3-${idx}`)}
+                      </h4>
+                    );
+                  }
+
+                  if (block.type === "figure") {
+                    const dims = computeControlledFigureDimensions(
+                      block.figure.width,
+                      block.figure.height
+                    );
+                    return (
+                      <figure
+                        key={block.id}
+                        className="my-2 w-full flex flex-col items-center gap-2.5 p-3 sm:p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]/50 overflow-hidden"
+                      >
+                        <img
+                          src={block.figure.url}
+                          alt={block.figure.alt}
+                          style={{
+                            maxWidth: `min(100%, ${dims.widthPx}px)`,
+                            maxHeight: `${dims.heightPx}px`,
+                          }}
+                          className="w-auto h-auto object-contain rounded-[4px]"
+                        />
+                        <figcaption className="w-full min-w-0 flex flex-col items-center gap-1 text-center max-w-[58ch]">
+                          <span className="w-full text-sm font-medium text-[var(--neutral-800)] leading-snug [overflow-wrap:anywhere]">
+                            {renderInlineFormatting(block.figure.caption, `figcap-${idx}`)}
+                          </span>
+                          {block.figure.attribution ? (
+                            <span className="w-full text-[11px] text-[var(--neutral-500)] leading-relaxed [overflow-wrap:anywhere]">
+                              {block.figure.attribution}
+                            </span>
+                          ) : null}
+                        </figcaption>
+                      </figure>
+                    );
+                  }
+
+                  if (block.type === "table") {
+                    return (
+                      <pre
+                        key={block.id}
+                        className="overflow-x-auto text-xs bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-3 m-0"
+                      >
+                        {block.raw}
+                      </pre>
+                    );
+                  }
+
+                  if (block.type === "bullet_list") {
+                    return (
+                      <ul
+                        key={block.id}
+                        className="list-disc pl-5 flex flex-col gap-2 text-base text-[var(--neutral-800)] leading-[1.7] m-0"
+                      >
+                        {block.items.map((item, liIdx) => (
+                          <li key={liIdx}>
+                            {renderParagraphWithCitations(
+                              item,
+                              citationByKey,
+                              activeCitationClusters,
+                              setInspectedCitations
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  }
+
+                  if (block.type === "blockquote") {
+                    return (
+                      <blockquote
+                        key={block.id}
+                        className="pl-4 border-l-2 border-[var(--neutral-300)] text-base text-[var(--neutral-700)] italic leading-[1.75] m-0"
+                      >
+                        {renderParagraphWithCitations(
+                          block.text,
+                          citationByKey,
+                          activeCitationClusters,
+                          setInspectedCitations
+                        )}
+                      </blockquote>
+                    );
+                  }
+
+                  return (
+                    <p
+                      key={block.id}
+                      className="text-base text-[var(--neutral-800)] leading-[1.75] m-0"
+                    >
+                      {renderParagraphWithCitations(
+                        block.text,
+                        citationByKey,
+                        activeCitationClusters,
+                        setInspectedCitations
+                      )}
+                    </p>
                   );
-                }
-                return (
-                  <p key={idx} className="text-base text-[var(--neutral-800)] leading-relaxed m-0">
-                    {renderParagraphWithCitations(trimmed, citationByKey, setInspectedCitation)}
-                  </p>
-                );
-              })}
-            </article>
+                })}
+              </article>
+            </div>
           )}
         </div>
 
-        {/* Sidebar: Sections, Citation inspector, Similarity report, Versions */}
-        <aside className="lg:col-span-4 space-y-4">
+        {/* Sidebar: Sections, Citation inspector, Originality & checks, Draft history */}
+        <aside className="xl:col-span-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-5 items-start">
           {initial.headings.length > 0 ? (
-            <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-2.5">
-              <h2 className="text-base font-medium m-0">Sections</h2>
+            <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-3.5">
+              <h2 className="text-base font-semibold text-[var(--neutral-900)] m-0">Sections</h2>
               <nav aria-label="Chapter sections">
-                <ul className="space-y-1.5 list-none p-0 m-0 text-sm">
+                <ul className="flex flex-col gap-2.5 list-none p-0 m-0 text-sm leading-snug">
                   {initial.headings.map((h) => (
                     <li key={h.id} className={h.level === 3 ? "pl-3" : ""}>
                       <a
@@ -460,25 +755,36 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
             </section>
           ) : null}
 
-          <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-2.5">
-            <h2 className="text-base font-medium m-0">Citation inspector</h2>
-            {inspectedCitation ? (
-              <div className="space-y-1 text-sm">
-                <p className="text-xs font-semibold text-[var(--accent-600)] m-0">
-                  Verified source
-                </p>
-                <p className="font-medium text-[var(--neutral-900)] m-0">
-                  {inspectedCitation.title}
-                </p>
-                <p className="text-xs text-[var(--neutral-600)] m-0">
-                  {inspectedCitation.venue ? `${inspectedCitation.venue} · ` : ""}
-                  {inspectedCitation.year ?? "n.d."}
-                </p>
-                {inspectedCitation.doi ? (
-                  <p className="text-xs text-[var(--neutral-600)] break-all m-0">
-                    DOI: {inspectedCitation.doi}
-                  </p>
-                ) : null}
+          <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-4">
+            <h2 className="text-base font-semibold text-[var(--neutral-900)] m-0">
+              Citation inspector
+            </h2>
+            {inspectedCitations.length > 0 ? (
+              <div className="flex flex-col gap-4 divide-y divide-[var(--neutral-100)]">
+                {inspectedCitations.map((citation, idx) => (
+                  <div
+                    key={citation.citeKey}
+                    className={`flex flex-col gap-3 text-sm ${idx > 0 ? "pt-4" : ""}`}
+                  >
+                    <span className="self-start inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-700)]">
+                      Verified source
+                    </span>
+                    <p className="text-[0.9375rem] font-medium text-[var(--neutral-900)] leading-snug m-0">
+                      {citation.title}
+                    </p>
+                    <div className="pt-2.5 border-t border-[var(--neutral-100)] flex flex-col gap-1.5 text-xs text-[var(--neutral-600)]">
+                      <p className="m-0">
+                        {citation.venue ? `${citation.venue} · ` : ""}
+                        {citation.year ?? "n.d."}
+                      </p>
+                      {citation.doi ? (
+                        <p className="m-0 break-all text-[var(--neutral-500)]">
+                          DOI: {citation.doi}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="text-xs text-[var(--neutral-600)] leading-relaxed m-0">
@@ -487,48 +793,123 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
             )}
           </section>
 
-          <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-2">
-            <h2 className="text-base font-medium m-0">Verification &amp; similarity</h2>
-            <p className="text-xs text-[var(--neutral-700)] tabular-nums m-0">
-              Verified traceable claims: <strong>{initial.verifiedClaimsCount}</strong>
-            </p>
+          <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-4">
+            <h2 className="text-base font-semibold text-[var(--neutral-900)] m-0">
+              Originality &amp; checks
+            </h2>
             {initial.originalityReport ? (
-              <div className="text-xs text-[var(--neutral-700)] tabular-nums space-y-1 pt-1">
+              <dl className="flex flex-col gap-2.5 text-xs tabular-nums m-0">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--neutral-600)]">Originality check</dt>
+                  <dd className="m-0">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[4px] border ${
+                        initial.originalityReport.passed
+                          ? "bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]"
+                          : "bg-[var(--error-bg)] text-[var(--error-text)] border-[var(--error-border)]"
+                      }`}
+                    >
+                      {initial.originalityReport.passed ? "Passed" : "Needs review"}
+                    </span>
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--neutral-600)]">Matched source text</dt>
+                  <dd className="font-semibold text-[var(--neutral-900)] m-0">
+                    {initial.originalityReport.overlapScore}%
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--neutral-600)]">Direct quotes</dt>
+                  <dd className="font-semibold text-[var(--neutral-900)] m-0">
+                    {initial.originalityReport.quoteSharePct}%
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-[var(--neutral-600)]">Shared across projects</dt>
+                  <dd className="font-semibold text-[var(--neutral-900)] m-0">
+                    {initial.originalityReport.crossUserScore}%
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-[var(--neutral-100)]">
+                  <dt className="text-[var(--neutral-600)]">Verified claims</dt>
+                  <dd className="font-semibold text-[var(--neutral-900)] m-0">
+                    {initial.verifiedClaimsCount}
+                  </dd>
+                </div>
+              </dl>
+            ) : (
+              <div className="flex flex-col gap-2 text-xs text-[var(--neutral-600)] tabular-nums">
                 <p className="m-0">
-                  Gate:{" "}
-                  <strong
-                    className={
-                      initial.originalityReport.passed
-                        ? "text-[var(--success-text)]"
-                        : "text-[var(--error-text)]"
-                    }
-                  >
-                    {initial.originalityReport.passed ? "Passed" : "Flagged"}
+                  Verified claims:{" "}
+                  <strong className="text-[var(--neutral-900)]">
+                    {initial.verifiedClaimsCount}
                   </strong>
                 </p>
-                <p className="m-0">Source overlap: {initial.originalityReport.overlapScore}%</p>
-                <p className="m-0">Direct quotes: {initial.originalityReport.quoteSharePct}%</p>
-                <p className="m-0">
-                  Cross-user similarity: {initial.originalityReport.crossUserScore}%
+                <p className="m-0 leading-relaxed">
+                  Originality checks appear here once drafting completes.
                 </p>
               </div>
-            ) : (
-              <p className="text-xs text-[var(--neutral-600)] m-0">
-                Similarity metrics appear here once drafting completes.
-              </p>
             )}
           </section>
 
           {initial.versions.length > 0 ? (
-            <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-2">
-              <h2 className="text-base font-medium m-0">Versions ({initial.versions.length})</h2>
-              <ul className="space-y-1.5 list-none p-0 m-0 text-xs text-[var(--neutral-700)] tabular-nums">
-                {initial.versions.slice(0, 6).map((v) => (
-                  <li key={v.id}>
-                    <strong>v{v.version}</strong> ({v.createdBy}) · {v.wordCount.toLocaleString()}w
-                    · ~{v.pageCount}p
-                  </li>
-                ))}
+            <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-3.5">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-base font-semibold text-[var(--neutral-900)] m-0">
+                  Draft history ({initial.versions.length})
+                </h2>
+                <p className="text-xs text-[var(--neutral-500)] m-0">
+                  Every save and AI revision is preserved. Select a draft to preview or restore.
+                </p>
+              </div>
+              <ul className="flex flex-col gap-2 list-none p-0 m-0 text-xs tabular-nums">
+                {initial.versions.slice(0, 8).map((v) => {
+                  const isCurrent = v.id === latestVersionId;
+                  const isSelected = previewVersion
+                    ? previewVersion.version.id === v.id
+                    : isCurrent;
+                  const isLoading = loadingVersionId === v.id;
+
+                  return (
+                    <li key={v.id}>
+                      <button
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => void handleSelectHistoryVersion(v)}
+                        className={`w-full text-left px-3 py-2.5 rounded-[var(--radius-sm)] border transition-colors flex flex-col gap-1 cursor-pointer ${
+                          isSelected
+                            ? "border-[var(--accent-600)]/40 bg-[var(--accent-100)]/35"
+                            : "border-[var(--neutral-200)] bg-white hover:bg-[var(--neutral-50)]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-[var(--neutral-900)]">
+                            Version {v.version} · {formatVersionCreator(v.createdBy)}
+                          </span>
+                          {isCurrent ? (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-700)]">
+                              Current
+                            </span>
+                          ) : isLoading ? (
+                            <span className="text-[11px] text-[var(--neutral-500)]">
+                              Loading...
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className="text-[var(--neutral-600)]">
+                          {v.wordCount.toLocaleString()} words · ~{v.pageCount}{" "}
+                          {v.pageCount === 1 ? "page" : "pages"}
+                        </span>
+                        {v.revisionNotes ? (
+                          <span className="text-[11px] text-[var(--neutral-500)] line-clamp-1">
+                            {v.revisionNotes}
+                          </span>
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ) : null}

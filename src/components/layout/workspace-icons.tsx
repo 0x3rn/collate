@@ -164,6 +164,21 @@ export function LogOutIcon(props: IconProps) {
   );
 }
 
+export function ArrowLeftIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M15.5 10h-11m0 0 4-4m-4 4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function ArrowRightIcon(props: IconProps) {
   return (
     <svg
@@ -210,6 +225,21 @@ export function DownloadIcon(props: IconProps) {
         d="M4 14.25v1a1.25 1.25 0 0 0 1.25 1.25h9.5A1.25 1.25 0 0 0 16 15.25v-1"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="m5.5 7.75 4.5 4.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

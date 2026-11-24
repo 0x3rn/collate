@@ -226,6 +226,9 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                     : `${completedChapters} of ${project.chaptersTotal} chapters drafted`
                   : "Outline ready";
               const pagesLabel = project.targetPages ?? project.idealPages;
+              const projectOverviewHref = inSetup
+                ? `/projects/${project.id}/setup`
+                : `/projects/${project.id}`;
 
               return (
                 <li
@@ -248,7 +251,8 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                       ) : null}
                     </div>
                     <Link
-                      href={project.nextAction.href}
+                      href={projectOverviewHref}
+                      title={project.title}
                       className="block text-[0.9375rem] font-semibold text-[var(--neutral-900)] group-hover:text-[var(--accent-600)] transition-colors truncate"
                     >
                       {project.title}

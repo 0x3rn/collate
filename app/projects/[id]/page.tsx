@@ -5,6 +5,7 @@ import { env } from "cloudflare:workers";
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { STATUS_BADGE_CLASSES } from "@/components/dashboard/project-card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
+import { ArrowLeftIcon } from "@/components/layout/workspace-icons";
 import { AssignmentPipelinePanel } from "@/components/project/assignment-pipeline-panel";
 import {
   ChapterPipelinePanel,
@@ -136,9 +137,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <div>
             <Link
               href="/projects"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
+              className="inline-flex items-center gap-2 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
             >
-              <span aria-hidden="true">←</span>
+              <ArrowLeftIcon className="w-4 h-4 shrink-0" />
               <span>Back to projects</span>
             </Link>
           </div>
@@ -219,8 +220,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-[var(--neutral-500)]">Layout</dt>
                 <dd className="text-[var(--neutral-800)] text-right tabular-nums m-0">
-                  {settings.marginsMm}mm margins · {settings.spelling.toUpperCase()} English · Page
-                  numbers {settings.pageNumbering ? "on" : "off"}
+                  {settings.marginsMm}mm margins · {settings.spelling.toUpperCase()} English ·{" "}
+                  {settings.pageNumbering ? "Page numbers included" : "No page numbers"}
                 </dd>
               </div>
             </dl>

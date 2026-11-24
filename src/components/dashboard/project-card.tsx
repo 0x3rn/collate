@@ -42,6 +42,7 @@ export function ProjectCard({ project }: { project: DashboardProjectSummary }) {
       : "Outline confirmed";
 
   const pagesLabel = project.targetPages ?? project.idealPages;
+  const projectOverviewHref = inSetup ? `/projects/${project.id}/setup` : `/projects/${project.id}`;
 
   return (
     <article className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col justify-between gap-4 hover:border-[var(--neutral-300)] transition-colors duration-150">
@@ -67,7 +68,7 @@ export function ProjectCard({ project }: { project: DashboardProjectSummary }) {
         <div className="space-y-1">
           <h2 className="text-lg sm:text-[1.1875rem] font-medium text-[var(--neutral-900)] leading-snug m-0">
             <Link
-              href={project.nextAction.href}
+              href={projectOverviewHref}
               className="hover:text-[var(--accent-600)] transition-colors"
             >
               {project.title}

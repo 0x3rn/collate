@@ -4,6 +4,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { Button, LinkButton } from "@/components/ui/button";
 import {
+  DownloadMenuButton,
+  type DownloadExportFormat,
+} from "@/components/ui/download-menu-button";
+import {
   InsufficientCreditsModal,
   ModalCard,
   type InsufficientCreditsDetails,
@@ -78,8 +82,13 @@ export function ChapterPipelinePanel({
   const router = useRouter();
   const toast = useToast();
   const [busyChapterId, setBusyChapterId] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<{
+    chapterId: string;
+    format: DownloadExportFormat;
+  } | null>(null);
   const [revisingChapterId, setRevisingChapterId] = useState<string | null>(null);
   const [revisionNote, setRevisionNote] = useState("");
+  const [revisionTargetSection, setRevisionTargetSection] = useState("");
   const [detailsChapter, setDetailsChapter] = useState<ChapterPanelItem | null>(null);
   const [detailsText, setDetailsText] = useState("");
   const [uploadingCsv, setUploadingCsv] = useState(false);
@@ -168,13 +177,14 @@ export function ChapterPipelinePanel({
     }
   }
 
-  async function triggerChapterPdfDownload(chapterId: string) {
+  async function triggerChapterDownload(chapterId: string, format: DownloadExportFormat) {
     setBusyChapterId(chapterId);
+    setDownloading({ chapterId, format });
     try {
       const res = await fetch(`/api/projects/${projectId}/exports`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ scope: "chapter", format: "pdf", chapterId }),
+        body: JSON.stringify({ scope: "chapter", format, chapterId }),
       });
       const data = (await res.json()) as {
         ok: boolean;
@@ -182,14 +192,26 @@ export function ChapterPipelinePanel({
         error?: string;
       };
       if (!res.ok || !data.ok || !data.export?.downloadUrl) {
-        toast.error(data.error ?? "Could not build chapter PDF.", "Download unavailable");
+        toast.error(
+          data.error ??
+            (format === "docx"
+              ? "Could not build chapter Word document."
+              : "Could not build chapter PDF."),
+          "Download unavailable"
+        );
         return;
       }
       window.location.href = data.export.downloadUrl;
     } catch {
-      toast.error("Network error while building chapter PDF.", "Download unavailable");
+      toast.error(
+        format === "docx"
+          ? "Network error while building chapter Word document."
+          : "Network error while building chapter PDF.",
+        "Download unavailable"
+      );
     } finally {
       setBusyChapterId(null);
+      setDownloading(null);
     }
   }
 
@@ -230,7 +252,10 @@ export function ChapterPipelinePanel({
       const res = await fetch(`/api/projects/${projectId}/chapters/${chapterId}/revise`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ instructions: revisionNote.trim() }),
+        body: JSON.stringify({
+          instructions: revisionNote.trim(),
+          ...(revisionTargetSection ? { targetSectionHeadings: [revisionTargetSection] } : {}),
+        }),
       });
       const data = (await res.json()) as {
         ok: boolean;
@@ -258,6 +283,7 @@ export function ChapterPipelinePanel({
         return;
       }
       setRevisionNote("");
+      setRevisionTargetSection("");
       setRevisingChapterId(null);
       toast.success(
         "A new chapter version will be saved as soon as it is ready.",
@@ -341,8 +367,8 @@ export function ChapterPipelinePanel({
         </section>
       ) : null}
 
-      <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] overflow-hidden">
-        <div className="px-5 sm:px-6 py-4 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]">
+        <div className="px-5 sm:px-6 py-4 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] rounded-t-[var(--radius-md)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-lg font-medium text-[var(--neutral-900)]">
             Chapters ({chapters.length})
           </h2>
@@ -356,13 +382,22 @@ export function ChapterPipelinePanel({
             const badge = CHAPTER_STATUS_BADGE[ch.status];
             const gate = canStartChapter(chapters, ch.number);
             const isBusy = busyChapterId === ch.id;
+            const isMultiActionChapter = ch.status === "ready" || ch.status === "approved";
+            const loadingDownloadFormat =
+              downloading?.chapterId === ch.id ? downloading.format : null;
 
             return (
               <li
                 key={ch.id}
-                className="px-5 sm:px-6 py-5 space-y-3 hover:bg-[var(--neutral-50)]/60 transition-colors"
+                className="px-5 sm:px-6 py-5 flex flex-col gap-3.5 last:rounded-b-[var(--radius-md)] hover:bg-[var(--neutral-50)]/60 transition-colors"
               >
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div
+                  className={
+                    isMultiActionChapter
+                      ? "flex flex-col gap-4"
+                      : "flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+                  }
+                >
                   <div className="flex items-start gap-3.5 min-w-0">
                     <span
                       aria-hidden="true"
@@ -377,10 +412,10 @@ export function ChapterPipelinePanel({
                       {ch.isAutoReferences ? "Ref" : String(ch.number).padStart(2, "0")}
                     </span>
 
-                    <div className="space-y-1.5 min-w-0">
+                    <div className="flex flex-col gap-1.5 min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2.5">
                         <h3
-                          className="text-base font-semibold text-[var(--neutral-900)] leading-snug"
+                          className="text-base font-semibold text-[var(--neutral-900)] leading-snug m-0"
                           style={{ fontFamily: "var(--font-sans)" }}
                         >
                           {ch.isAutoReferences ? ch.title : `Chapter ${ch.number}: ${ch.title}`}
@@ -399,20 +434,20 @@ export function ChapterPipelinePanel({
                         )}
                       </div>
 
-                      <p className="text-xs text-[var(--neutral-600)] tabular-nums leading-relaxed">
+                      <p className="text-xs text-[var(--neutral-600)] tabular-nums leading-relaxed m-0">
                         {ch.isAutoReferences
                           ? "Built automatically from the verified sources cited across your chapters."
                           : `Target: ~${(ch.pageBudget ?? 0).toLocaleString("en-US")} pages (~${(ch.wordBudget ?? 0).toLocaleString("en-US")} words)`}
                       </p>
 
                       {ch.sectionHeadings.length > 0 ? (
-                        <p className="text-xs text-[var(--neutral-500)] leading-relaxed">
+                        <p className="text-xs text-[var(--neutral-500)] leading-relaxed m-0">
                           Sections: {ch.sectionHeadings.join(" · ")}
                         </p>
                       ) : null}
 
                       {ch.originalityReport ? (
-                        <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] pt-0.5">
+                        <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] pt-0.5 m-0">
                           Similarity report:{" "}
                           <span
                             className={
@@ -453,7 +488,13 @@ export function ChapterPipelinePanel({
                   </div>
 
                   {!ch.isAutoReferences ? (
-                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <div
+                      className={
+                        isMultiActionChapter
+                          ? "pt-3 border-t border-[var(--neutral-100)] grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end gap-2"
+                          : "flex flex-wrap items-center justify-end gap-2 shrink-0"
+                      }
+                    >
                       {ch.status === "not_started" ? (
                         <Button
                           type="button"
@@ -508,77 +549,102 @@ export function ChapterPipelinePanel({
                         </>
                       ) : null}
 
-                      {ch.status === "ready" || ch.status === "approved" ? (
+                      {isMultiActionChapter ? (
                         <>
                           <LinkButton
                             href={`/projects/${projectId}/chapters/${ch.id}`}
                             variant="secondary"
+                            className="w-full sm:w-auto whitespace-nowrap"
                           >
                             Read / edit
                           </LinkButton>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            disabled={isBusy}
-                            onClick={() => triggerChapterPdfDownload(ch.id)}
-                          >
-                            Download PDF
-                          </Button>
-                        </>
-                      ) : null}
 
-                      {ch.status === "ready" ? (
-                        <>
-                          <Button
-                            type="button"
-                            variant="primary"
-                            loading={isBusy}
-                            loadingLabel="Approving..."
-                            onClick={() => triggerApprove(ch.id)}
-                          >
-                            Approve Chapter
-                          </Button>
                           <Button
                             type="button"
                             variant="secondary"
+                            className="w-full sm:w-auto whitespace-nowrap"
                             onClick={() =>
                               setRevisingChapterId(revisingChapterId === ch.id ? null : ch.id)
                             }
                           >
                             Request changes
                           </Button>
-                        </>
-                      ) : null}
 
-                      {ch.status === "approved" ? (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() =>
-                            setRevisingChapterId(revisingChapterId === ch.id ? null : ch.id)
-                          }
-                        >
-                          Request changes
-                        </Button>
+                          {ch.status === "ready" ? (
+                            <Button
+                              type="button"
+                              variant="primary"
+                              className="w-full sm:w-auto whitespace-nowrap"
+                              disabled={isBusy}
+                              loading={isBusy && loadingDownloadFormat === null}
+                              loadingLabel="Approving..."
+                              onClick={() => triggerApprove(ch.id)}
+                            >
+                              Approve Chapter
+                            </Button>
+                          ) : null}
+
+                          <DownloadMenuButton
+                            label="Download"
+                            disabled={isBusy && loadingDownloadFormat === null}
+                            loadingFormat={loadingDownloadFormat}
+                            onSelectFormat={(format) => triggerChapterDownload(ch.id, format)}
+                            align="right"
+                            className={
+                              ch.status === "approved"
+                                ? "col-start-2 w-full sm:w-auto"
+                                : "w-full sm:w-auto"
+                            }
+                          />
+                        </>
                       ) : null}
                     </div>
                   ) : null}
                 </div>
 
                 {revisingChapterId === ch.id ? (
-                  <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-3">
-                    <label
-                      htmlFor={`rev-note-${ch.id}`}
-                      className="block text-xs font-medium text-[var(--neutral-800)]"
-                    >
-                      What should be revised in Chapter {ch.number}?
-                    </label>
+                  <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor={`rev-note-${ch.id}`}
+                        className="block text-xs font-medium text-[var(--neutral-800)]"
+                      >
+                        What should be revised in Chapter {ch.number}?
+                      </label>
+                      <p className="text-xs text-[var(--neutral-500)] m-0">
+                        Collate updates only the affected section(s) and keeps the rest of your
+                        chapter intact.
+                      </p>
+                    </div>
+                    {ch.sectionHeadings.length > 1 ? (
+                      <div className="flex flex-col gap-1">
+                        <label
+                          htmlFor={`rev-section-${ch.id}`}
+                          className="block text-xs font-medium text-[var(--neutral-700)]"
+                        >
+                          Section to update (optional)
+                        </label>
+                        <select
+                          id={`rev-section-${ch.id}`}
+                          value={revisionTargetSection}
+                          onChange={(e) => setRevisionTargetSection(e.target.value)}
+                          className="block w-full px-3 py-2 text-sm bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
+                        >
+                          <option value="">Auto-detect from my note (recommended)</option>
+                          {ch.sectionHeadings.map((heading, idx) => (
+                            <option key={heading} value={heading}>
+                              {ch.number}.{idx + 1} {heading}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
                     <textarea
                       id={`rev-note-${ch.id}`}
                       rows={3}
                       value={revisionNote}
                       onChange={(e) => setRevisionNote(e.target.value)}
-                      placeholder="e.g. Expand section 2 with more Nigerian empirical studies and tighten the opening paragraph."
+                      placeholder="e.g. In section 1.1, add a verified photograph of beetroot and clarify the antioxidant pathway."
                       className="block w-full px-3 py-2 text-sm bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
                     />
                     <div className="flex items-center gap-2">
@@ -596,6 +662,7 @@ export function ChapterPipelinePanel({
                         onClick={() => {
                           setRevisingChapterId(null);
                           setRevisionNote("");
+                          setRevisionTargetSection("");
                         }}
                       >
                         Cancel

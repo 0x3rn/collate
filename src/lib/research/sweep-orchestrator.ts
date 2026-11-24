@@ -5,6 +5,7 @@ import type { AppDb } from "@/db/client";
 import { syncCitationRegistryForProject, verifyProjectCitations } from "@/db/queries/citations";
 import {
   feasibilityReports,
+  projectFigures,
   projects,
   questions,
   researchRuns,
@@ -24,6 +25,7 @@ import { chunkSourceText } from "./chunker";
 import { runConnectorsForQueries } from "./connectors/registry";
 import type { ConnectorEnv, SourceConnector } from "./connectors/types";
 import { enrichSourcesWithUnpaywall } from "./connectors/unpaywall";
+import { buildTopicImageQuery, searchWikimediaAcademicImages } from "./connectors/wikimedia-images";
 import { deduplicateSources } from "./dedupe";
 import { buildPassageVectorId, type EmbeddingProvider, type VectorStore } from "./embeddings";
 import { fetchAndSnapshotSource, type BrowserRunContentBinding } from "./fetcher";
@@ -381,6 +383,41 @@ export async function runResearchSweepOrchestration(
           existingByTitle.add(candidate.normalizedTitle);
           newlyInsertedCount++;
         }
+      }
+
+      // Opportunistically collect verified open-license figures (Wikimedia Commons) relevant to the topic
+      try {
+        const topicImgQuery = buildTopicImageQuery(planOutput.topic);
+        if (topicImgQuery.length >= 3) {
+          const verifiedImages = await searchWikimediaAcademicImages({
+            query: topicImgQuery,
+            limit: 4,
+            timeoutMs: RESEARCH_CONFIG.caps.perRequestTimeoutMs,
+            fetchFn,
+          });
+          for (const img of verifiedImages) {
+            await deps.db
+              .insert(projectFigures)
+              .values({
+                id: `fig_${crypto.randomUUID()}`,
+                projectId: payload.projectId,
+                url: img.url,
+                sourcePageUrl: img.sourcePageUrl,
+                title: img.title,
+                alt: img.alt,
+                caption: img.caption,
+                attribution: img.attribution,
+                license: img.license,
+                mimeType: img.mimeType,
+                naturalWidth: img.naturalWidth,
+                naturalHeight: img.naturalHeight,
+                createdAt: now,
+              })
+              .onConflictDoNothing();
+          }
+        }
+      } catch {
+        // Non-fatal: academic image discovery never blocks research sweep completion
       }
 
       const allAfter = await deps.db

@@ -47,7 +47,7 @@ async function renderHtmlViaBrowserRun(
   const res = await browser.quickAction("pdf", {
     html,
     pdfOptions: {
-      format: "A4",
+      format: "a4",
       printBackground: true,
       displayHeaderFooter: false,
       margin: { top: marginStr, right: marginStr, bottom: marginStr, left: marginStr },
@@ -159,7 +159,7 @@ export async function buildThesisPdfTwoPass(
   let runningArabicPage = 1;
 
   for (const ch of doc.chapters) {
-    const html = buildChapterHtmlDocument(ch, doc.formatting);
+    const html = buildChapterHtmlDocument(ch, doc.formatting, doc.resolvedFigures);
     const bytes = await renderHtmlViaBrowserRun(browser, html, doc.formatting.marginsMm);
     const pages = await countPdfPages(bytes);
 

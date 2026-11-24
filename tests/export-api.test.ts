@@ -310,5 +310,32 @@ describe("Phase 9 — Signed Download URLs & PDF/DOCX Export HTTP API", () => {
     const docxBytes = new Uint8Array(await docxDl.arrayBuffer());
     expect(docxBytes[0]).toBe(0x50);
     expect(docxBytes[1]).toBe(0x4b);
+
+    // Upstream PDF rendering error returns structured masked 502 JSON (never unhandled throw)
+    const failingBrowser: BrowserRunPdfBinding = {
+      async quickAction() {
+        return new Response('{"success":false,"errors":[{"code":"invalid_value"}]}', {
+          status: 400,
+        });
+      },
+    };
+    const failedPdfRes = await handleCreateExport(
+      new Request(`https://collate.app/api/projects/${projectId}/exports`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: alice.cookie,
+        },
+        body: JSON.stringify({ scope: "full", format: "pdf" }),
+      }),
+      projectId,
+      { ...deps, browser: failingBrowser }
+    );
+    expect(failedPdfRes.status).toBe(502);
+    const failedJson = (await failedPdfRes.json()) as { ok: boolean; error: string };
+    expect(failedJson.ok).toBe(false);
+    expect(failedJson.error).not.toContain("invalid_value");
+    expect(failedJson.error).not.toContain("Browser Run");
   });
 });

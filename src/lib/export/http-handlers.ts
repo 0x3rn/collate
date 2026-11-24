@@ -20,9 +20,11 @@ import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
 import { renderDraftWithCitations } from "@/lib/citations/formatter";
+import { logEvent } from "@/lib/observability/logger";
 import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pdf";
 import { formatProjectType } from "@/lib/ui/formatters";
 import { buildThesisDocx } from "./docx-builder";
+import { resolveExportFiguresForChapters } from "./figure-assets";
 import { buildThesisPdfTwoPass } from "./pdf-assembler";
 import { signExportDownloadParams, verifyExportDownloadParams } from "./signed-urls";
 import type { ExportChapterContent, ThesisExportDocument } from "./templates";
@@ -234,6 +236,10 @@ export async function handleCreateExport(
     }
   }
 
+  const resolvedFigures = await resolveExportFiguresForChapters(exportChapters, {
+    fetchFn: deps.fetchFn,
+  });
+
   const thesisDoc: ThesisExportDocument = {
     projectTitle: wizard.project.title,
     workTypeLabel: formatProjectType(wizard.project.type),
@@ -250,6 +256,7 @@ export async function handleCreateExport(
     },
     chapters: exportChapters,
     bibliographyEntries: combinedCitations.bibliography.map((b) => b.formatted),
+    resolvedFigures,
   };
 
   const includeFrontMatter = scope === "full";
@@ -257,36 +264,74 @@ export async function handleCreateExport(
   let pageCount: number;
   let contentType: string;
 
-  if (format === "pdf") {
-    const rendered = await buildThesisPdfTwoPass(thesisDoc, deps.browser!, {
-      includeFrontMatter,
-      includeReferences: true,
+  try {
+    if (format === "pdf") {
+      const rendered = await buildThesisPdfTwoPass(thesisDoc, deps.browser!, {
+        includeFrontMatter,
+        includeReferences: true,
+      });
+      bytes = rendered.pdfBytes;
+      pageCount = rendered.totalPageCount;
+      contentType = "application/pdf";
+    } else {
+      bytes = await buildThesisDocx(thesisDoc, {
+        includeFrontMatter,
+        includeReferences: true,
+      });
+      pageCount = Math.max(1, exportChapters.length * 2);
+      contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    }
+  } catch (err) {
+    logEvent("error", "export.build_failed", {
+      projectId,
+      data: {
+        scope,
+        format,
+        chapterId: chapterId ?? null,
+        error: err instanceof Error ? err.message : String(err),
+      },
     });
-    bytes = rendered.pdfBytes;
-    pageCount = rendered.totalPageCount;
-    contentType = "application/pdf";
-  } else {
-    bytes = await buildThesisDocx(thesisDoc, {
-      includeFrontMatter,
-      includeReferences: true,
-    });
-    pageCount = Math.max(1, exportChapters.length * 2);
-    contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    return jsonNoStore(
+      {
+        ok: false,
+        error: "We couldn't generate your document right now. Please try again in a moment.",
+      },
+      502
+    );
   }
 
   const exportId = `exp_${crypto.randomUUID()}`;
   const r2Key = `exports/${projectId}/${exportId}.${format}`;
   const sha256 = await sha256Hex(bytes);
 
-  await deps.bucket.put(r2Key, bytes, {
-    httpMetadata: { contentType },
-    customMetadata: {
+  try {
+    await deps.bucket.put(r2Key, bytes, {
+      httpMetadata: { contentType },
+      customMetadata: {
+        projectId,
+        scope,
+        format,
+        sha256,
+      },
+    });
+  } catch (err) {
+    logEvent("error", "export.storage_failed", {
       projectId,
-      scope,
-      format,
-      sha256,
-    },
-  });
+      data: {
+        exportId,
+        scope,
+        format,
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
+    return jsonNoStore(
+      {
+        ok: false,
+        error: "We couldn't save your export file right now. Please try again in a moment.",
+      },
+      502
+    );
+  }
 
   await deps.db.insert(exportsTable).values({
     id: exportId,
