@@ -11,9 +11,9 @@ import {
 } from "@/db/queries/dashboard";
 import {
   formatCitationStyle,
-  formatProjectStatus,
   formatProjectType,
   formatShortDate,
+  resolveProjectDisplayStatus,
 } from "@/lib/ui/formatters";
 
 type OverviewTab = "recent" | "attention";
@@ -147,7 +147,7 @@ export function OverviewLedgerClient({
         ) : (
           <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
             {recentProjects.map((project, index) => {
-              const status = formatProjectStatus(project.status);
+              const status = resolveProjectDisplayStatus(project);
               const inSetup = SETUP_PROJECT_STATUSES.has(project.status);
               const doneChapters = project.chaptersApproved + project.chaptersReady;
               const progressPct = inSetup

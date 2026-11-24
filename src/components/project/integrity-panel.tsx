@@ -40,11 +40,17 @@ export function IntegrityPanel({
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <a
-            href={`/api/projects/${projectId}/integrity?format=txt`}
+            href={`/api/projects/${projectId}/integrity?format=pdf`}
             className="inline-flex items-center justify-center gap-1.5 min-h-[40px] px-3.5 py-2 text-sm font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] whitespace-nowrap transition-colors"
           >
             <DownloadIcon className="w-4 h-4 text-[var(--accent-600)]" />
-            <span>Writing log (.txt)</span>
+            <span>Writing log (.pdf)</span>
+          </a>
+          <a
+            href={`/api/projects/${projectId}/integrity?format=txt`}
+            className="inline-flex items-center justify-center min-h-[40px] px-3 py-2 text-xs font-medium bg-[var(--neutral-50)] text-[var(--neutral-700)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] hover:text-[var(--neutral-900)] whitespace-nowrap transition-colors"
+          >
+            Text (.txt)
           </a>
           <a
             href={`/api/projects/${projectId}/integrity?format=md`}
@@ -55,15 +61,20 @@ export function IntegrityPanel({
         </div>
       </div>
 
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <label
-            htmlFor="ai-disclosure-box"
-            className="text-sm font-medium text-[var(--neutral-800)]"
-          >
-            Editable AI-use disclosure statement
-          </label>
-          <Button type="button" variant="secondary" onClick={handleCopy}>
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-0.5 min-w-0">
+            <label
+              htmlFor="ai-disclosure-box"
+              className="block text-sm font-medium text-[var(--neutral-800)] leading-snug"
+            >
+              Editable AI-use disclosure statement
+            </label>
+            <p className="text-xs text-[var(--neutral-500)] leading-snug m-0">
+              Optional — only use if your institution requires an AI-use disclosure.
+            </p>
+          </div>
+          <Button type="button" variant="secondary" onClick={handleCopy} className="shrink-0">
             {copied ? "Copied" : "Copy statement"}
           </Button>
         </div>

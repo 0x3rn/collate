@@ -13,9 +13,9 @@ import {
 import type { ProjectType } from "@/db/schema";
 import {
   formatCitationStyle,
-  formatProjectStatus,
   formatProjectType,
   formatShortDate,
+  resolveProjectDisplayStatus,
 } from "@/lib/ui/formatters";
 
 type TabFilter = "all" | ProjectLifecycleTab;
@@ -206,7 +206,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
 
           <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
             {filtered.map((project) => {
-              const status = formatProjectStatus(project.status);
+              const status = resolveProjectDisplayStatus(project);
               const inSetup = SETUP_PROJECT_STATUSES.has(project.status);
               const completedChapters = project.chaptersApproved + project.chaptersReady;
               const progressPct = inSetup
@@ -275,11 +275,9 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                       <div className="h-1.5 w-full rounded-full bg-[var(--neutral-100)] overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-300 ${
-                            project.status === "completed"
+                            status.tone === "success"
                               ? "bg-[var(--success-text)]"
-                              : project.chaptersNeedsAttention > 0 ||
-                                  project.status === "needs_refinement" ||
-                                  project.status === "not_feasible"
+                              : status.tone === "warning" || status.tone === "error"
                                 ? "bg-[var(--warning-text)]"
                                 : "bg-[var(--accent-600)]"
                           }`}

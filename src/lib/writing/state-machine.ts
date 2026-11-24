@@ -32,6 +32,15 @@ export interface StartChapterCheck {
   reason?: string;
 }
 
+const READABLE_CHAPTER_STATUS: Record<ChapterStatus, string> = {
+  not_started: "Not started",
+  queued: "Queued",
+  writing: "Writing",
+  ready: "Ready for Review",
+  approved: "Approved",
+  needs_attention: "Needs Attention",
+};
+
 export function canStartChapter(
   allChapters: ChapterGateSummary[],
   targetNumber: number
@@ -46,8 +55,7 @@ export function canStartChapter(
   if (target.isAutoReferences) {
     return {
       allowed: false,
-      reason:
-        "The References chapter is generated automatically by the citation engine, not written by the LLM.",
+      reason: "The References chapter is built automatically from your verified citations.",
     };
   }
 
@@ -63,7 +71,7 @@ export function canStartChapter(
     if (prev.status !== "ready" && prev.status !== "approved") {
       return {
         allowed: false,
-        reason: `Finish Chapter ${prev.number} ("${prev.title}") before starting Chapter ${targetNumber}. Current status: ${prev.status}.`,
+        reason: `Finish Chapter ${prev.number} ("${prev.title}") before starting Chapter ${targetNumber}. Current status: ${READABLE_CHAPTER_STATUS[prev.status]}.`,
       };
     }
   }

@@ -7,7 +7,7 @@ import {
 } from "@/config/pricing";
 import { WRITING_CONFIG } from "@/config/writing";
 import { getProjectForUser } from "@/db/queries/projects";
-import { chapters, projectDatasets, projectSettings, questions } from "@/db/schema";
+import { chapters, projectDatasets, projects, projectSettings, questions } from "@/db/schema";
 import {
   extractClientIp,
   isAllowedOrigin,
@@ -76,6 +76,16 @@ async function authenticateAndLoadProject(
   return { ok: true, session, project };
 }
 
+const StartChapterBodySchema = z
+  .object({
+    details: z
+      .string()
+      .trim()
+      .max(2000, "Keep additional details under 2000 characters.")
+      .optional(),
+  })
+  .optional();
+
 export async function handleStartChapter(
   request: Request,
   projectId: string,
@@ -84,6 +94,29 @@ export async function handleStartChapter(
 ): Promise<Response> {
   const auth = await authenticateAndLoadProject(request, projectId, deps, true);
   if (!auth.ok) return auth.error;
+
+  let providedDetails: string | undefined;
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      const rawText = await request.text();
+      if (rawText.trim()) {
+        const parsedBody = StartChapterBodySchema.safeParse(JSON.parse(rawText));
+        if (!parsedBody.success) {
+          return jsonNoStore(
+            {
+              ok: false,
+              error: parsedBody.error.issues[0]?.message ?? "Invalid details provided.",
+            },
+            400
+          );
+        }
+        providedDetails = parsedBody.data?.details?.trim() || undefined;
+      }
+    } catch {
+      return jsonNoStore({ ok: false, error: "Invalid JSON request body." }, 400);
+    }
+  }
 
   const allChapters = await deps.db
     .select()
@@ -194,6 +227,7 @@ export async function handleStartChapter(
           chapterId: target.id,
           reservationId,
           createdBy: "ai",
+          ...(providedDetails ? { revisionNotes: providedDetails } : {}),
           spendCapUsd: WRITING_CONFIG.limits.perChapterSpendCapUsd,
         },
       });
@@ -270,6 +304,18 @@ export async function handleApproveChapter(
     .update(chapters)
     .set({ status: "approved", updatedAt: now })
     .where(eq(chapters.id, target.id));
+
+  const projectChapters = await deps.db
+    .select({ status: chapters.status, isAutoReferences: chapters.isAutoReferences })
+    .from(chapters)
+    .where(eq(chapters.projectId, auth.project.id));
+  const contentChapters = projectChapters.filter((c) => !c.isAutoReferences);
+  if (contentChapters.length > 0 && contentChapters.every((c) => c.status === "approved")) {
+    await deps.db
+      .update(projects)
+      .set({ status: "completed", updatedAt: now })
+      .where(eq(projects.id, auth.project.id));
+  }
 
   return jsonNoStore({ ok: true, chapterId: target.id, status: "approved" }, 200);
 }

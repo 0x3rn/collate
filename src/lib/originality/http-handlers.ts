@@ -6,6 +6,7 @@ import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { getSessionFromToken } from "@/lib/auth/service";
 import {
   buildWritingProcessLog,
+  formatWritingProcessLogPdf,
   formatWritingProcessLogReport,
   generateAiDisclosureStatement,
   sanitizeProcessLogFilename,
@@ -64,6 +65,22 @@ export async function handleGetProjectIntegrity(
   });
 
   const requestedFormat = new URL(request.url).searchParams.get("format")?.trim().toLowerCase();
+  if (requestedFormat === "pdf") {
+    const pdfBytes = await formatWritingProcessLogPdf(processLog, disclosureStatement);
+    const filename = sanitizeProcessLogFilename(project.title, "pdf");
+    const pdfBuffer = new ArrayBuffer(pdfBytes.byteLength);
+    new Uint8Array(pdfBuffer).set(pdfBytes);
+    return new Response(pdfBuffer, {
+      status: 200,
+      headers: {
+        "content-type": "application/pdf",
+        "content-disposition": `attachment; filename="${filename}"`,
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }
+
   if (requestedFormat === "txt" || requestedFormat === "md" || requestedFormat === "markdown") {
     const ext = requestedFormat === "txt" ? "txt" : "md";
     const body = formatWritingProcessLogReport(processLog, disclosureStatement, ext);

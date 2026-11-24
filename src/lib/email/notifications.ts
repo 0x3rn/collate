@@ -95,20 +95,40 @@ export function buildChapterNeedsAttentionEmail(params: {
   chapterTitle: string;
   projectUrl: string;
   reason: string;
+  kind?: "technical_error" | "user_input_required";
 }): Omit<EmailMessage, "to"> {
   const safeName = params.name.trim() || "there";
+  const isTechnical = params.kind === "technical_error";
+
+  if (isTechnical) {
+    return {
+      subject: `Chapter ${params.chapterNumber} paused temporarily — ${params.projectTitle}`,
+      text: [
+        `Hi ${safeName},`,
+        "",
+        `Drafting for Chapter ${params.chapterNumber} ("${params.chapterTitle}") in "${params.projectTitle}" paused due to a temporary service issue.`,
+        "",
+        params.reason,
+        "",
+        `Open your project to resume Chapter ${params.chapterNumber}:`,
+        params.projectUrl,
+      ].join("\n"),
+      html: `<p>Hi ${escapeHtml(safeName)},</p><p>Drafting for Chapter ${params.chapterNumber} (<strong>${escapeHtml(params.chapterTitle)}</strong>) in "${escapeHtml(params.projectTitle)}" paused due to a temporary service issue.</p><p>${escapeHtml(params.reason)}</p><p><a href="${escapeHtml(params.projectUrl)}">Open project to resume Chapter ${params.chapterNumber}</a></p>`,
+    };
+  }
+
   return {
-    subject: `Chapter ${params.chapterNumber} needs your attention`,
+    subject: `Chapter ${params.chapterNumber} needs your input — ${params.projectTitle}`,
     text: [
       `Hi ${safeName},`,
       "",
-      `Chapter ${params.chapterNumber} ("${params.chapterTitle}") for "${params.projectTitle}" paused and needs your attention.`,
-      `Reason: ${params.reason}`,
+      `Chapter ${params.chapterNumber} ("${params.chapterTitle}") for "${params.projectTitle}" paused and needs a few details from you before continuing.`,
+      `What is needed: ${params.reason}`,
       "",
-      "All completed section progress has been saved safely. Open your project to review or resume:",
+      "All completed section progress has been saved safely. Open your project to provide details and resume:",
       params.projectUrl,
     ].join("\n"),
-    html: `<p>Hi ${escapeHtml(safeName)},</p><p>Chapter ${params.chapterNumber} (<strong>${escapeHtml(params.chapterTitle)}</strong>) for "${escapeHtml(params.projectTitle)}" paused and needs your attention.</p><p><strong>Reason:</strong> ${escapeHtml(params.reason)}</p><p>All completed progress has been preserved. <a href="${escapeHtml(params.projectUrl)}">Open project</a></p>`,
+    html: `<p>Hi ${escapeHtml(safeName)},</p><p>Chapter ${params.chapterNumber} (<strong>${escapeHtml(params.chapterTitle)}</strong>) for "${escapeHtml(params.projectTitle)}" paused and needs a few details from you before continuing.</p><p><strong>What is needed:</strong> ${escapeHtml(params.reason)}</p><p>All completed progress has been preserved. <a href="${escapeHtml(params.projectUrl)}">Open project to provide details</a></p>`,
   };
 }
 
@@ -179,5 +199,17 @@ export async function dispatchUserNotification(
   }
 
   const result = await mailer.send({ to: user.email, ...params.message });
+  if (!result.ok) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "user_notification_email_failed",
+        userId: user.id,
+        kind: params.kind,
+        provider: result.provider,
+        error: result.error,
+      })
+    );
+  }
   return { sent: result.ok, result };
 }

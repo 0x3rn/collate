@@ -13,6 +13,7 @@ import { loadProjectCitationMap } from "@/db/queries/citations";
 import { chapters, chapterVersions, claims, originalityReports } from "@/db/schema";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
 import type { R2ReadWriteBucket } from "@/lib/export/http-handlers";
+import { loadChapterAttentionMap } from "@/lib/writing/attention";
 import { extractMarkdownHeadings } from "@/lib/writing/chapter-reader-handlers";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +83,11 @@ export default async function ChapterReaderPage({
 
   const chapterClaims = await db.select().from(claims).where(eq(claims.chapterId, chapter.id));
 
+  const attentionMap =
+    chapter.status === "needs_attention"
+      ? await loadChapterAttentionMap(db, [{ id: chapter.id, chapterType: chapter.chapterType }])
+      : new Map();
+
   const initial: ChapterReaderInitialData = {
     projectId: id,
     chapter: {
@@ -90,6 +96,7 @@ export default async function ChapterReaderPage({
       title: chapter.title,
       status: chapter.status,
     },
+    attention: attentionMap.get(chapter.id) ?? null,
     markdown,
     headings: extractMarkdownHeadings(markdown),
     citations: citedKeys.map((key) => {

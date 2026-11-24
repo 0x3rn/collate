@@ -111,6 +111,7 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
             chapterTitle: info.chapterTitle,
             projectUrl: `${appUrl}/projects/${proj.id}`,
             reason: info.reason,
+            kind: info.kind,
           }),
         });
       },
@@ -132,6 +133,7 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
           loadContext: (fn) => step.do("load-assignment-context", fn),
           draftQuestion: (idx, fn) => step.do(`draft-question-${idx}`, fn),
           assembleAndFinalize: (fn) => step.do("assemble-assignment", fn),
+          notifyNeedsAttention: (fn) => step.do("notify-assignment-needs-attention", fn),
         }
       );
     }
@@ -142,6 +144,7 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
         loadContext: (fn) => step.do("load-context", fn),
         draftSection: (idx, fn) => step.do(`draft-section-${idx}`, fn),
         assembleAndFinalize: (fn) => step.do("assemble-and-finalize", fn),
+        notifyNeedsAttention: (fn) => step.do("notify-needs-attention", fn),
       },
       sharedDeps
     );

@@ -798,6 +798,7 @@ describe("Phase 7 — WriteChapterWorkflow (resumability, claim rewriting, 20-cl
 
     expect(attentionEvents).toHaveLength(1);
     expect(attentionEvents[0]?.chapterNumber).toBe(1);
-    expect(attentionEvents[0]?.reason).toContain("Simulated provider crash");
+    expect(attentionEvents[0]?.reason).not.toContain("Simulated provider crash");
+    expect(attentionEvents[0]?.reason.toLowerCase()).toContain("temporary service issue");
   });
 });

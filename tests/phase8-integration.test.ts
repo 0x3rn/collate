@@ -335,6 +335,22 @@ describe("Phase 8 — NN-6 Originality Gate wired into WriteChapterWorkflow & In
     expect(mdBody).toContain("# Writing Process Log");
     expect(mdBody).toContain("## 1. Research and Source Verification History");
 
+    const pdfRes = await handleGetProjectIntegrity(
+      new Request("https://collate.app/api/projects/prj_alice_int/integrity?format=pdf", {
+        headers: { cookie: alice.cookie },
+      }),
+      "prj_alice_int",
+      authDeps
+    );
+    expect(pdfRes.status).toBe(200);
+    expect(pdfRes.headers.get("content-type")).toBe("application/pdf");
+    expect(pdfRes.headers.get("content-disposition")).toContain(
+      "clean-energy-access-writing-log.pdf"
+    );
+    const pdfBytes = new Uint8Array(await pdfRes.arrayBuffer());
+    expect(pdfBytes.byteLength).toBeGreaterThan(500);
+    expect(String.fromCharCode(...pdfBytes.slice(0, 5))).toBe("%PDF-");
+
     const bobRes = await handleGetProjectIntegrity(
       new Request("https://collate.app/api/projects/prj_alice_int/integrity", {
         headers: { cookie: bob.cookie },

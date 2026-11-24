@@ -27,7 +27,7 @@ export const PROJECT_STATUS_DISPLAY: Record<ProjectStatus, StatusDisplay> = {
   not_feasible: { label: "Insufficient evidence", tone: "error" },
   needs_refinement: { label: "Needs refinement", tone: "warning" },
   outline_pending: { label: "Outline review", tone: "info" },
-  in_progress: { label: "Writing chapters", tone: "info" },
+  in_progress: { label: "Writing Chapters", tone: "info" },
   completed: { label: "Completed", tone: "success" },
   archived: { label: "Archived", tone: "neutral" },
 };
@@ -36,9 +36,9 @@ export const CHAPTER_STATUS_DISPLAY: Record<ChapterStatus, StatusDisplay> = {
   not_started: { label: "Not started", tone: "neutral" },
   queued: { label: "Queued", tone: "info" },
   writing: { label: "Writing", tone: "info" },
-  ready: { label: "Ready for review", tone: "info" },
+  ready: { label: "Ready for Review", tone: "info" },
   approved: { label: "Approved", tone: "success" },
-  needs_attention: { label: "Needs your review", tone: "warning" },
+  needs_attention: { label: "Needs Attention", tone: "warning" },
 };
 
 export const CITATION_STYLE_LABELS: Record<CitationStyle, string> = {
@@ -65,6 +65,50 @@ export function formatProjectType(type: ProjectType): string {
 
 export function formatProjectStatus(status: ProjectStatus): StatusDisplay {
   return PROJECT_STATUS_DISPLAY[status];
+}
+
+/**
+ * Resolves the live badge shown for a project using both the project's lifecycle status
+ * and its chapters' real states so paused or review-ready projects never falsely show
+ * "Writing Chapters" or prematurely show "Completed".
+ */
+export function resolveProjectDisplayStatus(input: {
+  status: ProjectStatus;
+  chaptersTotal?: number;
+  chaptersReady?: number;
+  chaptersApproved?: number;
+  chaptersWriting?: number;
+  chaptersNeedsAttention?: number;
+}): StatusDisplay {
+  if (input.status === "archived") {
+    return PROJECT_STATUS_DISPLAY.archived;
+  }
+
+  if ((input.chaptersNeedsAttention ?? 0) > 0) {
+    return { label: "Needs Attention", tone: "warning" };
+  }
+
+  if ((input.chaptersWriting ?? 0) > 0) {
+    return { label: "Writing Chapters", tone: "info" };
+  }
+
+  if ((input.chaptersReady ?? 0) > 0) {
+    return { label: "Ready for Review", tone: "info" };
+  }
+
+  const total = input.chaptersTotal ?? 0;
+  const approved = input.chaptersApproved ?? 0;
+  if (input.status === "completed" || (total > 0 && approved === total)) {
+    return PROJECT_STATUS_DISPLAY.completed;
+  }
+
+  if (input.status === "in_progress") {
+    return approved > 0
+      ? { label: "In Progress", tone: "info" }
+      : { label: "Ready to Draft", tone: "neutral" };
+  }
+
+  return PROJECT_STATUS_DISPLAY[input.status];
 }
 
 export function formatChapterStatus(status: ChapterStatus): StatusDisplay {

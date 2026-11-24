@@ -3,9 +3,9 @@ import { ArrowRightIcon } from "@/components/layout/workspace-icons";
 import { SETUP_PROJECT_STATUSES, type DashboardProjectSummary } from "@/db/queries/dashboard";
 import {
   formatCitationStyle,
-  formatProjectStatus,
   formatProjectType,
   formatShortDate,
+  resolveProjectDisplayStatus,
 } from "@/lib/ui/formatters";
 
 export const STATUS_BADGE_CLASSES = {
@@ -17,7 +17,7 @@ export const STATUS_BADGE_CLASSES = {
 } as const;
 
 export function ProjectCard({ project }: { project: DashboardProjectSummary }) {
-  const status = formatProjectStatus(project.status);
+  const status = resolveProjectDisplayStatus(project);
   const inSetup = SETUP_PROJECT_STATUSES.has(project.status);
 
   const completedChapters = project.chaptersApproved + project.chaptersReady;

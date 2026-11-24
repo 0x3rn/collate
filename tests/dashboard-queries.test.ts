@@ -22,7 +22,9 @@ import {
   formatExportScope,
   formatFileSize,
   getUserInitials,
+  resolveProjectDisplayStatus,
 } from "@/lib/ui/formatters";
+import { buildOriginalityAttention } from "@/lib/writing/attention";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
 
 describe("Dashboard data queries, isolation, and UI formatters", () => {
@@ -338,12 +340,12 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
       freeSweepsRemaining: 2,
     });
 
-    // Spotlight picks most recently updated active project
+    // Spotlight picks most recently updated active project; paused chapter links to project overview with Resume CTA
     expect(overview.spotlightProject?.id).toBe("prj_active");
     expect(overview.spotlightProject?.citationStyle).toBe("harvard");
     expect(overview.spotlightProject?.nextAction).toEqual({
-      href: "/projects/prj_active/chapters/ch_3",
-      label: "Review Chapter 3",
+      href: "/projects/prj_active",
+      label: "Resume Chapter 3",
     });
 
     // Attention priority: needs_attention (1) -> ready (2) -> needs_refinement (3), zero Bob items
@@ -390,6 +392,60 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
         chapters: [{ id: "c1", number: 1, status: "ready", isAutoReferences: false }],
       })
     ).toEqual({ href: "/projects/p1/chapters/c1", label: "Review assignment" });
+
+    expect(
+      deriveProjectNextAction({
+        id: "p2",
+        type: "project",
+        status: "in_progress",
+        wizardStep: 8,
+        chapters: [{ id: "c2", number: 2, status: "needs_attention", isAutoReferences: false }],
+        attentionByChapterId: new Map([["c2", buildOriginalityAttention({ overlapScore: 19 })]]),
+      })
+    ).toEqual({ href: "/projects/p2", label: "Provide Details" });
+
+    // Live project badge derivation: Needs Attention > Writing Chapters > Ready for Review > Completed
+    expect(
+      resolveProjectDisplayStatus({
+        status: "in_progress",
+        chaptersTotal: 5,
+        chaptersNeedsAttention: 1,
+        chaptersWriting: 0,
+      })
+    ).toEqual({ label: "Needs Attention", tone: "warning" });
+    expect(
+      resolveProjectDisplayStatus({
+        status: "in_progress",
+        chaptersTotal: 5,
+        chaptersWriting: 1,
+      })
+    ).toEqual({ label: "Writing Chapters", tone: "info" });
+    expect(
+      resolveProjectDisplayStatus({
+        status: "completed",
+        chaptersTotal: 5,
+        chaptersReady: 1,
+        chaptersApproved: 4,
+      })
+    ).toEqual({ label: "Ready for Review", tone: "info" });
+    expect(
+      resolveProjectDisplayStatus({
+        status: "completed",
+        chaptersTotal: 5,
+        chaptersReady: 0,
+        chaptersApproved: 5,
+      })
+    ).toEqual({ label: "Completed", tone: "success" });
+    expect(
+      resolveProjectDisplayStatus({
+        status: "in_progress",
+        chaptersTotal: 5,
+        chaptersReady: 0,
+        chaptersApproved: 0,
+        chaptersWriting: 0,
+        chaptersNeedsAttention: 0,
+      })
+    ).toEqual({ label: "Ready to Draft", tone: "neutral" });
 
     expect(formatCreditLedgerType("sweep_fee")).toBe("Topic source check");
     expect(formatCreditLedgerType("refund")).toBe("Automatic refund");

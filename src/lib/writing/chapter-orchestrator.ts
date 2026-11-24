@@ -38,6 +38,12 @@ import {
   DEFAULT_FRONT_MATTER,
   FrontMatterTogglesSchema,
 } from "@/lib/wizard/schema";
+import {
+  buildOriginalityAttention,
+  classifyChapterRuntimeError,
+  recordChapterNeedsAttentionAudit,
+  type ChapterAttentionKind,
+} from "./attention";
 import { buildLabelledResultsFramework, type DatasetAnalysisResult } from "./results-data";
 import { retrieveEvidencePassages, type RetrievedEvidencePassage } from "./retrieval";
 import {
@@ -114,6 +120,7 @@ export interface WriteChapterSteps {
     fn: () => Promise<SectionStepOutput>
   ): Promise<SectionStepOutput>;
   assembleAndFinalize(fn: () => Promise<FinalizeChapterOutput>): Promise<FinalizeChapterOutput>;
+  notifyNeedsAttention?(fn: () => Promise<void>): Promise<void>;
 }
 
 export interface WriteChapterDeps {
@@ -145,6 +152,7 @@ export interface WriteChapterDeps {
     chapterNumber: number;
     chapterTitle: string;
     reason: string;
+    kind: ChapterAttentionKind;
   }) => Promise<void>;
 }
 
@@ -204,8 +212,21 @@ export async function runWriteChapterOrchestration(
 
       await syncCitationRegistryForProject(deps.db, project.id, now);
       if (deps.citationFetchFn) {
+        // Scope citation checks to sources with extracted passages, trust scholarly API records,
+        // and cap live external HTTP fetches so Cloudflare Free-plan (50 subrequest) budgets
+        // remain intact for LLM drafting, verification, and email notifications.
+        const passageSourceRows = await deps.db
+          .select({ sourceId: sourcePassages.sourceId })
+          .from(sourcePassages)
+          .where(eq(sourcePassages.projectId, project.id));
+        const passageSourceIds = new Set(passageSourceRows.map((p) => p.sourceId));
+
         await verifyProjectCitations(deps.db, project.id, {
           onlyUnverified: true,
+          sourceIds: passageSourceIds.size > 0 ? passageSourceIds : undefined,
+          autoVerifyTrustedConnectors: true,
+          maxExternalChecks: 8,
+          concurrency: 4,
           fetchFn: deps.citationFetchFn,
           contactEmail: deps.contactEmail,
           now,
@@ -865,14 +886,30 @@ export async function runWriteChapterOrchestration(
           pageCount: finalPageCount,
           allChaptersComplete,
         });
-      } else if (finalStatus === "needs_attention" && deps.onNeedsAttention) {
-        await deps.onNeedsAttention({
+      } else if (finalStatus === "needs_attention") {
+        const originalityAttention = buildOriginalityAttention({
+          overlapScore: originalityOutcome.evaluation.overlapScore,
+          quoteSharePct: originalityOutcome.evaluation.quoteSharePct,
+        });
+        await recordChapterNeedsAttentionAudit(deps.db, {
+          userId: context.userId,
           projectId: context.projectId,
           chapterId: context.chapterId,
-          chapterNumber: context.chapterNumber,
-          chapterTitle: context.chapterTitle,
-          reason: `Originality gate flagged similarity above threshold (overlap ${originalityOutcome.evaluation.overlapScore}%, quotes ${originalityOutcome.evaluation.quoteSharePct}%). Review and edit before continuing.`,
+          attention: originalityAttention,
+          internalReason: `Originality gate flagged similarity (overlap ${originalityOutcome.evaluation.overlapScore}%, quotes ${originalityOutcome.evaluation.quoteSharePct}%)`,
+          now,
         });
+
+        if (deps.onNeedsAttention) {
+          await deps.onNeedsAttention({
+            projectId: context.projectId,
+            chapterId: context.chapterId,
+            chapterNumber: context.chapterNumber,
+            chapterTitle: context.chapterTitle,
+            reason: originalityAttention.userMessage,
+            kind: originalityAttention.kind,
+          });
+        }
       }
 
       return {
@@ -888,10 +925,31 @@ export async function runWriteChapterOrchestration(
     });
   } catch (err) {
     const failedAt = nowFn();
+    const { attention, internalReason } = classifyChapterRuntimeError(err);
+
     await deps.db
       .update(chapters)
       .set({ status: "needs_attention", updatedAt: failedAt })
       .where(eq(chapters.id, payload.chapterId));
+
+    const [projRow] = await deps.db
+      .select({ userId: projects.userId })
+      .from(projects)
+      .where(eq(projects.id, payload.projectId))
+      .limit(1);
+
+    try {
+      await recordChapterNeedsAttentionAudit(deps.db, {
+        userId: projRow?.userId ?? null,
+        projectId: payload.projectId,
+        chapterId: payload.chapterId,
+        attention,
+        internalReason,
+        now: failedAt,
+      });
+    } catch {
+      // Preserve original workflow error
+    }
 
     if (payload.reservationId) {
       try {
@@ -907,25 +965,38 @@ export async function runWriteChapterOrchestration(
     }
 
     if (deps.onNeedsAttention) {
-      try {
+      const dispatchNotification = async () => {
         const [chRow] = await deps.db
           .select()
           .from(chapters)
           .where(eq(chapters.id, payload.chapterId))
           .limit(1);
-        const reason =
-          err instanceof Error
-            ? err.message.slice(0, 300)
-            : "Chapter run paused unexpectedly. Completed sections were saved.";
-        await deps.onNeedsAttention({
+        await deps.onNeedsAttention!({
           projectId: payload.projectId,
           chapterId: payload.chapterId,
           chapterNumber: chRow?.number ?? 1,
           chapterTitle: chRow?.title ?? "Chapter",
-          reason,
+          reason: attention.userMessage,
+          kind: attention.kind,
         });
-      } catch {
-        // Never mask the original workflow error with a notification failure
+      };
+
+      try {
+        if (steps.notifyNeedsAttention) {
+          await steps.notifyNeedsAttention(dispatchNotification);
+        } else {
+          await dispatchNotification();
+        }
+      } catch (notifyErr) {
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "needs_attention_notification_error",
+            projectId: payload.projectId,
+            chapterId: payload.chapterId,
+            error: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+          })
+        );
       }
     }
     throw err;
@@ -967,6 +1038,7 @@ export interface WriteAssignmentSteps {
     fn: () => Promise<AssignmentQuestionStepOutput>
   ): Promise<AssignmentQuestionStepOutput>;
   assembleAndFinalize(fn: () => Promise<AssignmentDraftOutput>): Promise<AssignmentDraftOutput>;
+  notifyNeedsAttention?(fn: () => Promise<void>): Promise<void>;
 }
 
 export async function runWriteAssignmentOrchestration(
@@ -1103,8 +1175,21 @@ export async function runWriteAssignmentOrchestration(
 
       await syncCitationRegistryForProject(deps.db, project.id, now);
       if (deps.citationFetchFn) {
+        // Scope citation checks to sources with extracted passages, trust scholarly API records,
+        // and cap live external HTTP fetches so Cloudflare Free-plan (50 subrequest) budgets
+        // remain intact for LLM drafting, verification, and email notifications.
+        const passageSourceRows = await deps.db
+          .select({ sourceId: sourcePassages.sourceId })
+          .from(sourcePassages)
+          .where(eq(sourcePassages.projectId, project.id));
+        const passageSourceIds = new Set(passageSourceRows.map((p) => p.sourceId));
+
         await verifyProjectCitations(deps.db, project.id, {
           onlyUnverified: true,
+          sourceIds: passageSourceIds.size > 0 ? passageSourceIds : undefined,
+          autoVerifyTrustedConnectors: true,
+          maxExternalChecks: 8,
+          concurrency: 4,
           fetchFn: deps.citationFetchFn,
           contactEmail: deps.contactEmail,
           now,
@@ -1448,14 +1533,29 @@ export async function runWriteAssignmentOrchestration(
           pageCount: finalPageCount,
           allChaptersComplete: true,
         });
-      } else if (finalStatus === "needs_attention" && deps.onNeedsAttention) {
-        await deps.onNeedsAttention({
+      } else if (finalStatus === "needs_attention") {
+        const originalityAttention = buildOriginalityAttention({
+          overlapScore: originalityOutcome.evaluation.overlapScore,
+          quoteSharePct: originalityOutcome.evaluation.quoteSharePct,
+        });
+        await recordChapterNeedsAttentionAudit(deps.db, {
+          userId: context.userId,
           projectId: context.projectId,
           chapterId: context.chapterId,
-          chapterNumber: 1,
-          chapterTitle: context.topic,
-          reason: `Originality gate flagged similarity above threshold (overlap ${originalityOutcome.evaluation.overlapScore}%).`,
+          attention: originalityAttention,
+          internalReason: `Assignment originality gate flagged similarity (overlap ${originalityOutcome.evaluation.overlapScore}%)`,
+          now,
         });
+        if (deps.onNeedsAttention) {
+          await deps.onNeedsAttention({
+            projectId: context.projectId,
+            chapterId: context.chapterId,
+            chapterNumber: 1,
+            chapterTitle: context.topic,
+            reason: originalityAttention.userMessage,
+            kind: originalityAttention.kind,
+          });
+        }
       }
 
       return {
@@ -1472,11 +1572,31 @@ export async function runWriteAssignmentOrchestration(
     });
   } catch (err) {
     const failedAt = nowFn();
+    const { attention, internalReason } = classifyChapterRuntimeError(err);
+
     if (trackedChapterId) {
       await deps.db
         .update(chapters)
         .set({ status: "needs_attention", updatedAt: failedAt })
         .where(eq(chapters.id, trackedChapterId));
+
+      try {
+        const [projRow] = await deps.db
+          .select({ userId: projects.userId })
+          .from(projects)
+          .where(eq(projects.id, params.projectId))
+          .limit(1);
+        await recordChapterNeedsAttentionAudit(deps.db, {
+          userId: projRow?.userId ?? null,
+          projectId: params.projectId,
+          chapterId: trackedChapterId,
+          attention,
+          internalReason,
+          now: failedAt,
+        });
+      } catch {
+        // Preserve original error
+      }
     }
     if (params.reservationId) {
       try {
@@ -1491,19 +1611,32 @@ export async function runWriteAssignmentOrchestration(
       }
     }
     if (deps.onNeedsAttention && trackedChapterId) {
-      try {
-        await deps.onNeedsAttention({
+      const dispatchNotification = async () => {
+        await deps.onNeedsAttention!({
           projectId: params.projectId,
           chapterId: trackedChapterId,
           chapterNumber: 1,
           chapterTitle: "Assignment answers",
-          reason:
-            err instanceof Error
-              ? err.message.slice(0, 300)
-              : "Assignment drafting paused unexpectedly.",
+          reason: attention.userMessage,
+          kind: attention.kind,
         });
-      } catch {
-        // Ignore notification errors
+      };
+      try {
+        if (stepRunner.notifyNeedsAttention) {
+          await stepRunner.notifyNeedsAttention(dispatchNotification);
+        } else {
+          await dispatchNotification();
+        }
+      } catch (notifyErr) {
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "needs_attention_notification_error",
+            projectId: params.projectId,
+            chapterId: trackedChapterId,
+            error: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+          })
+        );
       }
     }
     throw err;

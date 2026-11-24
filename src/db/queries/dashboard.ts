@@ -16,6 +16,7 @@ import {
 } from "@/db/schema";
 import { countUserNonFailedSweeps } from "@/lib/billing/ledger";
 import { signExportDownloadParams } from "@/lib/export/signed-urls";
+import { loadChapterAttentionMap, type ChapterAttentionInfo } from "@/lib/writing/attention";
 
 export const SETUP_PROJECT_STATUSES = new Set<ProjectStatus>([
   "draft",
@@ -121,6 +122,7 @@ export function deriveProjectNextAction(params: {
   status: ProjectStatus;
   wizardStep: number;
   chapters: Array<{ id: string; number: number; status: ChapterStatus; isAutoReferences: boolean }>;
+  attentionByChapterId?: Map<string, ChapterAttentionInfo>;
 }): ProjectNextAction {
   const { id, type, status, wizardStep } = params;
 
@@ -140,10 +142,16 @@ export function deriveProjectNextAction(params: {
   const writableChapters = params.chapters.filter((ch) => !ch.isAutoReferences);
   const pausedChapter = writableChapters.find((ch) => ch.status === "needs_attention");
   if (pausedChapter) {
+    const attention = params.attentionByChapterId?.get(pausedChapter.id);
+    if (attention?.kind === "user_input_required") {
+      return {
+        href: `/projects/${id}`,
+        label: "Provide Details",
+      };
+    }
     return {
-      href: `/projects/${id}/chapters/${pausedChapter.id}`,
-      label:
-        type === "assignment" ? "Review paused draft" : `Review Chapter ${pausedChapter.number}`,
+      href: `/projects/${id}`,
+      label: type === "assignment" ? "Resume assignment" : `Resume Chapter ${pausedChapter.number}`,
     };
   }
 
@@ -215,6 +223,7 @@ export async function listEnrichedProjectsForUser(
         projectId: chapters.projectId,
         number: chapters.number,
         title: chapters.title,
+        chapterType: chapters.chapterType,
         status: chapters.status,
         isAutoReferences: chapters.isAutoReferences,
         updatedAt: chapters.updatedAt,
@@ -265,6 +274,11 @@ export async function listEnrichedProjectsForUser(
     exportCountByProject.set(row.projectId, Number(row.count ?? 0));
   }
 
+  const pausedChapterRefs = chapterRows
+    .filter((ch) => !ch.isAutoReferences && ch.status === "needs_attention")
+    .map((ch) => ({ id: ch.id, chapterType: ch.chapterType }));
+  const attentionByChapterId = await loadChapterAttentionMap(db, pausedChapterRefs);
+
   const prioritizedAttention: Array<{
     priority: number;
     sortMs: number;
@@ -288,6 +302,8 @@ export async function listEnrichedProjectsForUser(
 
       if (project.status !== "archived") {
         if (ch.status === "needs_attention") {
+          const att = attentionByChapterId.get(ch.id);
+          const needsUserDetails = att?.kind === "user_input_required";
           prioritizedAttention.push({
             priority: 1,
             sortMs: ch.updatedAt.getTime(),
@@ -300,11 +316,19 @@ export async function listEnrichedProjectsForUser(
               tone: "warning",
               title:
                 project.type === "assignment"
-                  ? "Assignment draft paused"
-                  : `Chapter ${ch.number} needs your review`,
-              detail: ch.title,
-              actionLabel: "Review draft",
-              href: `/projects/${project.id}/chapters/${ch.id}`,
+                  ? needsUserDetails
+                    ? "Assignment needs your details"
+                    : "Assignment paused temporarily"
+                  : needsUserDetails
+                    ? `Chapter ${ch.number} needs your details`
+                    : `Chapter ${ch.number} paused temporarily`,
+              detail: att?.title ? `${ch.title} — ${att.title}` : ch.title,
+              actionLabel: needsUserDetails
+                ? "Provide Details"
+                : project.type === "assignment"
+                  ? "Resume assignment"
+                  : `Resume Chapter ${ch.number}`,
+              href: `/projects/${project.id}`,
               updatedAt: ch.updatedAt.toISOString(),
             },
           });
@@ -400,6 +424,7 @@ export async function listEnrichedProjectsForUser(
         status: project.status,
         wizardStep: project.wizardStep,
         chapters: projectChapters,
+        attentionByChapterId,
       }),
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),

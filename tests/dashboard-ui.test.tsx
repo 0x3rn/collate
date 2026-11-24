@@ -12,12 +12,14 @@ import { QuickStartWorkbench } from "@/components/dashboard/quick-start-workbenc
 import { AppShell } from "@/components/layout/app-shell";
 import { AutoHideScrollbar } from "@/components/layout/auto-hide-scrollbar";
 import { ChapterPipelinePanel } from "@/components/project/chapter-pipeline-panel";
+import { ChapterReaderClient } from "@/components/project/chapter-reader-client";
 import { IntegrityPanel } from "@/components/project/integrity-panel";
 import { Button } from "@/components/ui/button";
 import { LedgerRowsSkeleton } from "@/components/ui/skeleton";
 import type { DashboardProjectSummary, UserExportItem } from "@/db/queries/dashboard";
 import { formatCredits, formatNumber } from "@/lib/ui/formatters";
 import { computeScrollbarMetrics, computeScrollTopFromDrag } from "@/lib/ui/scrollbar";
+import { buildOriginalityAttention, buildTechnicalErrorAttention } from "@/lib/writing/attention";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -310,10 +312,88 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     const integrityHtml = renderToStaticMarkup(
       <IntegrityPanel projectId="prj_001" disclosureStatement="Sample disclosure statement" />
     );
+    expect(integrityHtml).toContain('href="/api/projects/prj_001/integrity?format=pdf"');
     expect(integrityHtml).toContain('href="/api/projects/prj_001/integrity?format=txt"');
     expect(integrityHtml).toContain('href="/api/projects/prj_001/integrity?format=md"');
-    expect(integrityHtml).toContain("Writing log (.txt)");
+    expect(integrityHtml).toContain("Writing log (.pdf)");
+    expect(integrityHtml).toContain("Text (.txt)");
+    expect(integrityHtml).toContain("Markdown (.md)");
+    expect(integrityHtml).toContain(
+      "Optional — only use if your institution requires an AI-use disclosure."
+    );
     expect(integrityHtml).not.toContain("JSON");
+
+    // Capitalized Chapter buttons, Resume Chapter vs Provide Details distinction, and clean reader recovery
+    const attentionPipelineHtml = renderToStaticMarkup(
+      <ChapterPipelinePanel
+        projectId="prj_001"
+        datasets={[]}
+        chapters={[
+          {
+            id: "ch_tech",
+            number: 1,
+            title: "Introduction",
+            chapterType: "introduction",
+            pageBudget: 7,
+            wordBudget: 1925,
+            isAutoReferences: false,
+            status: "needs_attention",
+            sectionHeadings: ["Background"],
+            attention: buildTechnicalErrorAttention(),
+          },
+          {
+            id: "ch_input",
+            number: 2,
+            title: "Literature Review",
+            chapterType: "literature_review",
+            pageBudget: 12,
+            wordBudget: 3300,
+            isAutoReferences: false,
+            status: "needs_attention",
+            sectionHeadings: ["Themes"],
+            attention: buildOriginalityAttention({ overlapScore: 17, quoteSharePct: 3 }),
+          },
+          {
+            id: "ch_next",
+            number: 3,
+            title: "Methodology",
+            chapterType: "methodology",
+            pageBudget: 9,
+            wordBudget: 2475,
+            isAutoReferences: false,
+            status: "not_started",
+            sectionHeadings: [],
+          },
+        ]}
+      />
+    );
+    expect(attentionPipelineHtml).toContain("Resume Chapter 1");
+    expect(attentionPipelineHtml).toContain("Provide Details");
+    expect(attentionPipelineHtml).toContain("Start Chapter 3");
+    expect(attentionPipelineHtml).not.toContain("Start chapter");
+    expect(attentionPipelineHtml).not.toContain("Resume chapter");
+
+    const pausedReaderHtml = renderToStaticMarkup(
+      <ChapterReaderClient
+        initial={{
+          projectId: "prj_001",
+          chapter: { id: "ch_tech", number: 1, title: "Introduction", status: "needs_attention" },
+          attention: buildTechnicalErrorAttention(),
+          markdown: "",
+          headings: [],
+          citations: [],
+          versions: [],
+          verifiedClaimsCount: 0,
+          originalityReport: null,
+        }}
+      />
+    );
+    expect(pausedReaderHtml).toContain("Resume Chapter 1");
+    expect(pausedReaderHtml).toContain("temporary service issue");
+    expect(pausedReaderHtml).not.toContain("Light edit");
+    expect(pausedReaderHtml).not.toContain("@citeKey");
+    expect(pausedReaderHtml).not.toMatch(/\bmetadata\b/i);
+    expect(pausedReaderHtml).toContain("view its verified source details");
   });
 
   it("uses student-friendly Research copy without Workspace and computes auto-hide scrollbar metrics accurately", () => {

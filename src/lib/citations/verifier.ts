@@ -10,6 +10,11 @@ export interface CitationVerificationResult {
   resolvedTitle?: string;
 }
 
+export function isSubrequestLimitError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /too many subrequests/i.test(msg);
+}
+
 export async function verifyDoiRecord(
   rawDoi: string,
   expectedTitle: string,
@@ -134,16 +139,18 @@ export async function verifySourceUrlRecord(
       };
     }
 
+    // Transient throttling, server errors, or anti-bot statuses should remain unverified
+    // rather than permanently rejecting otherwise valid scholarly sources as dead links.
     return {
       valid: false,
-      status: "dead_url",
-      notes: `Source URL returned unexpected HTTP ${response.status}.`,
+      status: "unverified",
+      notes: `Source URL returned transient HTTP ${response.status}.`,
     };
   } catch (err) {
     return {
       valid: false,
-      status: "dead_url",
-      notes: `Could not reach source URL: ${err instanceof Error ? err.message : String(err)}`,
+      status: "unverified",
+      notes: `Could not verify source URL right now: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }

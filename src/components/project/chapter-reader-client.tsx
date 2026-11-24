@@ -3,8 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { FormAlert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 
 export interface ReaderCitationCard {
   citeKey: string;
@@ -33,6 +34,7 @@ export interface ChapterReaderInitialData {
     title: string;
     status: string;
   };
+  attention?: ChapterAttentionInfo | null;
   markdown: string;
   headings: Array<{ id: string; text: string; level: number }>;
   citations: ReaderCitationCard[];
@@ -88,10 +90,38 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
   );
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const citationByKey = new Map(initial.citations.map((c) => [c.citeKey, c]));
+  const hasDraft = markdown.trim().length > 0;
+  const isPausedWithoutDraft = initial.chapter.status === "needs_attention" && !hasDraft;
+
+  async function handleResumeChapter() {
+    setError(null);
+    setNotice(null);
+    setResuming(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${initial.projectId}/chapters/${initial.chapter.id}/start`,
+        { method: "POST" }
+      );
+      const data = (await res.json()) as { ok: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "Could not resume this chapter. Please try again.");
+        return;
+      }
+      setNotice(
+        `Chapter ${initial.chapter.number} queued for drafting. You will receive an email as soon as it is ready to review.`
+      );
+      router.refresh();
+    } catch {
+      setError("Network error while resuming chapter.");
+    } finally {
+      setResuming(false);
+    }
+  }
 
   async function handleSaveEdit() {
     setError(null);
@@ -168,47 +198,113 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      {!isPausedWithoutDraft ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={mode === "read" ? "primary" : "secondary"}
+              disabled={!hasDraft}
+              onClick={() => setMode("read")}
+            >
+              Read Chapter
+            </Button>
+            <Button
+              type="button"
+              variant={mode === "edit" ? "primary" : "secondary"}
+              disabled={!hasDraft}
+              onClick={() => setMode("edit")}
+            >
+              Light edit
+            </Button>
+          </div>
+
           <Button
             type="button"
-            variant={mode === "read" ? "primary" : "secondary"}
-            onClick={() => setMode("read")}
+            variant="secondary"
+            disabled={!hasDraft}
+            loading={exporting}
+            loadingLabel="Building PDF..."
+            onClick={handleDownloadPdf}
           >
-            Read chapter
-          </Button>
-          <Button
-            type="button"
-            variant={mode === "edit" ? "primary" : "secondary"}
-            onClick={() => setMode("edit")}
-          >
-            Light edit
+            Download Chapter PDF
           </Button>
         </div>
-
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={!markdown.trim()}
-          loading={exporting}
-          loadingLabel="Building PDF..."
-          onClick={handleDownloadPdf}
-        >
-          Download chapter PDF
-        </Button>
-      </div>
+      ) : null}
 
       {error ? <FormAlert tone="error">{error}</FormAlert> : null}
       {notice ? <FormAlert tone="success">{notice}</FormAlert> : null}
 
+      {initial.chapter.status === "needs_attention" && hasDraft && initial.attention ? (
+        <div className="rounded-[var(--radius-md)] border border-[var(--warning-border)] bg-[var(--warning-bg)] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1 text-sm text-[var(--warning-text)]">
+            <p className="font-semibold m-0">{initial.attention.title}</p>
+            <p className="m-0 leading-relaxed">{initial.attention.userMessage}</p>
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
+            {initial.attention.kind === "user_input_required" ? (
+              <LinkButton href={`/projects/${initial.projectId}`} variant="primary">
+                Provide Details
+              </LinkButton>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                loading={resuming}
+                loadingLabel="Resuming..."
+                onClick={handleResumeChapter}
+              >
+                Resume Chapter {initial.chapter.number}
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Main reader / editor pane */}
         <div className="lg:col-span-8 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-8 space-y-5">
-          {mode === "edit" ? (
+          {isPausedWithoutDraft ? (
+            <div className="space-y-5 py-2">
+              <div className="space-y-2">
+                <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-medium border rounded-[4px] bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]">
+                  Needs Attention
+                </span>
+                <h2 className="text-xl font-medium text-[var(--neutral-900)] m-0">
+                  {initial.attention?.title ?? "Drafting paused temporarily"}
+                </h2>
+                <p className="text-sm text-[var(--neutral-700)] leading-relaxed max-w-[60ch] m-0">
+                  {initial.attention?.userMessage ??
+                    "We ran into a temporary service issue while drafting this chapter. Your saved progress is intact and any reserved credits have been refunded. Please resume to try again."}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                {initial.attention?.kind === "user_input_required" ? (
+                  <LinkButton href={`/projects/${initial.projectId}`} variant="primary">
+                    Provide Details
+                  </LinkButton>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    loading={resuming}
+                    loadingLabel="Resuming..."
+                    onClick={handleResumeChapter}
+                  >
+                    Resume Chapter {initial.chapter.number}
+                  </Button>
+                )}
+                <LinkButton href={`/projects/${initial.projectId}`} variant="secondary">
+                  Back to project
+                </LinkButton>
+              </div>
+            </div>
+          ) : mode === "edit" ? (
             <div className="space-y-4">
               <p className="text-sm text-[var(--neutral-600)] m-0">
-                Keep existing <code>[@citeKey]</code> markers intact so the citation engine formats
-                your references cleanly. Saving creates a new version and updates project memory.
+                Keep the bracketed citation markers intact so your references format automatically.
+                Saving creates a new version and updates your project notes.
               </p>
               <textarea
                 aria-label="Chapter markdown editor"
@@ -246,10 +342,11 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 </Button>
               </div>
             </div>
-          ) : !markdown.trim() ? (
+          ) : !hasDraft ? (
             <p className="text-sm text-[var(--neutral-600)] m-0">
-              No drafted text is stored for this chapter yet. Start the chapter from the project
-              overview page.
+              {initial.chapter.status === "queued" || initial.chapter.status === "writing"
+                ? "This chapter is currently being drafted. You will receive an email as soon as it is ready to review."
+                : "No drafted text is stored for this chapter yet. Start the chapter from the project overview page."}
             </p>
           ) : (
             <article className="space-y-4 max-w-[68ch]">
@@ -329,7 +426,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
             {inspectedCitation ? (
               <div className="space-y-1 text-sm">
                 <p className="text-xs font-semibold text-[var(--accent-600)] m-0">
-                  @{inspectedCitation.citeKey}
+                  Verified source
                 </p>
                 <p className="font-medium text-[var(--neutral-900)] m-0">
                   {inspectedCitation.title}
@@ -345,9 +442,8 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 ) : null}
               </div>
             ) : (
-              <p className="text-xs text-[var(--neutral-600)] m-0">
-                Hover or click any [@citeKey] badge in the chapter to inspect its verified source
-                metadata.
+              <p className="text-xs text-[var(--neutral-600)] leading-relaxed m-0">
+                Hover over or click any citation in the chapter to view its verified source details.
               </p>
             )}
           </section>

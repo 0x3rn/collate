@@ -301,4 +301,103 @@ describe("Phase 6 — Fake DOI rejection, URL verification, and D1 citation regi
     expect(secondPassCalls).toBe(0);
     expect(secondStats).toEqual({ verified: 0, rejected: 0, unverified: 0 });
   });
+
+  it("keeps transient URL failures as unverified and caps external checks for Cloudflare Free-plan budgets", async () => {
+    const throttled = await verifySourceUrlRecord("https://arxiv.org/abs/2401.00001", {
+      fetchFn: async () => new Response("Rate limited", { status: 429 }),
+    });
+    expect(throttled.status).toBe("unverified");
+
+    const subreqBlocked = await verifySourceUrlRecord("https://arxiv.org/abs/2401.00002", {
+      fetchFn: async () => {
+        throw new Error("Too many subrequests by single Worker invocation");
+      },
+    });
+    expect(subreqBlocked.status).toBe("unverified");
+
+    await db.insert(sources).values([
+      {
+        id: "src_arxiv_1",
+        projectId: "prj_cit",
+        url: "https://arxiv.org/abs/2401.11111",
+        canonicalUrl: "https://arxiv.org/abs/2401.11111",
+        title: "ArXiv Oxidative Stress Study",
+        normalizedTitle: "arxiv oxidative stress study",
+        authorsJson: JSON.stringify(["Chinedu Obi"]),
+        year: 2024,
+        sourceType: "preprint",
+        connectorName: "arxiv",
+        credibilityScore: 80,
+        relevanceScore: 85,
+        retrievedAt: RETRIEVED,
+        createdAt: RETRIEVED,
+      },
+      {
+        id: "src_web_1",
+        projectId: "prj_cit",
+        url: "https://example.org/report-1",
+        canonicalUrl: "https://example.org/report-1",
+        title: "Web Report 1",
+        normalizedTitle: "web report 1",
+        authorsJson: JSON.stringify(["Web Author 1"]),
+        year: 2024,
+        sourceType: "web",
+        connectorName: "tavily",
+        credibilityScore: 60,
+        relevanceScore: 70,
+        retrievedAt: RETRIEVED,
+        createdAt: RETRIEVED,
+      },
+      {
+        id: "src_web_2",
+        projectId: "prj_cit",
+        url: "https://example.org/report-2",
+        canonicalUrl: "https://example.org/report-2",
+        title: "Web Report 2",
+        normalizedTitle: "web report 2",
+        authorsJson: JSON.stringify(["Web Author 2"]),
+        year: 2024,
+        sourceType: "web",
+        connectorName: "brave",
+        credibilityScore: 60,
+        relevanceScore: 70,
+        retrievedAt: RETRIEVED,
+        createdAt: RETRIEVED,
+      },
+      {
+        id: "src_unused_web",
+        projectId: "prj_cit",
+        url: "https://example.org/unused-no-passage",
+        canonicalUrl: "https://example.org/unused-no-passage",
+        title: "Unused Web Page",
+        normalizedTitle: "unused web page",
+        authorsJson: JSON.stringify(["Unused Author"]),
+        year: 2024,
+        sourceType: "web",
+        connectorName: "brave",
+        credibilityScore: 55,
+        relevanceScore: 60,
+        retrievedAt: RETRIEVED,
+        createdAt: RETRIEVED,
+      },
+    ]);
+
+    await syncCitationRegistryForProject(db, "prj_cit", RETRIEVED);
+
+    let liveFetchCount = 0;
+    const stats = await verifyProjectCitations(db, "prj_cit", {
+      sourceIds: ["src_arxiv_1", "src_web_1", "src_web_2"],
+      autoVerifyTrustedConnectors: true,
+      maxExternalChecks: 1,
+      fetchFn: async () => {
+        liveFetchCount++;
+        return new Response("OK", { status: 200 });
+      },
+      now: RETRIEVED,
+    });
+
+    // arXiv auto-verified with 0 HTTP calls; web capped to 1 live HTTP call; remaining 1 left unverified
+    expect(liveFetchCount).toBe(1);
+    expect(stats).toEqual({ verified: 2, rejected: 0, unverified: 1 });
+  });
 });

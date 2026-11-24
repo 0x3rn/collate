@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { env } from "cloudflare:workers";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 import { STATUS_BADGE_CLASSES } from "@/components/dashboard/project-card";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { AssignmentPipelinePanel } from "@/components/project/assignment-pipeline-panel";
@@ -13,17 +13,24 @@ import {
 import { ReviseOutlineButton } from "@/components/wizard/revise-outline-button";
 import { createDb } from "@/db/client";
 import { getProjectOutlineForUser } from "@/db/queries/outline";
-import { citations, originalityReports, projectDatasets, sections } from "@/db/schema";
+import {
+  chapterVersions,
+  citations,
+  originalityReports,
+  projectDatasets,
+  sections,
+} from "@/db/schema";
 import { ExportControls } from "@/components/project/export-controls";
 import { IntegrityPanel } from "@/components/project/integrity-panel";
 import { generateAiDisclosureStatement } from "@/lib/originality/integrity-exports";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
+import { loadChapterAttentionMap } from "@/lib/writing/attention";
 import {
   formatCitationStyle,
   formatNumber,
-  formatProjectStatus,
   formatProjectType,
   formatShortDate,
+  resolveProjectDisplayStatus,
 } from "@/lib/ui/formatters";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +71,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const citationRows = await db.select().from(citations).where(eq(citations.projectId, id));
 
+  const pausedChapters = state.chapters
+    .filter((ch) => !ch.isAutoReferences && ch.status === "needs_attention")
+    .map((ch) => ({ id: ch.id, chapterType: ch.chapterType }));
+  const chapterAttentionMap = await loadChapterAttentionMap(db, pausedChapters);
+
+  const chapterIds = state.chapters.map((c) => c.id);
+  const existingVersionRows =
+    chapterIds.length > 0
+      ? await db
+          .select({ chapterId: chapterVersions.chapterId })
+          .from(chapterVersions)
+          .where(inArray(chapterVersions.chapterId, chapterIds))
+      : [];
+  const chaptersWithDraftVersion = new Set(existingVersionRows.map((v) => v.chapterId));
+
   const chapterPanelItems: ChapterPanelItem[] = [];
   for (const ch of state.chapters) {
     const secRows = await db
@@ -81,6 +103,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       isAutoReferences: ch.isAutoReferences,
       status: ch.status,
       sectionHeadings: secRows.map((s) => s.heading),
+      attention: chapterAttentionMap.get(ch.id) ?? null,
+      hasDraftVersion: chaptersWithDraftVersion.has(ch.id),
       originalityReport: latestReportByChapter.has(ch.id)
         ? {
             passed: latestReportByChapter.get(ch.id)!.passed,
@@ -93,7 +117,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   }
 
   const { project, settings } = state;
-  const statusDisplay = formatProjectStatus(project.status);
+  const writableChapters = state.chapters.filter((ch) => !ch.isAutoReferences);
+  const statusDisplay = resolveProjectDisplayStatus({
+    status: project.status,
+    chaptersTotal: writableChapters.length,
+    chaptersReady: writableChapters.filter((c) => c.status === "ready").length,
+    chaptersApproved: writableChapters.filter((c) => c.status === "approved").length,
+    chaptersWriting: writableChapters.filter((c) => c.status === "queued" || c.status === "writing")
+      .length,
+    chaptersNeedsAttention: writableChapters.filter((c) => c.status === "needs_attention").length,
+  });
 
   return (
     <WorkspaceShell user={user} maxWidthClassName="max-w-[980px]">
