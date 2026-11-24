@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { TokenUsage } from "@/config/ai-models";
+import type { AiTask, TokenUsage } from "@/config/ai-models";
 import { LLMError } from "../errors";
 import {
   isCloudflareAiGatewayEnabled,
@@ -25,6 +25,7 @@ export interface DeepSeekMessageInput {
 }
 
 export interface DeepSeekRequestInput {
+  task?: AiTask;
   system?: string;
   messages: DeepSeekMessageInput[];
   maxTokens: number;
@@ -148,7 +149,7 @@ export function buildDeepSeekRequestBody(
 
   const reasoningEnabled = isDeepSeekReasoningModel(model);
   // DeepSeek counts internal reasoning_content tokens inside max_tokens.
-  // Add 8,192 tokens of thinking headroom so HIGH reasoning never starves visible output.
+  // Keep HIGH reasoning effort with +8,192 headroom so deep reasoning never starves output.
   const effectiveMaxTokens = reasoningEnabled
     ? Math.min(65536, input.maxTokens + DEEPSEEK_THINKING_TOKEN_HEADROOM)
     : input.maxTokens;

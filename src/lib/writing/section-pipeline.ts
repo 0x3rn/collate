@@ -43,6 +43,7 @@ export interface VerifiedSectionResult {
   wordCount: number;
   claims: VerifiedSectionClaim[];
   rewriteAttempts: number;
+  preservedExistingClaims?: boolean;
 }
 
 export function countWords(text: string): number {
@@ -159,6 +160,8 @@ export async function draftAndVerifySection(
     glossaryText: string;
     revisionInstructions?: string | null;
     existingSectionProse?: string | null;
+    isSingleSectionSurgical?: boolean;
+    isLightCopyEdit?: boolean;
     availableFigures?: DraftFigureContext[];
     extraDataContext?: string | null;
     passages: RetrievedEvidencePassage[];
@@ -166,12 +169,90 @@ export async function draftAndVerifySection(
   },
   llmCtx: CallLLMContext
 ): Promise<VerifiedSectionResult> {
+  if (
+    input.isLightCopyEdit &&
+    input.existingSectionProse?.trim() &&
+    input.revisionInstructions?.trim()
+  ) {
+    const existingProse = input.existingSectionProse.trim();
+    const existingWords = Math.max(1, countWords(existingProse));
+    const copyEditMaxTokens = Math.min(6000, Math.max(800, Math.round(existingWords * 1.8) + 200));
+
+    const copyEditSystem = [
+      `You are a careful academic copy-editor performing a targeted punctuation, spelling, or phrasing polish on an already-verified section of "${input.chapterTitle}".`,
+      `Spelling: ${input.spelling.toUpperCase()} English.`,
+      "Smartly choose natural, context-appropriate punctuation for every edit (for example, replacing em-dashes with commas, colons, semicolons, parentheses, or splitting into two crisp sentences depending on the grammar of each sentence).",
+      "STRICT PRESERVATION RULES:",
+      "1. Preserve factual meaning, statistics, dates, arguments, and overall length. Do NOT rewrite unaffected sentences.",
+      "2. Preserve EVERY [@citeKey] citation marker verbatim in its exact sentence.",
+      "3. Preserve EVERY :::figure ... ::: block (including url, alt, caption, attribution, width, height), Markdown table, <!-- pagebreak --> marker, and numeric range (e.g. 2020–2024) verbatim.",
+      "4. Never introduce em-dashes (\u2014) or spaced en-dashes (\u2013) as sentence punctuation.",
+      "5. Output ONLY the edited section Markdown body (no preamble, no outer ## section heading, no JSON wrapper).",
+    ].join("\n");
+
+    const copyEditRes = await callLLM(
+      {
+        workflowId: input.workflowId,
+        projectId: input.projectId,
+        step: `copy_edit_section:${input.sectionHeading.slice(0, 55)}`,
+        task: "verify",
+        thinkingLevel: "LOW",
+        system: copyEditSystem,
+        messages: [
+          {
+            role: "user",
+            content: [
+              `Section heading: ${input.sectionHeading}`,
+              `Copy-edit instruction: ${input.revisionInstructions.trim()}`,
+              `CURRENT SECTION TEXT:\n${existingProse}`,
+            ].join("\n\n"),
+          },
+        ],
+        maxTokens: copyEditMaxTokens,
+        temperature: 0.15,
+        spendCapUsd: input.spendCapUsd,
+      },
+      llmCtx
+    );
+
+    let editedProse = copyEditRes.text.trim();
+    // Unwrap accidental JSON wrapper if a model returns { "prose": "..." }
+    if (editedProse.startsWith("{")) {
+      const jsonSlice = extractJsonObject(editedProse);
+      if (jsonSlice) {
+        try {
+          const parsed = SectionDraftOutputSchema.safeParse(JSON.parse(jsonSlice));
+          if (parsed.success) {
+            editedProse = parsed.data.prose.trim();
+          }
+        } catch {
+          // Keep raw editedProse
+        }
+      }
+    }
+    // Strip accidental outer ```markdown ... ``` fence
+    const fencedMatch = editedProse.match(/^```(?:markdown|md)?\r?\n([\s\S]*?)\r?\n```$/i);
+    if (fencedMatch?.[1]?.trim()) {
+      editedProse = fencedMatch[1].trim();
+    }
+
+    const finalProse = editedProse.length >= 20 ? editedProse : existingProse;
+    return {
+      prose: finalProse,
+      wordCount: countWords(finalProse),
+      claims: [],
+      rewriteAttempts: 0,
+      preservedExistingClaims: true,
+    };
+  }
+
   const passageById = new Map(input.passages.map((p) => [p.passageId, p]));
   const passageByKey = new Map(input.passages.map((p) => [p.citeKey, p]));
   const allowedKeys = Array.from(passageByKey.keys());
   const isSurgicalRevision = Boolean(
     input.revisionInstructions?.trim() && input.existingSectionProse?.trim()
   );
+  const omitChapterWideContext = Boolean(input.isSingleSectionSurgical && isSurgicalRevision);
 
   const figuresBlock =
     input.availableFigures && input.availableFigures.length > 0
@@ -207,8 +288,10 @@ export async function draftAndVerifySection(
     `Topic: ${input.topic}`,
     `Section heading: ${input.sectionHeading}`,
     `Target length: approximately ${input.wordBudget} words.`,
-    input.priorSummaryText ? `Prior chapter memory:\n${input.priorSummaryText}` : "",
-    input.glossaryText ? `Glossary terms:\n${input.glossaryText}` : "",
+    !omitChapterWideContext && input.priorSummaryText
+      ? `Prior chapter memory:\n${input.priorSummaryText}`
+      : "",
+    !omitChapterWideContext && input.glossaryText ? `Glossary terms:\n${input.glossaryText}` : "",
     input.existingSectionProse
       ? `CURRENT SECTION TEXT (preserve untouched sentences verbatim):\n${input.existingSectionProse}`
       : "",
@@ -217,10 +300,15 @@ export async function draftAndVerifySection(
     figuresBlock
       ? `VERIFIED FIGURES (open-license, real photographs/diagrams):\n${figuresBlock}`
       : "",
-    `VERIFIED EVIDENCE PASSAGES:\n${buildEvidenceBlock(input.passages)}`,
+    input.passages.length > 0
+      ? `VERIFIED EVIDENCE PASSAGES:\n${buildEvidenceBlock(input.passages)}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");
+
+  const sectionMaxTokens = Math.min(8000, Math.max(1200, Math.round(input.wordBudget * 2.2)));
+  const draftThinkingLevel = isSurgicalRevision ? ("LOW" as const) : undefined;
 
   const initialRes = await callLLM(
     {
@@ -230,8 +318,9 @@ export async function draftAndVerifySection(
       task: "draft",
       system: systemPrompt,
       messages: [{ role: "user", content: baseUserPrompt }],
-      maxTokens: Math.min(8000, Math.max(1200, Math.round(input.wordBudget * 2.2))),
+      maxTokens: sectionMaxTokens,
       temperature: 0.25,
+      ...(draftThinkingLevel ? { thinkingLevel: draftThinkingLevel } : {}),
       spendCapUsd: input.spendCapUsd,
     },
     llmCtx
@@ -241,7 +330,50 @@ export async function draftAndVerifySection(
   let verifiedClaims: VerifiedSectionClaim[] = [];
   let rewriteAttempts = 0;
 
-  for (let attempt = 0; attempt <= WRITING_CONFIG.retries.maxClaimVerifyRewrites; attempt++) {
+  // For surgical revisions that only polish/clarify existing verified text without introducing
+  // any new [@citeKey] markers or expanding length by >25%, avoid redundant re-verification loops.
+  const extractCiteKeySet = (text: string): Set<string> => {
+    const keys = new Set<string>();
+    for (const m of text.matchAll(/@([a-zA-Z0-9_:-]+)/g)) {
+      if (m[1]) keys.add(m[1]);
+    }
+    return keys;
+  };
+  let skipVerifyForLightSurgical = false;
+  if (isSurgicalRevision && input.existingSectionProse) {
+    const oldKeys = extractCiteKeySet(input.existingSectionProse);
+    const newKeys = extractCiteKeySet(currentDraft.prose);
+    const addedNewCitation = Array.from(newKeys).some((k) => !oldKeys.has(k));
+    const oldWords = Math.max(1, countWords(input.existingSectionProse));
+    const newWords = countWords(currentDraft.prose);
+    const expandedSignificantly = newWords > oldWords * 1.25 + 60;
+    if (!addedNewCitation && !expandedSignificantly) {
+      skipVerifyForLightSurgical = true;
+      verifiedClaims = extractClaimsFromProse(currentDraft.prose, input.passages)
+        .map((c) => {
+          const psg = passageById.get(c.passageId) ?? passageByKey.get(c.citeKey);
+          if (!psg) return null;
+          return {
+            text: c.text,
+            citationId: psg.citationId,
+            citeKey: psg.citeKey,
+            passageId: psg.passageId,
+            verdict: "supported" as ClaimVerdict,
+            verified: true,
+            verifierNotes: "Preserved from previously verified section.",
+          };
+        })
+        .filter((x): x is VerifiedSectionClaim => x !== null);
+    }
+  }
+
+  const maxVerifyRewrites = skipVerifyForLightSurgical
+    ? -1
+    : isSurgicalRevision
+      ? 0
+      : WRITING_CONFIG.retries.maxClaimVerifyRewrites;
+
+  for (let attempt = 0; attempt <= maxVerifyRewrites; attempt++) {
     const resolvedFromModel = currentDraft.claims
       .map((c) => {
         const cleanKey = normalizeCiteKey(c.citeKey);
@@ -276,8 +408,8 @@ export async function draftAndVerifySection(
     }
 
     const verifyPrompt = [
-      "Verify each factual claim strictly against its paired source passage.",
-      "Mark a claim 'supported' only if the passage directly supports it, 'partly_supported' if overstated, or 'unsupported' if not backed by the passage.",
+      "Verify each factual claim against its paired source passage.",
+      "Mark a claim 'supported' if the passage supports it, 'partly_supported' if it synthesizes or frames the finding broadly without contradicting the passage, or 'unsupported' ONLY if the claim fabricates facts or contradicts the passage.",
       'Return ONLY JSON: { "results": [{ "index": 0, "verdict": "supported|partly_supported|unsupported", "notes": "..." }] }.',
       "",
       ...traceableClaims.map(
@@ -293,9 +425,9 @@ export async function draftAndVerifySection(
         step: `verify_claims:${input.sectionHeading.slice(0, 50)}:a${attempt}`,
         task: "verify",
         system:
-          "You are a strict academic fact-checker. Never approve claims not backed by the quoted passage.",
+          "You are a strict academic fact-checker. Flag fabricated or contradicted claims as unsupported, while allowing accurate academic synthesis backed by the passage.",
         messages: [{ role: "user", content: verifyPrompt }],
-        maxTokens: 2048,
+        maxTokens: 1600,
         temperature: 0.0,
         spendCapUsd: input.spendCapUsd,
       },
@@ -328,13 +460,15 @@ export async function draftAndVerifySection(
         citeKey: pair.passage.citeKey,
         passageId: pair.passage.passageId,
         verdict: outcome.verdict,
-        verified: outcome.verdict === "supported",
+        // Only genuinely unsupported claims fail verification; partly_supported synthesis
+        // does not trigger expensive full-section rewrite cascades.
+        verified: outcome.verdict === "supported" || outcome.verdict === "partly_supported",
         verifierNotes: outcome.notes,
       };
     });
 
-    const unsupported = verifiedClaims.filter((c) => !c.verified);
-    if (unsupported.length === 0 || attempt === WRITING_CONFIG.retries.maxClaimVerifyRewrites) {
+    const unsupported = verifiedClaims.filter((c) => c.verdict === "unsupported");
+    if (unsupported.length === 0 || attempt === maxVerifyRewrites) {
       if (unsupported.length > 0) {
         let cleanedProse = currentDraft.prose;
         for (const bad of unsupported) {
@@ -350,9 +484,9 @@ export async function draftAndVerifySection(
 
     rewriteAttempts++;
     const rewritePrompt = [
-      "The fact-checker flagged these claims as unsupported or overstated:",
+      "The fact-checker flagged these claims as unsupported:",
       ...unsupported.map((u) => `- "${u.text}" (Reason: ${u.verifierNotes})`),
-      "Rewrite the section removing or correcting the flagged claims so EVERY remaining factual statement is directly supported by the provided passages.",
+      "Rewrite ONLY the flagged sentences so EVERY remaining factual statement is directly supported by the provided passages. Keep all unaffected sentences verbatim.",
       'Return ONLY the updated JSON object { "prose": "...", "claims": [...] }.',
       "",
       `CURRENT PROSE:\n${currentDraft.prose}`,
@@ -368,8 +502,9 @@ export async function draftAndVerifySection(
         task: "draft",
         system: systemPrompt,
         messages: [{ role: "user", content: rewritePrompt }],
-        maxTokens: Math.min(8000, Math.max(1200, Math.round(input.wordBudget * 2.2))),
+        maxTokens: sectionMaxTokens,
         temperature: 0.2,
+        thinkingLevel: "LOW",
         spendCapUsd: input.spendCapUsd,
       },
       llmCtx

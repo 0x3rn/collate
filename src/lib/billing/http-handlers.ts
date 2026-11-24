@@ -10,6 +10,7 @@ import {
   BillingError,
   checkSpendCircuitBreaker,
   grantPaymentCreditsIdempotent,
+  issueAdminBatchCredits,
   issueAdminManualRefund,
   setGlobalCircuitBreaker,
 } from "./ledger";
@@ -534,4 +535,64 @@ export async function handleAdminCircuitBreaker(
   const now = (deps.nowFn ?? (() => new Date()))();
   await setGlobalCircuitBreaker(deps.db, parsed.data.paused, parsed.data.reason, now);
   return jsonNoStore({ ok: true, paused: parsed.data.paused, reason: parsed.data.reason }, 200);
+}
+
+const AdminBatchCreditSchema = z.object({
+  campaignId: z
+    .string()
+    .trim()
+    .min(4, "Campaign ID is required.")
+    .max(80)
+    .regex(/^[a-zA-Z0-9_-]+$/, "Campaign ID must be alphanumeric with dashes or underscores."),
+  credits: z
+    .number()
+    .int()
+    .min(1, "Grant at least 1 credit.")
+    .max(500, "Max 500 credits per grant."),
+  reason: z.string().trim().min(5, "Provide a reason of at least 5 characters.").max(240),
+  mode: z.enum(["all", "random_sample"]).default("all"),
+  cursorUserId: z.string().trim().min(1).max(120).nullable().optional(),
+  batchSize: z.number().int().min(1).max(80).default(50),
+  remainingTargetCount: z.number().int().min(1).max(100_000).optional(),
+});
+
+export async function handleAdminBatchCredit(
+  request: Request,
+  deps: BillingHttpDeps
+): Promise<Response> {
+  const auth = await requireAdminSession(request, deps, true);
+  if (!auth.ok) return auth.error;
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return jsonNoStore({ ok: false, error: "Invalid JSON request body." }, 400);
+  }
+
+  const parsed = AdminBatchCreditSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return jsonNoStore(
+      { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid batch credit payload." },
+      400
+    );
+  }
+
+  const now = (deps.nowFn ?? (() => new Date()))();
+  try {
+    const result = await issueAdminBatchCredits(deps.db, {
+      adminUserId: auth.session.user.id,
+      campaignId: parsed.data.campaignId,
+      credits: parsed.data.credits,
+      reason: parsed.data.reason,
+      mode: parsed.data.mode,
+      cursorUserId: parsed.data.cursorUserId ?? null,
+      batchSize: parsed.data.batchSize,
+      remainingTargetCount: parsed.data.remainingTargetCount,
+      now,
+    });
+    return jsonNoStore({ ok: true, ...result }, 200);
+  } catch {
+    return jsonNoStore({ ok: false, error: "Failed to process batch credit grant." }, 500);
+  }
 }

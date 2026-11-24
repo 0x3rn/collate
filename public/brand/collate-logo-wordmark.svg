@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 114 32" width="114" height="32" fill="none" role="img" aria-label="Collate">
+  <title>Collate</title>
+  <defs>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Newsreader:wght@600&amp;display=swap");
+      .collate-wordmark {
+        font-family: "Newsreader", Georgia, "Times New Roman", serif;
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+      }
+    </style>
+  </defs>
+  <g>
+    <path d="M 26.86 7.6 A 12.8 12.8 0 1 0 26.86 24.4 L 23.92 21.84 A 8.9 8.9 0 1 1 23.92 10.16 Z" fill="#1E3A5F" />
+    <path d="M 24.21 11.47 A 6.9 6.9 0 1 0 24.21 20.53 L 21.64 18.3 A 3.5 3.5 0 1 1 21.64 13.7 Z" fill="#1E3A5F" />
+    <text x="34.5" y="23.6" fill="#1E3A5F" class="collate-wordmark">Collate</text>
+  </g>
+</svg>

@@ -43,9 +43,8 @@ export default async function PrivacyPage() {
 
           <h2 className="text-xl font-medium">2. No model training on your content</h2>
           <p>
-            Your topics, datasets, and drafts are never used to train third-party AI models.
-            Cross-user originality checks store only irreversible one-way shingle hashes, never your
-            raw prose.
+            Your topics, datasets, and drafts are never used to train third-party models. Cross-user
+            originality checks store only irreversible one-way shingle hashes, never your raw prose.
           </p>
 
           <h2 className="text-xl font-medium">3. Self-service data deletion (NDPA / GDPR)</h2>

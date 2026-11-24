@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SignOutButton } from "@/components/auth/sign-out-button";
+import { CollateLogo } from "@/components/brand/collate-logo";
 import { LinkButton } from "@/components/ui/button";
 import type { PublicUser } from "@/lib/auth/service";
 
@@ -9,10 +10,11 @@ export function SiteHeader({ user }: { user: PublicUser | null }) {
       <div className="mx-auto max-w-[1120px] px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         <Link
           href={user ? "/dashboard" : "/"}
-          className="text-xl font-semibold tracking-tight text-[var(--neutral-900)] shrink-0"
+          className="inline-flex items-center gap-2 text-xl font-semibold tracking-tight text-[var(--neutral-900)] shrink-0"
           style={{ fontFamily: "var(--font-serif)" }}
         >
-          Collate
+          <CollateLogo className="w-6 h-6 text-[var(--accent-600)] shrink-0" />
+          <span className="leading-none translate-y-[0.5px]">Collate</span>
         </Link>
 
         {user ? (

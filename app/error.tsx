@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { CollateLogo } from "@/components/brand/collate-logo";
 import { Button } from "@/components/ui/button";
 
 interface ErrorBoundaryProps {
@@ -19,7 +20,10 @@ export default function AppError({ error, reset }: ErrorBoundaryProps) {
         role="alert"
         className="w-full max-w-[480px] bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-8 space-y-4"
       >
-        <p className="text-sm font-medium text-[var(--neutral-500)]">Collate</p>
+        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-700)] m-0">
+          <CollateLogo className="w-4 h-4 text-[var(--accent-600)] shrink-0" />
+          <span style={{ fontFamily: "var(--font-serif)" }}>Collate</span>
+        </p>
         <h1 className="text-2xl font-medium">Something went wrong</h1>
         <p className="text-[var(--neutral-600)] leading-relaxed">
           An unexpected error interrupted this page. Your saved work is unaffected; try loading the

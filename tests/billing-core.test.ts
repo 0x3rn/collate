@@ -1,15 +1,20 @@
+import fs from "node:fs";
+import path from "node:path";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type AppDb } from "@/db/client";
 import { createProjectForUser } from "@/db/queries/projects";
-import { jobsLog, users } from "@/db/schema";
+import { creditLedger, creditReservations, jobsLog, users } from "@/db/schema";
 import {
   captureChapterReservation,
   checkSpendCircuitBreaker,
+  ensurePrematureRefundsReconciled,
   grantPaymentCreditsIdempotent,
   issueAdminManualRefund,
+  reconcilePrematurelyRefundedReservations,
   refundChapterReservation,
   reserveChapterCredits,
+  resetReconciliationIsolateCacheForTests,
   setGlobalCircuitBreaker,
 } from "@/lib/billing/ledger";
 import { computeHmacHex, verifyPaystackWebhook, verifyStripeWebhook } from "@/lib/billing/webhooks";
@@ -258,5 +263,200 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
     await setGlobalCircuitBreaker(db, false, "Fixed upstream provider", now);
     const afterAdminResume = await checkSpendCircuitBreaker(db, new Date(baseMs + 30_000));
     expect(afterAdminResume.allowed).toBe(true);
+  });
+
+  it("self-heals captureChapterReservation after premature DO-reset refund and reconciles completed unbilled runs exactly once", async () => {
+    resetReconciliationIsolateCacheForTests();
+    await db.update(users).set({ creditsBalance: 973 }).where(eq(users.id, "usr_pay"));
+
+    // Seed 3 refunded reservations matching production DO-reset race:
+    // 1) rev_ok (5 credits) -> completed after DO reset (memory_summary_ch2 succeeded)
+    // 2) rev_failed (2 credits) -> genuinely failed on spend cap (must stay refunded!)
+    // 3) crun_ok (7 credits) -> completed after DO reset (memory_summary_ch1 succeeded)
+    const t1 = new Date(now.getTime() + 1000);
+    const t2 = new Date(now.getTime() + 2000);
+    const t3 = new Date(now.getTime() + 3000);
+
+    await db.insert(creditReservations).values([
+      {
+        id: "res_ch2_rev_ok",
+        userId: "usr_pay",
+        projectId: "prj_pay",
+        chapterId: null,
+        idempotencyKey: "revision:rev_ch2_ok",
+        creditsReserved: 5,
+        status: "refunded",
+        createdAt: t1,
+        settledAt: new Date(t1.getTime() + 500),
+      },
+      {
+        id: "res_ch1_rev_fail",
+        userId: "usr_pay",
+        projectId: "prj_pay",
+        chapterId: null,
+        idempotencyKey: "revision:rev_ch1_fail",
+        creditsReserved: 2,
+        status: "refunded",
+        createdAt: t2,
+        settledAt: new Date(t2.getTime() + 500),
+      },
+      {
+        id: "res_ch1_crun_ok",
+        userId: "usr_pay",
+        projectId: "prj_pay",
+        chapterId: null,
+        idempotencyKey: "chapter:crun_ch1_ok",
+        creditsReserved: 7,
+        status: "refunded",
+        createdAt: t3,
+        settledAt: new Date(t3.getTime() + 500),
+      },
+    ]);
+
+    await db.insert(jobsLog).values([
+      {
+        id: "job_mem_ch2",
+        workflowId: "rev_ch2_ok",
+        projectId: "prj_pay",
+        step: "memory_summary_ch2",
+        model: "deepseek-flash",
+        status: "succeeded",
+        tokensIn: 2000,
+        tokensOut: 900,
+        costEstimateUsd: 0.001,
+        createdAt: new Date(t1.getTime() + 1000),
+      },
+      {
+        id: "job_cap_ch1",
+        workflowId: "rev_ch1_fail",
+        projectId: "prj_pay",
+        step: "draft_section:Definition",
+        model: "gemini-4-neon",
+        status: "failed",
+        tokensIn: 0,
+        tokensOut: 0,
+        costEstimateUsd: 0,
+        error: "Workflow rev_ch1_fail reached spend cap ($2.05 >= $2.00)",
+        createdAt: new Date(t2.getTime() + 1000),
+      },
+      {
+        id: "job_mem_ch1",
+        workflowId: "crun_ch1_ok",
+        projectId: "prj_pay",
+        step: "memory_summary_ch1",
+        model: "deepseek-flash",
+        status: "succeeded",
+        tokensIn: 2000,
+        tokensOut: 1000,
+        costEstimateUsd: 0.001,
+        createdAt: new Date(t3.getTime() + 1000),
+      },
+    ]);
+
+    // 1. Runtime reconciliation recaptures 5 + 7 = 12 credits (973 -> 961) and ignores failed run
+    const firstPass = await reconcilePrematurelyRefundedReservations(db, now);
+    expect(firstPass.reconciledCount).toBe(2);
+    expect(firstPass.totalCreditsRecaptured).toBe(12);
+    expect(firstPass.reservationIds).toEqual(["res_ch2_rev_ok", "res_ch1_crun_ok"]);
+
+    const [usrAfter] = await db.select().from(users).where(eq(users.id, "usr_pay"));
+    expect(usrAfter?.creditsBalance).toBe(961);
+
+    const [failedRes] = await db
+      .select()
+      .from(creditReservations)
+      .where(eq(creditReservations.id, "res_ch1_rev_fail"));
+    expect(failedRes?.status).toBe("refunded");
+
+    // 2. Repeating capture or reconciliation is 100% idempotent (never double-deducts!)
+    const repeatCap = await captureChapterReservation(db, "res_ch1_crun_ok", now);
+    expect(repeatCap).toEqual({ status: "captured", recaptured: false });
+    await ensurePrematureRefundsReconciled(db, now);
+    const [usrAfterRepeat] = await db.select().from(users).where(eq(users.id, "usr_pay"));
+    expect(usrAfterRepeat?.creditsBalance).toBe(961);
+  });
+
+  it("SQL migration 0014 reconciles completed refunded runs atomically and stays idempotent with runtime hook", async () => {
+    resetReconciliationIsolateCacheForTests();
+    await db.update(users).set({ creditsBalance: 973 }).where(eq(users.id, "usr_pay"));
+
+    const t1 = new Date(now.getTime() + 1000);
+    const t2 = new Date(now.getTime() + 2000);
+    await db.insert(creditReservations).values([
+      {
+        id: "res_sql_1",
+        userId: "usr_pay",
+        projectId: "prj_pay",
+        chapterId: null,
+        idempotencyKey: "revision:rev_sql_1",
+        creditsReserved: 5,
+        status: "refunded",
+        createdAt: t1,
+        settledAt: new Date(t1.getTime() + 500),
+      },
+      {
+        id: "res_sql_2",
+        userId: "usr_pay",
+        projectId: "prj_pay",
+        chapterId: null,
+        idempotencyKey: "chapter:crun_sql_2",
+        creditsReserved: 7,
+        status: "refunded",
+        createdAt: t2,
+        settledAt: new Date(t2.getTime() + 500),
+      },
+    ]);
+    await db.insert(jobsLog).values([
+      {
+        id: "job_sql_1",
+        workflowId: "rev_sql_1",
+        projectId: "prj_pay",
+        step: "memory_summary_ch2",
+        model: "deepseek-flash",
+        status: "succeeded",
+        tokensIn: 1000,
+        tokensOut: 500,
+        costEstimateUsd: 0.001,
+        createdAt: new Date(t1.getTime() + 1000),
+      },
+      {
+        id: "job_sql_2",
+        workflowId: "crun_sql_2",
+        projectId: "prj_pay",
+        step: "memory_summary_ch1",
+        model: "deepseek-flash",
+        status: "succeeded",
+        tokensIn: 1000,
+        tokensOut: 500,
+        costEstimateUsd: 0.001,
+        createdAt: new Date(t2.getTime() + 1000),
+      },
+    ]);
+
+    const sqlPath = path.resolve(process.cwd(), "drizzle/0014_reconcile_premature_refunds.sql");
+    const rawSql = fs.readFileSync(sqlPath, "utf8");
+    for (const stmt of rawSql.split("--> statement-breakpoint")) {
+      const trimmed = stmt.trim();
+      if (trimmed) {
+        d1Ctx.sqlite.exec(trimmed);
+      }
+    }
+
+    const [usrAfterSql] = await db.select().from(users).where(eq(users.id, "usr_pay"));
+    expect(usrAfterSql?.creditsBalance).toBe(961);
+
+    const ledgerRows = await db
+      .select()
+      .from(creditLedger)
+      .where(eq(creditLedger.userId, "usr_pay"));
+    expect(ledgerRows.map((r) => [r.creditsDelta, r.balanceAfter])).toEqual([
+      [-5, 968],
+      [-7, 961],
+    ]);
+
+    // Running runtime hook after SQL migration must NOT deduct again
+    await ensurePrematureRefundsReconciled(db, now);
+    const [usrAfterHook] = await db.select().from(users).where(eq(users.id, "usr_pay"));
+    expect(usrAfterHook?.creditsBalance).toBe(961);
   });
 });

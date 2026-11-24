@@ -1660,9 +1660,9 @@ export function ChapterRichEditor({
         }
       >
         <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
-          Search for real, openly licensed photographs or scientific diagrams (never AI-generated).
-          Collate automatically preserves natural proportions and adds fine-print attribution
-          underneath the caption.
+          Search for real, openly licensed photographs or scientific diagrams (never synthetic or
+          generated illustrations). Collate automatically preserves natural proportions and adds
+          fine-print attribution underneath the caption.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-2">

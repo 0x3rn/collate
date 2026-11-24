@@ -11,6 +11,7 @@ import { ProjectsDirectoryClient } from "@/components/dashboard/projects-directo
 import { QuickStartWorkbench } from "@/components/dashboard/quick-start-workbench";
 import { AppShell } from "@/components/layout/app-shell";
 import { AutoHideScrollbar } from "@/components/layout/auto-hide-scrollbar";
+import { RouteProgressBar } from "@/components/layout/route-progress-bar";
 import { ChapterPipelinePanel } from "@/components/project/chapter-pipeline-panel";
 import { ChapterReaderClient } from "@/components/project/chapter-reader-client";
 import { ChapterRichEditor } from "@/components/project/chapter-rich-editor";
@@ -21,6 +22,7 @@ import type { DashboardProjectSummary, UserExportItem } from "@/db/queries/dashb
 import type { CslItem } from "@/lib/citations/csl";
 import { buildReaderCitationLabels } from "@/lib/citations/reader-format";
 import { formatCredits, formatNumber } from "@/lib/ui/formatters";
+import { shouldTriggerRouteProgress } from "@/lib/ui/route-progress";
 import { computeScrollbarMetrics, computeScrollTopFromDrag } from "@/lib/ui/scrollbar";
 import { buildOriginalityAttention, buildTechnicalErrorAttention } from "@/lib/writing/attention";
 
@@ -38,6 +40,7 @@ vi.mock("next/link", () => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({
     push: vi.fn(),
     refresh: vi.fn(),
@@ -700,5 +703,44 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
         maxThumbTop: 0,
       })
     ).toBe(0);
+  });
+
+  it("triggers global RouteProgressBar only for in-app page navigations and stays idle on SSR", () => {
+    // Renders cleanly on SSR as empty when idle (no flash on initial page load)
+    expect(renderToStaticMarkup(<RouteProgressBar />)).toBe("");
+
+    const currentHref = "https://collate.app/projects";
+    // Internal page transitions -> true
+    expect(shouldTriggerRouteProgress({ href: "/dashboard", currentHref })).toBe(true);
+    expect(shouldTriggerRouteProgress({ href: "/projects/prj_123", currentHref })).toBe(true);
+    expect(shouldTriggerRouteProgress({ href: "/projects?tab=completed", currentHref })).toBe(true);
+    expect(shouldTriggerRouteProgress({ href: "/admin", target: "_self", currentHref })).toBe(true);
+
+    // Non-navigation or same-page links -> false
+    expect(shouldTriggerRouteProgress({ href: "/projects", currentHref })).toBe(false);
+    expect(shouldTriggerRouteProgress({ href: "/projects#top", currentHref })).toBe(false);
+    expect(shouldTriggerRouteProgress({ href: "#features", currentHref })).toBe(false);
+    expect(
+      shouldTriggerRouteProgress({
+        href: "/api/projects/prj_1/exports/exp_1/download",
+        currentHref,
+      })
+    ).toBe(false);
+    expect(shouldTriggerRouteProgress({ href: "/dashboard", target: "_blank", currentHref })).toBe(
+      false
+    );
+    expect(shouldTriggerRouteProgress({ href: "/dashboard", hasDownload: true, currentHref })).toBe(
+      false
+    );
+    expect(
+      shouldTriggerRouteProgress({ href: "/dashboard", ariaDisabled: "true", currentHref })
+    ).toBe(false);
+    expect(shouldTriggerRouteProgress({ href: "https://doi.org/10.1000/xyz", currentHref })).toBe(
+      false
+    );
+    expect(shouldTriggerRouteProgress({ href: "mailto:help@collate.app", currentHref })).toBe(
+      false
+    );
+    expect(shouldTriggerRouteProgress({ href: "", currentHref })).toBe(false);
   });
 });

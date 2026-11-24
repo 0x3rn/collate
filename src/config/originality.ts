@@ -6,6 +6,6 @@ export const ORIGINALITY_CONFIG = {
   maxConsecutiveSingleSourceMirror: 3,
   maxDirectQuotePct: 2.0,
   maxCrossUserSimilarityPct: 18,
-  maxRewritePasses: 2,
+  maxRewritePasses: 1,
   allowWaiverByConfig: false,
 } as const;

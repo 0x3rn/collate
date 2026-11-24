@@ -15,8 +15,11 @@ import { retrieveEvidencePassages } from "@/lib/writing/retrieval";
 import { analyzeCsvDataset, buildLabelledResultsFramework } from "@/lib/writing/results-data";
 import { draftAndVerifySection, normalizeCiteKey } from "@/lib/writing/section-pipeline";
 import {
+  isEmDashOnlyRequest,
+  isLightStyleCopyEditRequest,
   matchExplicitRevisionTargets,
   parseExistingChapterSections,
+  sectionContainsEmOrSpacedEnDash,
 } from "@/lib/writing/section-revision";
 import {
   assertChapterTransition,
@@ -523,5 +526,45 @@ describe("Phase 7 — Verified Evidence Passage Retrieval & D1 Writing Constrain
         sectionPlan: plan,
       })
     ).toEqual([]);
+  });
+
+  it("classifies light copy-edit vs substantive revision requests and detects em-dashes safely", () => {
+    expect(isEmDashOnlyRequest("Remove em dashes and replace with something else")).toBe(true);
+    expect(isEmDashOnlyRequest("Please eliminate all em-dashes in this chapter.")).toBe(true);
+    expect(isEmDashOnlyRequest("Remove em dashes in section 1.2")).toBe(true);
+    expect(isEmDashOnlyRequest("Remove em dashes and add two new sources")).toBe(false);
+
+    expect(isLightStyleCopyEditRequest("Remove em dashes and replace with something else")).toBe(
+      true
+    );
+    expect(isLightStyleCopyEditRequest("Fix spelling typos and punctuation errors.")).toBe(true);
+    expect(isLightStyleCopyEditRequest("Convert to UK English spelling")).toBe(true);
+    // Substantive requests must NOT take the light copy-edit shortcut
+    expect(isLightStyleCopyEditRequest("Fix punctuation and add a diagram of solar wiring.")).toBe(
+      false
+    );
+    expect(
+      isLightStyleCopyEditRequest("Expand section 1.2 with recent findings and citations.")
+    ).toBe(false);
+
+    // Em-dash detection ignores fenced figure URLs and numeric ranges (2020–2024)
+    expect(
+      sectionContainsEmOrSpacedEnDash(
+        [
+          "Solar clinics achieved 94% uptime during 2020–2024 [@okonkwo2024].",
+          ":::figure",
+          "url: https://upload.wikimedia.org/example—image.jpg",
+          ":::",
+        ].join("\n")
+      )
+    ).toBe(false);
+    expect(
+      sectionContainsEmOrSpacedEnDash(
+        "Rural clinics — particularly off-grid sites — rely on microgrids."
+      )
+    ).toBe(true);
+    expect(
+      sectionContainsEmOrSpacedEnDash("Battery degradation – a persistent risk – raises costs.")
+    ).toBe(true);
   });
 });

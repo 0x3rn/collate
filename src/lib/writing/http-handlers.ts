@@ -7,7 +7,14 @@ import {
 } from "@/config/pricing";
 import { WRITING_CONFIG } from "@/config/writing";
 import { getProjectForUser } from "@/db/queries/projects";
-import { chapters, projectDatasets, projects, projectSettings, questions } from "@/db/schema";
+import {
+  chapters,
+  projectDatasets,
+  projects,
+  projectSettings,
+  questions,
+  sections,
+} from "@/db/schema";
 import {
   extractClientIp,
   isAllowedOrigin,
@@ -29,10 +36,28 @@ import { calculateWordsPerPage } from "@/lib/outline/planner";
 import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { WriteChapterPayload } from "./chapter-orchestrator";
 import { analyzeCsvDataset } from "./results-data";
+import { matchExplicitRevisionTargets } from "./section-revision";
 import { canStartChapter } from "./state-machine";
 
 export interface ChapterWorkflowLauncher {
   create(options: { id?: string; params: WriteChapterPayload }): Promise<{ id: string }>;
+  get?(id: string): Promise<{ status(): Promise<{ status: string }> }>;
+}
+
+const ACTIVE_WORKFLOW_STATUSES = new Set(["queued", "running", "waiting", "waitingForPause"]);
+
+async function isWorkflowInstanceStillActive(
+  launcher: ChapterWorkflowLauncher | undefined,
+  workflowInstanceId: string | null | undefined
+): Promise<boolean> {
+  if (!launcher?.get || !workflowInstanceId) return false;
+  try {
+    const instance = await launcher.get(workflowInstanceId);
+    const info = await instance.status();
+    return ACTIVE_WORKFLOW_STATUSES.has(info.status);
+  } catch {
+    return false;
+  }
 }
 
 export interface ChapterHttpDeps extends HttpAuthDeps {
@@ -131,7 +156,17 @@ export async function handleStartChapter(
     return jsonNoStore({ ok: false, error: "Chapter not found." }, 404);
   }
 
-  if (target.status === "queued" || target.status === "writing") {
+  if (
+    target.status === "queued" ||
+    target.status === "writing" ||
+    (await isWorkflowInstanceStillActive(deps.workflowLauncher, target.workflowInstanceId))
+  ) {
+    if (target.status !== "queued" && target.status !== "writing") {
+      await deps.db
+        .update(chapters)
+        .set({ status: "writing", updatedAt: (deps.nowFn ?? (() => new Date()))() })
+        .where(eq(chapters.id, target.id));
+    }
     return jsonNoStore(
       {
         ok: true,
@@ -413,8 +448,58 @@ export async function handleRequestChapterChanges(
     );
   }
 
+  if (await isWorkflowInstanceStillActive(deps.workflowLauncher, target.workflowInstanceId)) {
+    return jsonNoStore(
+      {
+        ok: false,
+        error:
+          "A run for this chapter is already in progress. Wait for it to finish before requesting changes.",
+      },
+      409
+    );
+  }
+
+  const chapterSections = await deps.db
+    .select({
+      id: sections.id,
+      orderIndex: sections.orderIndex,
+      heading: sections.heading,
+    })
+    .from(sections)
+    .where(eq(sections.chapterId, target.id))
+    .orderBy(asc(sections.orderIndex));
+
+  const explicitTargetHeadings =
+    parsed.data.targetSectionHeadings && parsed.data.targetSectionHeadings.length > 0
+      ? parsed.data.targetSectionHeadings
+      : undefined;
+
+  const matchedSelectedIds = explicitTargetHeadings
+    ? matchExplicitRevisionTargets({
+        chapterNumber: target.number,
+        revisionInstructions: parsed.data.instructions,
+        sectionPlan: chapterSections.map((s) => ({
+          sectionId: s.id,
+          orderIndex: s.orderIndex,
+          heading: s.heading,
+        })),
+        explicitTargetHeadings,
+      })
+    : [];
+
+  const isTargetedSectionRun =
+    chapterSections.length > 1 &&
+    matchedSelectedIds.length > 0 &&
+    matchedSelectedIds.length < chapterSections.length;
+
   const runId = `rev_${crypto.randomUUID()}`;
-  const creditsRequired = estimateRevisionCredits(target.pageBudget);
+  const creditsRequired = estimateRevisionCredits(target.pageBudget, {
+    totalSections: chapterSections.length,
+    selectedSectionsCount: isTargetedSectionRun ? matchedSelectedIds.length : undefined,
+  });
+  const revisionSpendCapUsd = isTargetedSectionRun
+    ? WRITING_CONFIG.limits.sectionRevisionSpendCapUsd
+    : WRITING_CONFIG.limits.maxRevisionSpendCapUsd;
   let reservationId: string;
 
   try {
@@ -424,7 +509,9 @@ export async function handleRequestChapterChanges(
       chapterId: target.id,
       credits: creditsRequired,
       idempotencyKey: `revision:${runId}`,
-      note: `Reserved ${creditsRequired} credits for Chapter ${target.number} revision`,
+      note: isTargetedSectionRun
+        ? `Reserved ${creditsRequired} credit${creditsRequired === 1 ? "" : "s"} for Chapter ${target.number} targeted section revision`
+        : `Reserved ${creditsRequired} credits for Chapter ${target.number} revision`,
       now,
     });
     reservationId = reserved.reservationId;
@@ -436,7 +523,7 @@ export async function handleRequestChapterChanges(
           code: err.code,
           creditsRequired,
           creditsAvailable: err.availableCredits ?? auth.session.user.creditsBalance,
-          error: `Revising Chapter ${target.number} requires ${creditsRequired} credits. Top up your credit balance on Credits & Billing to continue.`,
+          error: `Revising Chapter ${target.number} requires ${creditsRequired} credit${creditsRequired === 1 ? "" : "s"}. Top up your credit balance on Credits & Billing to continue.`,
         },
         err.status
       );
@@ -463,10 +550,8 @@ export async function handleRequestChapterChanges(
           reservationId,
           createdBy: "revision",
           revisionNotes: parsed.data.instructions,
-          ...(parsed.data.targetSectionHeadings && parsed.data.targetSectionHeadings.length > 0
-            ? { targetSectionHeadings: parsed.data.targetSectionHeadings }
-            : {}),
-          spendCapUsd: WRITING_CONFIG.limits.maxRevisionSpendCapUsd,
+          ...(explicitTargetHeadings ? { targetSectionHeadings: explicitTargetHeadings } : {}),
+          spendCapUsd: revisionSpendCapUsd,
         },
       });
       workflowInstanceId = instance.id;

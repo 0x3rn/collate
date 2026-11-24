@@ -66,9 +66,42 @@ export function estimateChapterCredits(pageBudget: number | null | undefined): n
   );
 }
 
-export function estimateRevisionCredits(pageBudget: number | null | undefined): number {
-  const base = estimateChapterCredits(pageBudget);
-  return Math.max(BILLING_POLICY.minCreditsPerChapter, Math.ceil(base * 0.25));
+export interface RevisionCreditOptions {
+  totalSections?: number;
+  selectedSectionsCount?: number;
+}
+
+/**
+ * Computes transparent revision credit costs:
+ * - Auto-detect / whole-chapter revision reserves the chapter's full credit estimate
+ *   because auto-detect may touch every section in the chapter.
+ * - Targeting specific section(s) feeds ONLY those section(s) to the AI and deducts
+ *   a proportional share (strictly less than the full chapter when targeting a subset).
+ */
+export function estimateRevisionCredits(
+  pageBudget: number | null | undefined,
+  options?: RevisionCreditOptions
+): number {
+  const fullChapterCredits = estimateChapterCredits(pageBudget);
+  const totalSections = options?.totalSections ?? 0;
+  const selectedCount = options?.selectedSectionsCount ?? 0;
+
+  if (totalSections > 1 && selectedCount > 0 && selectedCount < totalSections) {
+    const proportional = Math.ceil((fullChapterCredits * selectedCount) / totalSections);
+    return Math.max(1, Math.min(fullChapterCredits - 1, proportional));
+  }
+
+  return fullChapterCredits;
+}
+
+export function estimateSingleSectionRevisionCredits(
+  pageBudget: number | null | undefined,
+  totalSections: number
+): number {
+  return estimateRevisionCredits(pageBudget, {
+    totalSections,
+    selectedSectionsCount: 1,
+  });
 }
 
 export function estimateAssignmentCredits(

@@ -29,6 +29,7 @@ import { calculateWordsPerPage } from "@/lib/outline/planner";
 import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { EmbeddingProvider, VectorStore } from "@/lib/research/embeddings";
 import {
+  evaluateChapterOriginality,
   runOriginalityGateWithRewrite,
   type ExternalPlagiarismProvider,
 } from "@/lib/originality/checker";
@@ -60,8 +61,35 @@ import {
   type DraftFigureContext,
   type MeasurePagesFn,
 } from "./section-pipeline";
-import { parseExistingChapterSections, selectSectionsForRevision } from "./section-revision";
+import {
+  isEmDashOnlyRequest,
+  isLightStyleCopyEditRequest,
+  matchExplicitRevisionTargets,
+  parseExistingChapterSections,
+  sectionContainsEmOrSpacedEnDash,
+  selectSectionsForRevision,
+} from "./section-revision";
 import { isChapterTimedOut } from "./state-machine";
+
+const EXPLICIT_FULL_REWRITE_OR_LENGTH_PATTERN =
+  /\b(redo\s+(?:the\s+)?(?:whole|entire|full)|rewrite\s+(?:the\s+)?(?:whole|entire|full)|start\s+over|expand\s+(?:the\s+)?chapter|make\s+(?:it|this)\s+(?:longer|shorter)|more\s+pages|fewer\s+pages|increase\s+(?:the\s+)?(?:length|pages|word\s+count)|reduce\s+(?:the\s+)?(?:length|pages|word\s+count))\b/i;
+
+export function isExplicitFullChapterRewriteRequest(notes?: string | null): boolean {
+  if (!notes?.trim()) return false;
+  return EXPLICIT_FULL_REWRITE_OR_LENGTH_PATTERN.test(notes);
+}
+
+/**
+ * Identifies transient Cloudflare Workflows infrastructure interruptions (such as a Durable Object
+ * reset during a deployment) where Workflows automatically replays and completes the run.
+ * These must NEVER mark the chapter `needs_attention` or refund credits prematurely.
+ */
+export function isTransientWorkflowResetError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /durable object reset|code was updated|workflowinternalerror|isolate was evicted/i.test(
+    msg
+  );
+}
 
 export const WriteChapterPayloadSchema = z.object({
   mode: z.enum(["chapter", "assignment"]).default("chapter"),
@@ -421,20 +449,40 @@ export async function runWriteChapterOrchestration(
             const parsedSections = parseExistingChapterSections(prevMarkdown, mappedSectionPlan);
             if (Object.keys(parsedSections).length > 0) {
               existingProseBySectionId = parsedSections;
-              targetedSectionIds = await selectSectionsForRevision(
-                {
-                  workflowId: payload.runId,
-                  projectId: project.id,
+              if (isLightStyleCopyEditRequest(payload.revisionNotes)) {
+                const explicitTargets = matchExplicitRevisionTargets({
                   chapterNumber: chapter.number,
-                  chapterTitle: chapter.title,
                   revisionInstructions: payload.revisionNotes,
                   sectionPlan: mappedSectionPlan,
-                  existingProseBySectionId: parsedSections,
                   explicitTargetHeadings: payload.targetSectionHeadings,
-                  spendCapUsd: payload.spendCapUsd,
-                },
-                deps.llmCtx
-              );
+                });
+                const candidateIds =
+                  explicitTargets.length > 0
+                    ? explicitTargets
+                    : mappedSectionPlan.map((s) => s.sectionId);
+                // For em-dash cleanup requests, skip sections that contain zero em-dashes
+                // so clean sections make 0 LLM calls and stay byte-for-byte identical.
+                targetedSectionIds = isEmDashOnlyRequest(payload.revisionNotes)
+                  ? candidateIds.filter((id) =>
+                      sectionContainsEmOrSpacedEnDash(parsedSections[id] ?? "")
+                    )
+                  : candidateIds;
+              } else {
+                targetedSectionIds = await selectSectionsForRevision(
+                  {
+                    workflowId: payload.runId,
+                    projectId: project.id,
+                    chapterNumber: chapter.number,
+                    chapterTitle: chapter.title,
+                    revisionInstructions: payload.revisionNotes,
+                    sectionPlan: mappedSectionPlan,
+                    existingProseBySectionId: parsedSections,
+                    explicitTargetHeadings: payload.targetSectionHeadings,
+                    spendCapUsd: payload.spendCapUsd,
+                  },
+                  deps.llmCtx
+                );
+              }
             }
           }
         }
@@ -618,6 +666,18 @@ export async function runWriteChapterOrchestration(
     const targetedSectionSet = context.targetedSectionIds
       ? new Set(context.targetedSectionIds)
       : null;
+    const isLightCopyEdit = Boolean(
+      payload.createdBy === "revision" &&
+      payload.revisionNotes &&
+      isLightStyleCopyEditRequest(payload.revisionNotes)
+    );
+    const isTargetedSectionRevision = Boolean(
+      payload.createdBy === "revision" &&
+      context.existingProseBySectionId &&
+      context.targetedSectionIds &&
+      context.targetedSectionIds.length > 0 &&
+      context.targetedSectionIds.length < context.sectionPlan.length
+    );
 
     for (let idx = 0; idx < context.sectionPlan.length; idx++) {
       const sec = context.sectionPlan[idx]!;
@@ -694,15 +754,26 @@ export async function runWriteChapterOrchestration(
           .set({ status: "drafting", updatedAt: now })
           .where(eq(sections.id, sec.sectionId));
 
-        const passages = await retrieveEvidencePassages(deps.db, {
-          projectId: context.projectId,
-          queryText: `${context.topic} ${context.chapterTitle} ${sec.heading}`,
-          topK: WRITING_CONFIG.limits.topPassagesPerSection,
-          sourceTypeFilter:
-            context.resultsMode === "public_dataset" ? ["dataset", "institutional"] : undefined,
-          embedder: deps.embedder,
-          vectorStore: deps.vectorStore,
-        });
+        const useLightCopyEditPath = Boolean(isLightCopyEdit && existingSectionProse);
+        const topPassagesForSection = isTargetedSectionRevision
+          ? 4
+          : sec.wordBudget <= 350
+            ? 4
+            : sec.wordBudget <= 800
+              ? 6
+              : WRITING_CONFIG.limits.topPassagesPerSection;
+
+        const passages = useLightCopyEditPath
+          ? []
+          : await retrieveEvidencePassages(deps.db, {
+              projectId: context.projectId,
+              queryText: `${context.topic} ${context.chapterTitle} ${sec.heading}`,
+              topK: topPassagesForSection,
+              sourceTypeFilter:
+                context.resultsMode === "public_dataset" ? ["dataset", "institutional"] : undefined,
+              embedder: deps.embedder,
+              vectorStore: deps.vectorStore,
+            });
 
         const result = await draftAndVerifySection(
           {
@@ -718,28 +789,32 @@ export async function runWriteChapterOrchestration(
             glossaryText: context.glossaryText,
             revisionInstructions: payload.revisionNotes,
             existingSectionProse,
-            availableFigures: context.availableFigures,
-            extraDataContext: context.datasetMarkdown,
+            isSingleSectionSurgical: isTargetedSectionRevision,
+            isLightCopyEdit: useLightCopyEditPath,
+            availableFigures: useLightCopyEditPath ? undefined : context.availableFigures,
+            extraDataContext: useLightCopyEditPath ? null : context.datasetMarkdown,
             passages,
             spendCapUsd: payload.spendCapUsd,
           },
           deps.llmCtx
         );
 
-        await deps.db.delete(claims).where(eq(claims.sectionId, sec.sectionId));
-        for (const clm of result.claims) {
-          await deps.db.insert(claims).values({
-            id: `clm_${crypto.randomUUID()}`,
-            sectionId: sec.sectionId,
-            chapterId: context.chapterId,
-            text: clm.text,
-            citationId: clm.citationId,
-            passageId: clm.passageId,
-            verdict: clm.verdict,
-            verified: clm.verified,
-            verifierNotes: clm.verifierNotes,
-            createdAt: nowFn(),
-          });
+        if (!result.preservedExistingClaims) {
+          await deps.db.delete(claims).where(eq(claims.sectionId, sec.sectionId));
+          for (const clm of result.claims) {
+            await deps.db.insert(claims).values({
+              id: `clm_${crypto.randomUUID()}`,
+              sectionId: sec.sectionId,
+              chapterId: context.chapterId,
+              text: clm.text,
+              citationId: clm.citationId,
+              passageId: clm.passageId,
+              verdict: clm.verdict,
+              verified: clm.verified,
+              verifierNotes: clm.verifierNotes,
+              createdAt: nowFn(),
+            });
+          }
         }
 
         await deps.db
@@ -825,20 +900,36 @@ export async function runWriteChapterOrchestration(
             }
           : defaultMeasurePages;
 
-      const calibrated = await enforceChapterLengthBand(
-        {
-          workflowId: payload.runId,
-          projectId: context.projectId,
-          chapterTitle: context.chapterTitle,
-          assembledMarkdown: rawChapterMarkdown,
-          targetPages: context.targetPages,
-          wordsPerPage: context.wordsPerPage,
-          passages: allPassages,
-          spendCapUsd: payload.spendCapUsd,
-          measurePagesFn: effectiveMeasurePagesFn,
-        },
-        deps.llmCtx
-      );
+      // On ANY revision where the user did not explicitly ask to redo/expand/shorten the whole
+      // chapter, NEVER trigger whole-chapter length calibration or whole-chapter originality
+      // rewrites — focus strictly on what the user asked to change without redoing the chapter.
+      const isFocusedRevision =
+        payload.createdBy === "revision" &&
+        !isExplicitFullChapterRewriteRequest(payload.revisionNotes);
+      const skipWholeChapterLlmPasses =
+        isTargetedSectionRevision || isLightCopyEdit || isFocusedRevision;
+
+      const calibrated = skipWholeChapterLlmPasses
+        ? {
+            markdown: rawChapterMarkdown,
+            wordCount: countWords(rawChapterMarkdown),
+            pageCount: await effectiveMeasurePagesFn(rawChapterMarkdown, context.wordsPerPage),
+            adjustments: 0,
+          }
+        : await enforceChapterLengthBand(
+            {
+              workflowId: payload.runId,
+              projectId: context.projectId,
+              chapterTitle: context.chapterTitle,
+              assembledMarkdown: rawChapterMarkdown,
+              targetPages: context.targetPages,
+              wordsPerPage: context.wordsPerPage,
+              passages: allPassages,
+              spendCapUsd: payload.spendCapUsd,
+              measurePagesFn: effectiveMeasurePagesFn,
+            },
+            deps.llmCtx
+          );
 
       const allProjectPassages = await deps.db
         .select()
@@ -867,23 +958,42 @@ export async function runWriteChapterOrchestration(
         return { chapterVersionId: fp.chapterVersionId, shingleHashes: hashes };
       });
 
-      const originalityOutcome = await runOriginalityGateWithRewrite({
-        workflowId: payload.runId,
-        projectId: context.projectId,
-        chapterTitle: context.chapterTitle,
-        draftMarkdown: calibrated.markdown,
-        sourcePassages: allProjectPassages.map((p) => ({
-          passageId: p.id,
-          sourceId: p.sourceId,
-          text: p.text,
-        })),
-        otherUserFingerprints,
-        embedder: deps.embedder,
-        externalProvider: deps.externalPlagiarismProvider,
-        llmCtx: deps.llmCtx,
-        spendCapUsd: payload.spendCapUsd,
-        waiveGate: deps.waiveOriginalityGate,
-      });
+      // On targeted single-section revisions or focused copy-edit passes, NEVER feed
+      // untouched sections of the whole chapter back into a whole-chapter LLM originality rewrite.
+      const originalityOutcome = skipWholeChapterLlmPasses
+        ? {
+            markdown: calibrated.markdown,
+            evaluation: await evaluateChapterOriginality({
+              draftMarkdown: calibrated.markdown,
+              sourcePassages: allProjectPassages.map((p) => ({
+                passageId: p.id,
+                sourceId: p.sourceId,
+                text: p.text,
+              })),
+              otherUserFingerprints,
+              embedder: deps.embedder,
+              externalProvider: deps.externalPlagiarismProvider,
+              waiveGate: deps.waiveOriginalityGate,
+            }),
+            rewritePasses: 0,
+          }
+        : await runOriginalityGateWithRewrite({
+            workflowId: payload.runId,
+            projectId: context.projectId,
+            chapterTitle: context.chapterTitle,
+            draftMarkdown: calibrated.markdown,
+            sourcePassages: allProjectPassages.map((p) => ({
+              passageId: p.id,
+              sourceId: p.sourceId,
+              text: p.text,
+            })),
+            otherUserFingerprints,
+            embedder: deps.embedder,
+            externalProvider: deps.externalPlagiarismProvider,
+            llmCtx: deps.llmCtx,
+            spendCapUsd: payload.spendCapUsd,
+            waiveGate: deps.waiveOriginalityGate,
+          });
 
       const finalMarkdown = originalityOutcome.markdown;
       const finalWordCount = countWords(finalMarkdown);
@@ -926,64 +1036,66 @@ export async function runWriteChapterOrchestration(
         createdAt: now,
       });
 
-      const memUpdate = await summarizeChapterForMemory(
-        {
-          workflowId: payload.runId,
-          projectId: context.projectId,
-          chapterNumber: context.chapterNumber,
-          chapterTitle: context.chapterTitle,
-          chapterMarkdown: finalMarkdown,
-          spendCapUsd: payload.spendCapUsd,
-        },
-        deps.llmCtx
-      );
+      if (!skipWholeChapterLlmPasses) {
+        const memUpdate = await summarizeChapterForMemory(
+          {
+            workflowId: payload.runId,
+            projectId: context.projectId,
+            chapterNumber: context.chapterNumber,
+            chapterTitle: context.chapterTitle,
+            chapterMarkdown: finalMarkdown,
+            spendCapUsd: payload.spendCapUsd,
+          },
+          deps.llmCtx
+        );
 
-      const [memoryRow] = await deps.db
-        .select()
-        .from(projectMemory)
-        .where(eq(projectMemory.projectId, context.projectId))
-        .limit(1);
+        const [memoryRow] = await deps.db
+          .select()
+          .from(projectMemory)
+          .where(eq(projectMemory.projectId, context.projectId))
+          .limit(1);
 
-      let summaries: Array<{ chapterNumber: number; title: string; summary: string }> = [];
-      let glossary: Array<{ term: string; definition: string }> = [];
-      if (memoryRow) {
-        try {
-          summaries = JSON.parse(memoryRow.chapterSummariesJson) as typeof summaries;
-        } catch {
-          summaries = [];
+        let summaries: Array<{ chapterNumber: number; title: string; summary: string }> = [];
+        let glossary: Array<{ term: string; definition: string }> = [];
+        if (memoryRow) {
+          try {
+            summaries = JSON.parse(memoryRow.chapterSummariesJson) as typeof summaries;
+          } catch {
+            summaries = [];
+          }
+          try {
+            glossary = JSON.parse(memoryRow.glossaryJson) as typeof glossary;
+          } catch {
+            glossary = [];
+          }
         }
-        try {
-          glossary = JSON.parse(memoryRow.glossaryJson) as typeof glossary;
-        } catch {
-          glossary = [];
+
+        const nextSummaries = [
+          ...summaries.filter((s) => s.chapterNumber !== context.chapterNumber),
+          {
+            chapterNumber: context.chapterNumber,
+            title: context.chapterTitle,
+            summary: memUpdate.summary,
+          },
+        ].sort((a, b) => a.chapterNumber - b.chapterNumber);
+
+        const seenTerms = new Set(glossary.map((g) => g.term.toLowerCase()));
+        for (const term of memUpdate.glossaryTerms) {
+          if (!seenTerms.has(term.term.toLowerCase())) {
+            glossary.push(term);
+            seenTerms.add(term.term.toLowerCase());
+          }
         }
+
+        await deps.db
+          .update(projectMemory)
+          .set({
+            chapterSummariesJson: JSON.stringify(nextSummaries),
+            glossaryJson: JSON.stringify(glossary),
+            updatedAt: now,
+          })
+          .where(eq(projectMemory.projectId, context.projectId));
       }
-
-      const nextSummaries = [
-        ...summaries.filter((s) => s.chapterNumber !== context.chapterNumber),
-        {
-          chapterNumber: context.chapterNumber,
-          title: context.chapterTitle,
-          summary: memUpdate.summary,
-        },
-      ].sort((a, b) => a.chapterNumber - b.chapterNumber);
-
-      const seenTerms = new Set(glossary.map((g) => g.term.toLowerCase()));
-      for (const term of memUpdate.glossaryTerms) {
-        if (!seenTerms.has(term.term.toLowerCase())) {
-          glossary.push(term);
-          seenTerms.add(term.term.toLowerCase());
-        }
-      }
-
-      await deps.db
-        .update(projectMemory)
-        .set({
-          chapterSummariesJson: JSON.stringify(nextSummaries),
-          glossaryJson: JSON.stringify(glossary),
-          updatedAt: now,
-        })
-        .where(eq(projectMemory.projectId, context.projectId));
 
       await deps.db.insert(originalityReports).values({
         id: `org_${crypto.randomUUID()}`,
@@ -1110,6 +1222,9 @@ export async function runWriteChapterOrchestration(
       };
     });
   } catch (err) {
+    if (isTransientWorkflowResetError(err)) {
+      throw err;
+    }
     const failedAt = nowFn();
     const { attention, internalReason } = classifyChapterRuntimeError(err);
 
@@ -1758,6 +1873,9 @@ export async function runWriteAssignmentOrchestration(
       };
     });
   } catch (err) {
+    if (isTransientWorkflowResetError(err)) {
+      throw err;
+    }
     const failedAt = nowFn();
     const { attention, internalReason } = classifyChapterRuntimeError(err);
 

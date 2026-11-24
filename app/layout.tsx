@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AutoHideScrollbar } from "@/components/layout/auto-hide-scrollbar";
+import { RouteProgressBar } from "@/components/layout/route-progress-bar";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body className="min-h-screen flex flex-col bg-[var(--neutral-50)] text-[var(--neutral-900)]">
+        <RouteProgressBar />
         <ToastProvider>
           {children}
           <AutoHideScrollbar />

@@ -1,5 +1,7 @@
+import { asc } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type AppDb } from "@/db/client";
+import { users } from "@/db/schema";
 import {
   handleSignIn,
   handleSignUp,
@@ -7,6 +9,7 @@ import {
   type HttpAuthDeps,
 } from "@/lib/auth/http-handlers";
 import {
+  handleAdminBatchCredit,
   handleAdminCircuitBreaker,
   handleAdminManualRefund,
   handleAdminOverview,
@@ -296,5 +299,171 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
       deps
     );
     expect(okPause.status).toBe(200);
+  });
+
+  it("credits all users in cursor-paginated idempotent batches and supports random subsets with admin auth guard", async () => {
+    const admin = await signUpUser("Admin", "ops@collate.app", "quiet stone harbor lantern");
+    const u1 = await signUpUser("Student 1", "s1@uni.edu", "amber paper quiet desk");
+    const u2 = await signUpUser("Student 2", "s2@uni.edu", "silver cedar library oak");
+    const u3 = await signUpUser("Student 3", "s3@uni.edu", "autumn glass ink journal");
+    const u4 = await signUpUser("Student 4", "s4@uni.edu", "winter birch study lamp");
+    const deps: BillingHttpDeps = { ...authDeps, adminEmails: "ops@collate.app" };
+
+    // 1. Unauthenticated -> 401
+    const unauth = await handleAdminBatchCredit(
+      new Request("https://collate.app/api/admin/credit-batch", {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "https://collate.app" },
+        body: JSON.stringify({
+          campaignId: "outage_nov_24",
+          credits: 10,
+          reason: "Outage goodwill credit",
+        }),
+      }),
+      deps
+    );
+    expect(unauth.status).toBe(401);
+
+    // 2. Non-admin -> 403
+    const forbidden = await handleAdminBatchCredit(
+      new Request("https://collate.app/api/admin/credit-batch", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: u1.cookie,
+        },
+        body: JSON.stringify({
+          campaignId: "outage_nov_24",
+          credits: 10,
+          reason: "Outage goodwill credit",
+        }),
+      }),
+      deps
+    );
+    expect(forbidden.status).toBe(403);
+
+    // 3. Invalid payload -> 400
+    const badReq = await handleAdminBatchCredit(
+      new Request("https://collate.app/api/admin/credit-batch", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: admin.cookie,
+        },
+        body: JSON.stringify({
+          campaignId: "bad id!",
+          credits: 0,
+          reason: "x",
+        }),
+      }),
+      deps
+    );
+    expect(badReq.status).toBe(400);
+
+    // 4. Cursor-paginated "all" mode across 5 users with batchSize=2 -> 3 batches (2 + 2 + 1)
+    let cursor: string | null = null;
+    let batches = 0;
+    let totalCredited = 0;
+    for (;;) {
+      const res = await handleAdminBatchCredit(
+        new Request("https://collate.app/api/admin/credit-batch", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "https://collate.app",
+            cookie: admin.cookie,
+          },
+          body: JSON.stringify({
+            campaignId: "outage_nov_24",
+            credits: 12,
+            reason: "Service outage compensation",
+            mode: "all",
+            batchSize: 2,
+            cursorUserId: cursor,
+          }),
+        }),
+        deps
+      );
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as {
+        ok: boolean;
+        creditedInBatch: number;
+        skippedInBatch: number;
+        totalUsers: number;
+        nextCursorUserId: string | null;
+        done: boolean;
+      };
+      expect(data.ok).toBe(true);
+      expect(data.totalUsers).toBe(5);
+      batches += 1;
+      totalCredited += data.creditedInBatch;
+      cursor = data.nextCursorUserId;
+      if (data.done) break;
+    }
+
+    expect(batches).toBe(3);
+    expect(totalCredited).toBe(5);
+
+    const allAfter = await db.select().from(users).orderBy(asc(users.id));
+    expect(allAfter.map((u) => u.creditsBalance)).toEqual([12, 12, 12, 12, 12]);
+
+    // 5. Replaying the exact same campaignId must credit 0 users (100% idempotent)
+    const replayRes = await handleAdminBatchCredit(
+      new Request("https://collate.app/api/admin/credit-batch", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: admin.cookie,
+        },
+        body: JSON.stringify({
+          campaignId: "outage_nov_24",
+          credits: 12,
+          reason: "Duplicate retry",
+          mode: "all",
+          batchSize: 50,
+        }),
+      }),
+      deps
+    );
+    expect(replayRes.status).toBe(200);
+    const replayJson = (await replayRes.json()) as {
+      creditedInBatch: number;
+      skippedInBatch: number;
+    };
+    expect(replayJson.creditedInBatch).toBe(0);
+    expect(replayJson.skippedInBatch).toBe(5);
+
+    // 6. Random subset mode credits exactly 2 distinct random users (+5 each)
+    const sampleRes = await handleAdminBatchCredit(
+      new Request("https://collate.app/api/admin/credit-batch", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: admin.cookie,
+        },
+        body: JSON.stringify({
+          campaignId: "promo_random_2",
+          credits: 5,
+          reason: "Random promotional credit giveaway",
+          mode: "random_sample",
+          batchSize: 50,
+          remainingTargetCount: 2,
+        }),
+      }),
+      deps
+    );
+    expect(sampleRes.status).toBe(200);
+    const sampleJson = (await sampleRes.json()) as { creditedInBatch: number; done: boolean };
+    expect(sampleJson.creditedInBatch).toBe(2);
+    expect(sampleJson.done).toBe(true);
+
+    const allAfterSample = await db.select().from(users);
+    const winners = allAfterSample.filter((u) => u.creditsBalance === 17);
+    expect(winners).toHaveLength(2);
+    expect([u1.userId, u2.userId, u3.userId, u4.userId, admin.userId]).toContain(winners[0]!.id);
   });
 });

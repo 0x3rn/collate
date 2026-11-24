@@ -19,7 +19,10 @@ import {
 import type { CallLLMContext } from "@/lib/ai/call-llm";
 import { reserveChapterCredits } from "@/lib/billing/ledger";
 import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pdf";
-import { runWriteChapterOrchestration } from "@/lib/writing/chapter-orchestrator";
+import {
+  isExplicitFullChapterRewriteRequest,
+  runWriteChapterOrchestration,
+} from "@/lib/writing/chapter-orchestrator";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
 
 describe("Phase 7 — WriteChapterWorkflow (resumability, claim rewriting, 20-claim traceability & NN-4)", () => {
@@ -871,6 +874,7 @@ describe("Phase 7 — WriteChapterWorkflow (resumability, claim rewriting, 20-cl
     });
 
     const draftedSections: string[] = [];
+    const allRequestBodies: string[] = [];
     const llmCtx: CallLLMContext = {
       db,
       env: {
@@ -880,7 +884,9 @@ describe("Phase 7 — WriteChapterWorkflow (resumability, claim rewriting, 20-cl
         APP_ENV: "dev",
       },
       fetchFn: async (_url, init) => {
-        const body = JSON.parse(String(init?.body ?? "{}")) as {
+        const rawBody = String(init?.body ?? "{}");
+        allRequestBodies.push(rawBody);
+        const body = JSON.parse(rawBody) as {
           system?: string;
           messages?: Array<{ content: string }>;
         };
@@ -983,12 +989,315 @@ describe("Phase 7 — WriteChapterWorkflow (resumability, claim rewriting, 20-cl
     );
 
     expect(out.version).toBe(2);
-    // ONLY Section 2 was sent to the LLM — Section 1 was preserved verbatim!
+    // ONLY Section 2 was sent to the LLM — Section 1 was preserved verbatim and NEVER sent to ANY LLM call!
     expect(draftedSections).toEqual(["Statement of the problem"]);
+    expect(allRequestBodies).toHaveLength(1);
+    for (const reqBody of allRequestBodies) {
+      expect(reqBody).not.toContain(untouchedText);
+    }
     const v2Text = r2Map.get(out.contentR2Key) ?? "";
     expect(v2Text).toContain(untouchedText);
     expect(v2Text).toContain(
       "Surgically revised problem statement clarifying diesel downtime in rural clinics."
     );
+  });
+
+  it("runs smart low-cost LLM copy-edit ONLY on sections with em-dashes (Hydrogen LOW +4096), skips clean sections, and preserves claims + figures", async () => {
+    await db.insert(chapters).values({
+      id: "chp_emdash",
+      projectId: "prj_p7",
+      number: 1,
+      title: "Introduction",
+      chapterType: "introduction",
+      pageBudget: 2,
+      wordBudget: 550,
+      isAutoReferences: false,
+      status: "ready",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(sections).values([
+      {
+        id: "sec_em1",
+        chapterId: "chp_emdash",
+        orderIndex: 1,
+        heading: "Background of the study",
+        wordBudget: 275,
+        status: "verified",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "sec_em2",
+        chapterId: "chp_emdash",
+        orderIndex: 2,
+        heading: "Statement of the problem",
+        wordBudget: 275,
+        status: "verified",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    // Pre-existing verified claim on sec_em1 must stay intact after light copy-edit
+    await db.insert(citations).values({
+      id: "cit_em_1",
+      projectId: "prj_p7",
+      sourceId: "src_1",
+      citeKey: "okonkwo2024",
+      cslJson: JSON.stringify({ id: "okonkwo2024", title: "Empirical Study 1" }),
+      verificationStatus: "verified",
+      createdAt: now,
+    });
+
+    await db.insert(claims).values({
+      id: "clm_em1_existing",
+      sectionId: "sec_em1",
+      chapterId: "chp_emdash",
+      text: "Rural clinics rely on solar microgrids.",
+      citationId: "cit_em_1",
+      passageId: "psg_1_0",
+      verdict: "supported",
+      verified: true,
+      verifierNotes: "Verified in initial draft",
+      createdAt: now,
+    });
+
+    const cleanSection2 =
+      "Diesel backup systems remain costly and unreliable for vaccine cold-chain storage during 2020–2024 [@okonkwo2024].";
+
+    const r2Map = new Map<string, string>();
+    const v1Key = "chapters/prj_p7/chp_emdash/v1.md";
+    r2Map.set(
+      v1Key,
+      [
+        "# Chapter 1: Introduction",
+        "",
+        "## 1.1 Background of the study",
+        "",
+        "Rural clinics — particularly off-grid facilities — rely on solar microgrids [@okonkwo2024] — however grid outages persist during 2020–2024.",
+        "",
+        ":::figure",
+        "url: https://upload.wikimedia.org/example—image.jpg",
+        "alt: Clinic solar array",
+        "caption: Solar array installation",
+        "attribution: Wikimedia Commons",
+        "width: 800",
+        "height: 600",
+        ":::",
+        "",
+        "## 1.2 Statement of the problem",
+        "",
+        cleanSection2,
+      ].join("\n")
+    );
+
+    await db.insert(chapterVersions).values({
+      id: "ver_em1",
+      chapterId: "chp_emdash",
+      version: 1,
+      contentR2Key: v1Key,
+      wordCount: 40,
+      pageCount: 1,
+      createdBy: "ai",
+      createdAt: now,
+    });
+
+    const recordedCalls: Array<{
+      url: string;
+      body: Record<string, unknown>;
+    }> = [];
+
+    const smartEditedSec1 = [
+      "Rural clinics (particularly off-grid facilities) rely on solar microgrids [@okonkwo2024]; however, grid outages persist during 2020–2024.",
+      "",
+      ":::figure",
+      "url: https://upload.wikimedia.org/example—image.jpg",
+      "alt: Clinic solar array",
+      "caption: Solar array installation",
+      "attribution: Wikimedia Commons",
+      "width: 800",
+      "height: 600",
+      ":::",
+    ].join("\n");
+
+    const llmCtx: CallLLMContext = {
+      db,
+      env: {
+        GEMINI_API_KEY: "gem-test-key",
+        GOOGLE_CLOUD_PROJECT: "test-gcp-proj",
+        LLM_MODEL_DRAFT: "gemini-4-neon",
+        LLM_MODEL_VERIFY: "gemini-4-hydrogen",
+        APP_ENV: "dev",
+      },
+      fetchFn: async (inputUrl, init) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        recordedCalls.push({ url: String(inputUrl), body });
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: { role: "model", parts: [{ text: smartEditedSec1 }] },
+                finishReason: "STOP",
+              },
+            ],
+            usageMetadata: {
+              promptTokenCount: 180,
+              candidatesTokenCount: 95,
+              thoughtsTokenCount: 120,
+            },
+            modelVersion: "gemini-4-hydrogen",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      },
+    };
+
+    const out = await runWriteChapterOrchestration(
+      {
+        runId: "rev_emdash_1",
+        projectId: "prj_p7",
+        chapterId: "chp_emdash",
+        createdBy: "revision",
+        revisionNotes: "Remove em dashes and replace with something else",
+      },
+      {
+        loadContext: (fn) => fn(),
+        draftSection: (_idx, fn) => fn(),
+        assembleAndFinalize: (fn) => fn(),
+      },
+      {
+        db,
+        bucket: {
+          async put(key, val) {
+            r2Map.set(key, String(val));
+          },
+          async get(key) {
+            const val = r2Map.get(key);
+            return val === undefined
+              ? null
+              : {
+                  async text() {
+                    return val;
+                  },
+                };
+          },
+        },
+        llmCtx,
+        measurePagesFn: async () => 2,
+        waiveOriginalityGate: true,
+        nowFn: () => now,
+      }
+    );
+
+    // Exactly ONE smart copy-edit call (Section 1 only — clean Section 2 skipped with 0 calls!)
+    expect(recordedCalls).toHaveLength(1);
+    expect(recordedCalls[0]!.url).toContain("gemini-4-hydrogen");
+    const genCfg = recordedCalls[0]!.body.generationConfig as {
+      maxOutputTokens: number;
+      thinkingConfig?: { thinkingLevel?: string };
+    };
+    expect(genCfg.thinkingConfig?.thinkingLevel).toBe("LOW");
+    // Base copyEditMaxTokens (>= 800) + GOOGLE_LOW_THINKING_HEADROOM (4096)
+    expect(genCfg.maxOutputTokens).toBe(800 + 4096);
+    // Compact copy-edit prompt never dumps VERIFIED EVIDENCE PASSAGES or untouched Section 2
+    const serializedBody = JSON.stringify(recordedCalls[0]!.body);
+    expect(serializedBody).not.toContain("VERIFIED EVIDENCE PASSAGES");
+    expect(serializedBody).not.toContain(cleanSection2);
+
+    expect(out.version).toBe(2);
+    const v2 = r2Map.get(out.contentR2Key) ?? "";
+    expect(v2).toContain(
+      "Rural clinics (particularly off-grid facilities) rely on solar microgrids [@okonkwo2024]; however, grid outages persist during 2020–2024."
+    );
+    // Clean Section 2 remains byte-for-byte untouched
+    expect(v2).toContain(cleanSection2);
+    // Fenced figure URL remains completely untouched
+    expect(v2).toContain("url: https://upload.wikimedia.org/example—image.jpg");
+
+    // Pre-existing verified claim row in D1 was preserved (not wiped!)
+    const remainingClaims = await db.select().from(claims).where(eq(claims.sectionId, "sec_em1"));
+    expect(remainingClaims).toHaveLength(1);
+    expect(remainingClaims[0]!.id).toBe("clm_em1_existing");
+  });
+
+  it("does not falsely refund credits or mark needs_attention on Cloudflare Durable Object code-update reset", async () => {
+    await db.insert(chapters).values({
+      id: "chp_do_reset",
+      projectId: "prj_p7",
+      number: 1,
+      title: "Introduction",
+      chapterType: "introduction",
+      pageBudget: 7,
+      wordBudget: 1925,
+      isAutoReferences: false,
+      status: "writing",
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(sections).values({
+      id: "sec_do_1",
+      chapterId: "chp_do_reset",
+      orderIndex: 1,
+      heading: "Background of the study",
+      wordBudget: 500,
+      status: "not_started",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const reserved = await reserveChapterCredits(db, {
+      userId: "usr_p7",
+      projectId: "prj_p7",
+      chapterId: "chp_do_reset",
+      credits: 7,
+      idempotencyKey: "chapter:run_do_reset",
+      now,
+    });
+
+    const llmCtx: CallLLMContext = {
+      db,
+      env: { ANTHROPIC_API_KEY: "sk-ant-test", APP_ENV: "dev" },
+    };
+
+    await expect(
+      runWriteChapterOrchestration(
+        {
+          runId: "run_do_reset",
+          projectId: "prj_p7",
+          chapterId: "chp_do_reset",
+          reservationId: reserved.reservationId,
+        },
+        {
+          loadContext: (fn) => fn(),
+          draftSection: async () => {
+            throw new Error("Durable Object reset because its code was updated.");
+          },
+          assembleAndFinalize: (fn) => fn(),
+        },
+        { db, bucket: { async put() {} }, llmCtx, nowFn: () => now }
+      )
+    ).rejects.toThrow("Durable Object reset");
+
+    // Reservation must remain HELD (not refunded!) and chapter must remain WRITING (not needs_attention!)
+    const [resRow] = await db
+      .select()
+      .from(creditReservations)
+      .where(eq(creditReservations.id, reserved.reservationId));
+    expect(resRow?.status).toBe("held");
+
+    const [chRow] = await db.select().from(chapters).where(eq(chapters.id, "chp_do_reset"));
+    expect(chRow?.status).toBe("writing");
+  });
+
+  it("only triggers whole-chapter rewrite/length passes when explicitly requested", () => {
+    expect(isExplicitFullChapterRewriteRequest("Remove em dashes from this chapter")).toBe(false);
+    expect(isExplicitFullChapterRewriteRequest("Tighten passive voice in section 1.2")).toBe(false);
+    expect(isExplicitFullChapterRewriteRequest("Clarify methodology headings")).toBe(false);
+    expect(isExplicitFullChapterRewriteRequest("Redo the entire chapter with fresh framing")).toBe(
+      true
+    );
+    expect(isExplicitFullChapterRewriteRequest("Expand the chapter to add more pages")).toBe(true);
   });
 });

@@ -7,6 +7,7 @@ import { createDb } from "@/db/client";
 import { listProjectsForUser } from "@/db/queries/projects";
 import { getWizardStateForUser, type HydratedWizardState } from "@/db/queries/wizard";
 import type { ProjectRecord } from "@/db/schema";
+import { ensurePrematureRefundsReconciled } from "@/lib/billing/ledger";
 import { DEV_SESSION_COOKIE, PROD_SESSION_COOKIE } from "./cookies";
 import { getSessionFromToken, type PublicUser } from "./service";
 import { sanitizeRedirectPath } from "./tokens";
@@ -24,6 +25,9 @@ export const getCurrentSession = cache(
     if (!rawToken) return null;
 
     const db = createDb(env.DB);
+    await ensurePrematureRefundsReconciled(db).catch(() => {
+      // Non-fatal: billing reconciliation will retry on next request
+    });
     return getSessionFromToken(db, rawToken);
   }
 );

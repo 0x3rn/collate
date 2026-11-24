@@ -99,6 +99,67 @@ const WHOLE_CHAPTER_PATTERNS = [
   /\b(entire|whole|full|all sections|every section|throughout the chapter|across the chapter)\b/i,
 ];
 
+const EM_DASH_ONLY_REMOVAL_PATTERN =
+  /^(?:please\s+)?(?:remove|replace|strip|eliminate|fix|clean\s+up|get\s+rid\s+of)\s+(?:all\s+|any\s+|the\s+)?(?:em[\s-]?dash(?:es)?|en[\s-]?dash(?:es)?|long\s+dash(?:es)?|m[\s-]?dash(?:es)?)(?:[\s,;]*(?:from|in|across|throughout)\s+(?:(?:this|the)\s+)?(?:chapter|section(?:\s+\d+(?:\.\d+)?)?|text|draft|entire\s+chapter|whole\s+chapter))?(?:[\s,;]*(?:and\s+)?(?:replace|use|substitute)(?:\s+(?:them|it))?\s+(?:with\s+)?(?:something\s+else|commas?|colons?|parentheses|semicolons?|other\s+punctuation|standard\s+punctuation|appropriate\s+punctuation|better\s+punctuation))?[\s.!?]*$/i;
+
+const SUBSTANTIVE_REVISION_PATTERN =
+  /\b(add|insert|include|cite|citation|citations|source|sources|reference|references|figure|figures|image|images|diagram|chart|table|tables|expand|shorten|longer|shorter|more\s+words|more\s+pages|fewer\s+pages|rewrite\s+(?:the\s+)?(?:whole|entire|full)|redo\s+(?:the\s+)?(?:whole|entire|full)|start\s+over|new\s+section|data|statistic|statistics|methodology|finding|findings|argument|arguments|discuss|explain|elaborate)\b/i;
+
+const LIGHT_COPY_EDIT_PATTERN =
+  /\b(em[\s-]?dash(?:es)?|en[\s-]?dash(?:es)?|long\s+dash(?:es)?|m[\s-]?dash(?:es)?|punctuation|typo|typos|spelling|spellcheck|grammar|grammatical|capitali[sz]ation|british\s+english|american\s+english|uk\s+english|us\s+english|proofread|copy[\s-]?edit)\b/i;
+
+/**
+ * Returns true when a user's revision note specifically requests removing/replacing
+ * em-dashes or spaced en-dashes without requesting substantive content edits.
+ */
+export function isEmDashOnlyRequest(instructions: string): boolean {
+  const cleaned = instructions.trim().replace(/\s+/g, " ");
+  if (!cleaned || cleaned.length > 240) return false;
+  return EM_DASH_ONLY_REMOVAL_PATTERN.test(cleaned);
+}
+
+/**
+ * Returns true when a revision request is a light copy-edit pass (punctuation, em-dashes,
+ * typos, spelling, grammar, UK/US spelling) that does not alter facts, citations, figures,
+ * tables, or chapter depth. These runs use a fast, low-cost LLM copy-editor (e.g.
+ * gemini-4-hydrogen at LOW thinking) instead of re-synthesizing from evidence passages.
+ */
+export function isLightStyleCopyEditRequest(instructions: string): boolean {
+  const cleaned = instructions.trim().replace(/\s+/g, " ");
+  if (!cleaned || cleaned.length > 260) return false;
+  if (isEmDashOnlyRequest(cleaned)) return true;
+  if (SUBSTANTIVE_REVISION_PATTERN.test(cleaned)) return false;
+  return LIGHT_COPY_EDIT_PATTERN.test(cleaned);
+}
+
+/**
+ * Inspects prose lines of a section (skipping fenced :::figure/code blocks and raw URLs)
+ * to determine whether the section actually contains em-dashes (—), spaced en-dashes ( – ),
+ * or prose double-hyphens ( -- ) that need smart punctuation editing.
+ */
+export function sectionContainsEmOrSpacedEnDash(markdown: string): boolean {
+  const lines = markdown.split(/\r?\n/);
+  let inFencedBlock = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^(?:```|~~~|:::)/.test(trimmed)) {
+      if (trimmed === ":::" || trimmed === "```" || trimmed === "~~~") {
+        inFencedBlock = false;
+      } else {
+        inFencedBlock = true;
+      }
+      continue;
+    }
+    if (inFencedBlock || /^https?:\/\//i.test(trimmed)) {
+      continue;
+    }
+    if (line.includes("\u2014") || /\s\u2013\s/.test(line) || /\s--\s/.test(line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Deterministic check for explicit section mentions in the user's revision note
  * (e.g. "in section 1.2", "in Background of the study", or explicit UI targetSectionHeadings).

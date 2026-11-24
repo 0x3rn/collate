@@ -43,7 +43,7 @@ export default async function TermsPage() {
           <p>
             Collate provides an internal similarity report, verified citation records, a
             writing-process log, and an editable AI-use disclosure statement. No tool can guarantee
-            the outcome of an external university similarity or AI-writing detector.
+            the outcome of an external university similarity or automated writing detector.
           </p>
 
           <h2 className="text-xl font-medium">3. Credits and refund policy</h2>

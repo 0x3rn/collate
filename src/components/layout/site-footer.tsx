@@ -1,16 +1,20 @@
 import Link from "next/link";
+import { CollateLogo } from "@/components/brand/collate-logo";
 
 export function SiteFooter() {
   return (
     <footer className="mt-auto border-t border-[var(--neutral-200)] bg-white">
       <div className="mx-auto max-w-[1120px] px-4 sm:px-6 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 text-sm">
         <div className="sm:col-span-2 space-y-2">
-          <p
-            className="text-lg font-semibold text-[var(--neutral-900)] m-0"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            Collate
-          </p>
+          <div className="inline-flex items-center gap-2">
+            <CollateLogo className="w-5 h-5 text-[var(--accent-600)] shrink-0" />
+            <p
+              className="text-lg font-semibold leading-none translate-y-[0.5px] text-[var(--neutral-900)] m-0"
+              style={{ fontFamily: "var(--font-serif)" }}
+            >
+              Collate
+            </p>
+          </div>
           <p className="text-[var(--neutral-600)] max-w-[46ch] leading-relaxed m-0">
             Research and drafting assistant for evidence-backed projects, research papers, theses,
             and assignments. Built on Cloudflare Workers.

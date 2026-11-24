@@ -239,7 +239,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
               return (
                 <li
                   key={project.id}
-                  className="px-5 sm:px-6 py-4 grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 items-start md:items-center hover:bg-[var(--neutral-50)] transition-colors duration-150 group"
+                  className="px-5 sm:px-6 py-3.5 md:py-4 grid grid-cols-1 md:grid-cols-12 gap-2.5 md:gap-4 items-start md:items-center hover:bg-[var(--neutral-50)] transition-colors duration-150 group"
                 >
                   {/* Project title & type */}
                   <div className="md:col-span-5 min-w-0 space-y-1">
@@ -298,11 +298,11 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                   </div>
 
                   {/* Sources & date */}
-                  <div className="md:col-span-2 text-xs text-[var(--neutral-600)] tabular-nums space-y-0.5">
-                    <p className="font-medium text-[var(--neutral-800)]">
+                  <div className="md:col-span-2 text-xs text-[var(--neutral-600)] tabular-nums flex items-center justify-between gap-2 md:block md:space-y-0.5">
+                    <p className="font-medium text-[var(--neutral-800)] m-0">
                       {project.sourcesCount} {project.sourcesCount === 1 ? "source" : "sources"}
                     </p>
-                    <p className="text-[var(--neutral-500)]">
+                    <p className="text-[var(--neutral-500)] m-0">
                       {formatShortDate(project.updatedAt)}
                     </p>
                   </div>

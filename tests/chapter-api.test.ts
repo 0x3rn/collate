@@ -1,9 +1,13 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { estimateChapterCredits, estimateRevisionCredits } from "@/config/pricing";
+import {
+  estimateChapterCredits,
+  estimateRevisionCredits,
+  estimateSingleSectionRevisionCredits,
+} from "@/config/pricing";
 import { createDb, type AppDb } from "@/db/client";
 import { createWizardDraftProject } from "@/db/queries/wizard";
-import { chapters, creditReservations, users } from "@/db/schema";
+import { chapters, creditReservations, sections, users } from "@/db/schema";
 import {
   handleSignIn,
   handleSignUp,
@@ -239,13 +243,124 @@ describe("Phase 7 — Chapter & CSV Dataset HTTP API (NN-8 gating, idempotency &
 
     const ch2Cost = estimateChapterCredits(ch2.pageBudget);
     const revCost = estimateRevisionCredits(ch1.pageBudget);
+    expect(revCost).toBe(ch1Cost);
     const [aliceAfterRev] = await db.select().from(users).where(eq(users.id, alice.userId));
     expect(aliceAfterRev?.creditsBalance).toBe(100 - ch1Cost - ch2Cost - revCost);
+
+    // Targeted single-section revision deducts strictly fewer proportional credits & lower spendCapUsd
+    await db
+      .update(chapters)
+      .set({ status: "ready", pageBudget: 8 })
+      .where(eq(chapters.id, ch1.id));
+    await db.insert(sections).values([
+      {
+        id: "sec_api_1",
+        chapterId: ch1.id,
+        orderIndex: 1,
+        heading: "Background of the study",
+        wordBudget: 500,
+        status: "verified",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "sec_api_2",
+        chapterId: ch1.id,
+        orderIndex: 2,
+        heading: "Statement of the problem",
+        wordBudget: 500,
+        status: "verified",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "sec_api_3",
+        chapterId: ch1.id,
+        orderIndex: 3,
+        heading: "Aim and objectives",
+        wordBudget: 500,
+        status: "verified",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "sec_api_4",
+        chapterId: ch1.id,
+        orderIndex: 4,
+        heading: "Scope and delimitations",
+        wordBudget: 500,
+        status: "verified",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    const balBeforeSecRev = aliceAfterRev!.creditsBalance;
+    const secRevRes = await handleRequestChapterChanges(
+      new Request(`https://collate.app/api/projects/${projectId}/chapters/${ch1.id}/revise`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: alice.cookie,
+        },
+        body: JSON.stringify({
+          instructions: "Clarify sampling scope in this section.",
+          targetSectionHeadings: ["Scope and delimitations"],
+        }),
+      }),
+      projectId,
+      ch1.id,
+      deps
+    );
+    expect(secRevRes.status).toBe(202);
+    const expectedSecCost = estimateSingleSectionRevisionCredits(8, 4);
+    expect(expectedSecCost).toBe(2);
+    expect(expectedSecCost).toBeLessThan(estimateChapterCredits(8));
+    expect(launchedParams[launchCount - 1]?.spendCapUsd).toBe(0.75);
+    const [aliceAfterSecRev] = await db.select().from(users).where(eq(users.id, alice.userId));
+    expect(aliceAfterSecRev?.creditsBalance).toBe(balBeforeSecRev - expectedSecCost);
+
+    // Active workflow instance guard: if chapter was marked needs_attention while its workflow
+    // is still running in Cloudflare, Resume must NOT launch a second concurrent workflow
+    await db
+      .update(chapters)
+      .set({ status: "needs_attention", workflowInstanceId: "wf_still_running" })
+      .where(eq(chapters.id, ch1.id));
+    const countBeforeGuard = launchCount;
+    const guardRes = await handleStartChapter(
+      new Request(`https://collate.app/api/projects/${projectId}/chapters/${ch1.id}/start`, {
+        method: "POST",
+        headers: { origin: "https://collate.app", cookie: alice.cookie },
+      }),
+      projectId,
+      ch1.id,
+      {
+        ...deps,
+        workflowLauncher: {
+          ...launcher,
+          async get() {
+            return {
+              async status() {
+                return { status: "running" };
+              },
+            };
+          },
+        },
+      }
+    );
+    expect(guardRes.status).toBe(202);
+    const guardJson = (await guardRes.json()) as { alreadyRunning: boolean };
+    expect(guardJson.alreadyRunning).toBe(true);
+    expect(launchCount).toBe(countBeforeGuard);
+    await db
+      .update(chapters)
+      .set({ status: "approved", workflowInstanceId: null })
+      .where(eq(chapters.id, ch1.id));
 
     // If workflow launcher fails, reservation is immediately refunded and chapter status reverts
     await db.update(chapters).set({ status: "ready" }).where(eq(chapters.id, ch2.id));
     const ch3 = draft.chapters.find((c) => c.number === 3)!;
-    const balanceBeforeLaunchCrash = aliceAfterRev!.creditsBalance;
+    const balanceBeforeLaunchCrash = aliceAfterSecRev!.creditsBalance;
     const failingRes = await handleStartChapter(
       new Request(`https://collate.app/api/projects/${projectId}/chapters/${ch3.id}/start`, {
         method: "POST",

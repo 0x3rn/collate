@@ -57,6 +57,7 @@ export const CallLLMInputSchema = z.object({
   temperature: z.number().min(0).max(1).default(0.2),
   timeoutMs: z.number().int().min(10).max(300_000).default(DEFAULT_TIMEOUT_MS),
   modelOverride: z.string().trim().min(1).optional(),
+  thinkingLevel: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
   spendCapUsd: z.number().positive().optional(),
 });
 
@@ -281,6 +282,7 @@ function buildProviderRequestBody(
       return buildGoogleRequestBody({
         model,
         task: input.task,
+        thinkingLevel: input.thinkingLevel,
         system: input.system,
         messages: input.messages,
         maxTokens: input.maxTokens,
@@ -295,6 +297,7 @@ function buildProviderRequestBody(
       });
     case "deepseek":
       return buildDeepSeekRequestBody(model, {
+        task: input.task,
         system: input.system,
         messages: input.messages,
         maxTokens: input.maxTokens,

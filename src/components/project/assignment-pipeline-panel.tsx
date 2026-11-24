@@ -8,6 +8,7 @@ import {
   type InsufficientCreditsDetails,
 } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
+import { estimateRevisionCredits } from "@/config/pricing";
 import type { ChapterStatus } from "@/db/schema";
 
 export interface AssignmentQuestionPlanItem {
@@ -300,44 +301,60 @@ export function AssignmentPipelinePanel({
         </div>
       </div>
 
-      {revising && assignmentChapter ? (
-        <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-3">
-          <label
-            htmlFor="assignment-rev-note"
-            className="block text-xs font-medium text-[var(--neutral-800)]"
-          >
-            What should be revised across your assignment answers?
-          </label>
-          <textarea
-            id="assignment-rev-note"
-            rows={3}
-            value={revisionNote}
-            onChange={(e) => setRevisionNote(e.target.value)}
-            placeholder="e.g. Expand Question 2 with additional empirical comparisons and tighten Question 1's opening."
-            className="block w-full px-3 py-2 text-sm bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-          />
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              loading={busy}
-              loadingLabel="Queueing revision..."
-              onClick={submitRevision}
-            >
-              Start revision run
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setRevising(false);
-                setRevisionNote("");
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      {revising && assignmentChapter
+        ? (() => {
+            const totalPages = questions.reduce((sum, q) => sum + q.pageBudget, 0) || undefined;
+            const revCredits = estimateRevisionCredits(totalPages);
+            const creditWord = revCredits === 1 ? "credit" : "credits";
+            return (
+              <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-3">
+                <div className="space-y-1">
+                  <label
+                    htmlFor="assignment-rev-note"
+                    className="block text-xs font-medium text-[var(--neutral-800)]"
+                  >
+                    What should be revised across your assignment answers?
+                  </label>
+                  <p className="text-xs text-[var(--neutral-500)] m-0 tabular-nums">
+                    Requesting changes deducts{" "}
+                    <span className="font-semibold text-[var(--neutral-800)]">
+                      {revCredits} {creditWord}
+                    </span>{" "}
+                    once the revision finishes (refunded automatically if it fails).
+                  </p>
+                </div>
+                <textarea
+                  id="assignment-rev-note"
+                  rows={3}
+                  value={revisionNote}
+                  onChange={(e) => setRevisionNote(e.target.value)}
+                  placeholder="e.g. Expand Question 2 with additional empirical comparisons and tighten Question 1's opening."
+                  className="block w-full px-3 py-2 text-sm bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    loading={busy}
+                    loadingLabel="Queueing revision..."
+                    onClick={submitRevision}
+                  >
+                    Start revision ({revCredits} {creditWord})
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setRevising(false);
+                      setRevisionNote("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            );
+          })()
+        : null}
 
       <ol className="space-y-3 list-none p-0 m-0">
         {questions.map((q) => (

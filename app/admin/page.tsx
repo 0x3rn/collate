@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Admin operations | Collate",
-  description: "Monitor users, AI job costs, failures, circuit breakers, and manual refunds.",
+  description: "Monitor users, drafting job costs, failures, circuit breakers, and credit grants.",
 };
 
 export default async function AdminPage() {
@@ -43,6 +43,9 @@ export default async function AdminPage() {
     .select({ total: sql<number>`coalesce(sum(${jobsLog.costEstimateUsd}), 0)` })
     .from(jobsLog);
 
+  const [totalUsersRow] = await db.select({ count: sql<number>`count(*)` }).from(users);
+  const totalUsersCount = Number(totalUsersRow?.count ?? 0);
+
   const recentUsers = await db
     .select({
       id: users.id,
@@ -67,7 +70,7 @@ export default async function AdminPage() {
         <div className="border-b border-[var(--neutral-200)] pb-5">
           <h1 className="text-[2rem] font-medium">Admin operations</h1>
           <p className="text-sm text-[var(--neutral-600)] mt-1.5">
-            Monitor users, AI job costs, failures, spend circuit breakers, and manual refunds.
+            Monitor users, drafting job costs, failures, spend circuit breakers, and credit grants.
           </p>
         </div>
 
@@ -75,6 +78,7 @@ export default async function AdminPage() {
           initial={{
             circuitBreaker: breaker,
             allTimeLlmCostUsd: Number(totalCostRow?.total ?? 0),
+            totalUsersCount,
             users: recentUsers,
             recentJobs: recentJobs.map((j) => ({
               id: j.id,

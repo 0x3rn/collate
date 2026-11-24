@@ -551,7 +551,9 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
       error: null,
     });
 
-    // Verify task-aware thinking levels & +8192 thinking headroom
+    // Verify task-aware thinking levels & headroom:
+    // - gemini-4-hydrogen verify -> MEDIUM (+8192)
+    // - classify / extract / short drafts -> LOW (+4096)
     const verifyBody = buildGoogleRequestBody({
       model: "gemini-4-hydrogen",
       task: "verify",
@@ -562,7 +564,7 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
     expect(verifyBody.generationConfig).toEqual({
       maxOutputTokens: 1600 + 8192,
       temperature: 0.1,
-      thinkingConfig: { thinkingLevel: "HIGH" },
+      thinkingConfig: { thinkingLevel: "MEDIUM" },
     });
 
     const classifyBody = buildGoogleRequestBody({
@@ -573,9 +575,9 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
       temperature: 0.1,
     });
     expect(classifyBody.generationConfig).toEqual({
-      maxOutputTokens: 500 + 8192,
+      maxOutputTokens: 500 + 4096,
       temperature: 0.1,
-      thinkingConfig: { thinkingLevel: "HIGH" },
+      thinkingConfig: { thinkingLevel: "LOW" },
     });
 
     const extractBody = buildGoogleRequestBody({
@@ -586,9 +588,22 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
       temperature: 0.1,
     });
     expect(extractBody.generationConfig).toEqual({
-      maxOutputTokens: 800 + 8192,
+      maxOutputTokens: 800 + 4096,
       temperature: 0.1,
-      thinkingConfig: { thinkingLevel: "HIGH" },
+      thinkingConfig: { thinkingLevel: "LOW" },
+    });
+
+    const shortDraftBody = buildGoogleRequestBody({
+      model: "gemini-4-neon",
+      task: "draft",
+      messages: [{ role: "user", content: "Write concise 250-word section." }],
+      maxTokens: 1400,
+      temperature: 0.2,
+    });
+    expect(shortDraftBody.generationConfig).toEqual({
+      maxOutputTokens: 1400 + 4096,
+      temperature: 0.2,
+      thinkingConfig: { thinkingLevel: "LOW" },
     });
 
     const neonClassifyBody = buildGoogleRequestBody({
@@ -599,9 +614,9 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
       temperature: 0.1,
     });
     expect(neonClassifyBody.generationConfig).toEqual({
-      maxOutputTokens: 500 + 8192,
+      maxOutputTokens: 500 + 4096,
       temperature: 0.1,
-      thinkingConfig: { thinkingLevel: "MEDIUM" },
+      thinkingConfig: { thinkingLevel: "LOW" },
     });
   });
 
@@ -982,6 +997,7 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
     expect(deepSeekBody.temperature).toBeUndefined();
 
     const deepSeekFlashBody = buildDeepSeekRequestBody("deepseek-flash", {
+      task: "extract",
       system: "Extract JSON.",
       messages: [{ role: "user", content: "Extract structured claims." }],
       maxTokens: 1200,

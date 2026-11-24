@@ -31,9 +31,12 @@ export interface GoogleMessageInput {
   content: string;
 }
 
+export type GoogleThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
+
 export interface GoogleRequestInput {
   model?: string;
   task?: AiTask;
+  thinkingLevel?: GoogleThinkingLevel;
   system?: string;
   messages: GoogleMessageInput[];
   maxTokens: number;
@@ -251,27 +254,46 @@ function isGemini4Model(model?: string): boolean {
   return /^gemini-4(?:$|-)/i.test(model.trim());
 }
 
-function resolveGemini4ThinkingLevel(model: string, task?: AiTask): "MEDIUM" | "HIGH" {
-  // gemini-4-hydrogen completes HIGH thinking reliably (~26-39s), ideal for strict
-  // claim verification, classification, and extraction.
-  if (
-    /^gemini-4-hydrogen(?:$|-)/i.test(model.trim()) &&
-    (task === "verify" || task === "classify" || task === "extract")
-  ) {
-    return "HIGH";
+function resolveGemini4ThinkingLevel(
+  model: string,
+  task?: AiTask,
+  override?: GoogleThinkingLevel,
+  maxTokens = 4096
+): GoogleThinkingLevel {
+  if (override) {
+    return override;
   }
-  // For heavy flagship Gemini 4 models (e.g. gemini-4-neon, where HIGH can exceed 90s),
-  // MEDIUM delivers ~3,500+ thinking tokens reliably across drafting, classification, and extraction.
+  // gemini-4-hydrogen at MEDIUM delivers thorough academic claim verification without
+  // HIGH's 4,000-5,500 thinking-token spikes.
+  if (/^gemini-4-hydrogen(?:$|-)/i.test(model.trim()) && task === "verify") {
+    return "MEDIUM";
+  }
+  // Structured classification, extraction, and short/surgical drafts use LOW thinking
+  // with +4,096 headroom for crisp, unstarved outputs at low cost.
+  if (task === "verify" || task === "classify" || task === "extract") {
+    return "LOW";
+  }
+  if (maxTokens < 2400) {
+    return "LOW";
+  }
   return "MEDIUM";
 }
 
 export const GOOGLE_THINKING_TOKEN_HEADROOM = 8192;
+export const GOOGLE_LOW_THINKING_HEADROOM = 4096;
 
 export function buildGoogleRequestBody(input: GoogleRequestInput): Record<string, unknown> {
+  const isGemini4 = isGemini4Model(input.model) && Boolean(input.model);
+  const resolvedLevel = isGemini4
+    ? resolveGemini4ThinkingLevel(input.model!, input.task, input.thinkingLevel, input.maxTokens)
+    : undefined;
+
   // Gemini 3.x and 4.x thinking models count internal thoughtsTokenCount inside maxOutputTokens.
-  // Add 8,192 tokens of thinking headroom so deep reasoning never starves visible academic prose.
+  // Scale thinking headroom to the resolved thinking effort so short calls don't over-allocate.
+  const headroom =
+    resolvedLevel === "LOW" ? GOOGLE_LOW_THINKING_HEADROOM : GOOGLE_THINKING_TOKEN_HEADROOM;
   const effectiveMaxOutputTokens = isGoogleThinkingModel(input.model)
-    ? Math.min(24576, input.maxTokens + GOOGLE_THINKING_TOKEN_HEADROOM)
+    ? Math.min(24576, input.maxTokens + headroom)
     : input.maxTokens;
 
   const generationConfig: Record<string, unknown> = {
@@ -279,9 +301,9 @@ export function buildGoogleRequestBody(input: GoogleRequestInput): Record<string
     temperature: input.temperature,
   };
 
-  if (isGemini4Model(input.model) && input.model) {
+  if (resolvedLevel) {
     generationConfig.thinkingConfig = {
-      thinkingLevel: resolveGemini4ThinkingLevel(input.model, input.task),
+      thinkingLevel: resolvedLevel,
     };
   }
 

@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ComponentType, type ReactNode, type SVGProps } from "react";
+import { CollateLogo } from "@/components/brand/collate-logo";
 import { SpinnerIcon } from "@/components/ui/button";
 import { formatCredits, getUserInitials } from "@/lib/ui/formatters";
+import { startRouteProgress } from "@/lib/ui/route-progress";
 import {
   BillingIcon,
   CloseIcon,
@@ -77,7 +79,7 @@ function SidebarContent({
 }: {
   user: AppShellUser;
   pathname: string;
-  onNavigate?: (targetHref: string) => void;
+  onNavigate?: () => void;
   onSignOut: () => void;
   signingOut: boolean;
 }) {
@@ -97,7 +99,7 @@ function SidebarContent({
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  onClick={() => onNavigate?.(item.href)}
+                  onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
                   className={`relative min-h-[38px] px-2.5 py-2 rounded-[var(--radius-sm)] flex items-center gap-2.5 text-sm transition-colors duration-150 ${
                     active
@@ -122,15 +124,16 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Brand header — clean typographic wordmark */}
+      {/* Brand header — standalone SVG emblem + live wordmark */}
       <div className="h-15 px-5 border-b border-[var(--neutral-200)] flex items-center justify-between gap-2 shrink-0">
         <Link
           href="/dashboard"
-          onClick={() => onNavigate?.("/dashboard")}
-          className="text-xl font-semibold tracking-tight leading-none text-[var(--neutral-900)]"
+          onClick={onNavigate}
+          className="inline-flex items-center gap-2 text-xl font-semibold tracking-tight leading-none text-[var(--neutral-900)]"
           style={{ fontFamily: "var(--font-serif)" }}
         >
-          Collate
+          <CollateLogo className="w-6 h-6 text-[var(--accent-600)] shrink-0" />
+          <span className="leading-none translate-y-[0.5px]">Collate</span>
         </Link>
       </div>
 
@@ -138,7 +141,7 @@ function SidebarContent({
       <div className="px-3.5 pt-3.5 pb-1 shrink-0">
         <Link
           href="/projects/new"
-          onClick={() => onNavigate?.("/projects/new")}
+          onClick={onNavigate}
           className="w-full min-h-[38px] px-3 py-1.5 rounded-[var(--radius-sm)] border border-[var(--neutral-300)] bg-[var(--neutral-50)] hover:bg-white hover:border-[var(--accent-600)] text-[var(--neutral-900)] text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-all duration-150"
         >
           <PlusIcon className="w-4 h-4 text-[var(--accent-600)] shrink-0" />
@@ -166,7 +169,7 @@ function SidebarContent({
       <div className="p-3.5 border-t border-[var(--neutral-200)] bg-[var(--neutral-50)]/70 space-y-3 shrink-0">
         <Link
           href="/billing"
-          onClick={() => onNavigate?.("/billing")}
+          onClick={onNavigate}
           className="block px-3 py-2.5 rounded-[var(--radius-sm)] bg-white border border-[var(--neutral-200)] hover:border-[var(--neutral-300)] transition-colors group space-y-1"
         >
           <div className="flex items-center justify-between gap-2">
@@ -188,7 +191,7 @@ function SidebarContent({
         <div className="flex items-center justify-between gap-2 px-0.5">
           <Link
             href="/account"
-            onClick={() => onNavigate?.("/account")}
+            onClick={onNavigate}
             className="flex items-center gap-2.5 min-w-0 group"
           >
             <span
@@ -244,18 +247,10 @@ export function AppShell({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [navigating, setNavigating] = useState(false);
 
   useEffect(() => {
     setMobileOpen(false);
-    setNavigating(false);
   }, [pathname]);
-
-  useEffect(() => {
-    if (!navigating) return;
-    const timeout = setTimeout(() => setNavigating(false), 4500);
-    return () => clearTimeout(timeout);
-  }, [navigating]);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -266,11 +261,8 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [mobileOpen]);
 
-  function handleNavigate(targetHref: string) {
+  function handleNavigate() {
     setMobileOpen(false);
-    if (targetHref !== pathname) {
-      setNavigating(true);
-    }
   }
 
   async function handleSignOut() {
@@ -278,6 +270,7 @@ export function AppShell({
     try {
       await fetch("/api/auth/signout", { method: "POST" });
     } finally {
+      startRouteProgress();
       router.push("/sign-in");
       router.refresh();
     }
@@ -285,16 +278,6 @@ export function AppShell({
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[var(--neutral-50)]">
-      {/* Subtle top route-transition progress hairline */}
-      {navigating ? (
-        <div
-          aria-hidden="true"
-          className="fixed top-0 left-0 right-0 z-50 h-[2px] bg-[var(--accent-100)] overflow-hidden pointer-events-none"
-        >
-          <div className="h-full w-1/2 bg-[var(--accent-600)] route-progress-sweep" />
-        </div>
-      ) : null}
-
       {/* Desktop persistent left sidebar */}
       <aside className="hidden lg:block lg:w-[244px] lg:shrink-0 border-r border-[var(--neutral-200)] bg-white">
         <div className="sticky top-0 h-screen">
@@ -316,23 +299,25 @@ export function AppShell({
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation menu"
             aria-expanded={mobileOpen}
-            className="min-w-[44px] min-h-[44px] -ml-1 rounded-[var(--radius-sm)] text-[var(--neutral-700)] hover:bg-[var(--neutral-100)] grid place-items-center cursor-pointer"
+            className="min-w-[44px] min-h-[44px] -ml-1 rounded-[var(--radius-sm)] text-[var(--neutral-700)] hover:bg-[var(--neutral-100)] grid place-items-center shrink-0 cursor-pointer"
           >
             <MenuIcon className="w-5 h-5" />
           </button>
+
           <Link
             href="/dashboard"
-            onClick={() => handleNavigate("/dashboard")}
-            className="text-lg font-semibold tracking-tight text-[var(--neutral-900)]"
+            onClick={handleNavigate}
+            className="inline-flex items-center gap-1.5 h-9 text-lg font-semibold tracking-tight leading-none text-[var(--neutral-900)]"
             style={{ fontFamily: "var(--font-serif)" }}
           >
-            Collate
+            <CollateLogo className="w-[22px] h-[22px] text-[var(--accent-600)] shrink-0" />
+            <span className="leading-none translate-y-[0.5px]">Collate</span>
           </Link>
         </div>
 
         <Link
           href="/projects/new"
-          onClick={() => handleNavigate("/projects/new")}
+          onClick={handleNavigate}
           className="min-h-[36px] px-3 rounded-[var(--radius-sm)] bg-[var(--accent-600)] hover:bg-[var(--accent-700)] text-white text-xs font-medium inline-flex items-center gap-1 shrink-0 transition-colors"
         >
           <PlusIcon className="w-3.5 h-3.5" />

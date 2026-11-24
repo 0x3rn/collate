@@ -14,6 +14,7 @@ import {
   type InsufficientCreditsDetails,
 } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
+import { estimateRevisionCredits, estimateSingleSectionRevisionCredits } from "@/config/pricing";
 import type { ChapterStatus, ExperimentalDataMode } from "@/db/schema";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 import { canStartChapter } from "@/lib/writing/state-machine";
@@ -609,79 +610,114 @@ export function ChapterPipelinePanel({
                   ) : null}
                 </div>
 
-                {revisingChapterId === ch.id ? (
-                  <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] flex flex-col gap-3">
-                    <div className="flex flex-col gap-1">
-                      <label
-                        htmlFor={`rev-note-${ch.id}`}
-                        className="block text-xs font-medium text-[var(--neutral-800)]"
-                      >
-                        What should be revised in Chapter {ch.number}?
-                      </label>
-                      <p className="text-xs text-[var(--neutral-500)] m-0">
-                        Collate updates only the affected section(s) and keeps the rest of your
-                        chapter intact.
-                      </p>
-                    </div>
-                    {ch.sectionHeadings.length > 1 ? (
-                      <div className="flex flex-col gap-1">
-                        <label
-                          htmlFor={`rev-section-${ch.id}`}
-                          className="block text-xs font-medium text-[var(--neutral-700)]"
-                        >
-                          Section to update (optional)
-                        </label>
-                        <CustomSelect
-                          id={`rev-section-${ch.id}`}
-                          ariaLabel="Section to update"
-                          size="sm"
-                          value={revisionTargetSection}
-                          onChange={setRevisionTargetSection}
-                          options={[
-                            {
-                              value: "",
-                              label: "Auto-detect from my note (recommended)",
-                              description: "Updates only the sections mentioned in your note",
-                            },
-                            ...ch.sectionHeadings.map((heading, idx) => ({
-                              value: heading,
-                              label: `${ch.number}.${idx + 1} ${heading}`,
-                            })),
-                          ]}
-                        />
-                      </div>
-                    ) : null}
-                    <textarea
-                      id={`rev-note-${ch.id}`}
-                      rows={3}
-                      value={revisionNote}
-                      onChange={(e) => setRevisionNote(e.target.value)}
-                      placeholder="e.g. In section 1.1, add a verified photograph of beetroot and clarify the antioxidant pathway."
-                      className="block w-full px-3 py-2 text-sm bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-                    />
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        loading={isBusy}
-                        loadingLabel="Queueing revision..."
-                        onClick={() => submitRevision(ch.id)}
-                      >
-                        Start revision
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => {
-                          setRevisingChapterId(null);
-                          setRevisionNote("");
-                          setRevisionTargetSection("");
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
+                {revisingChapterId === ch.id
+                  ? (() => {
+                      const fullRevCredits = estimateRevisionCredits(ch.pageBudget);
+                      const hasMultipleSections = ch.sectionHeadings.length > 1;
+                      const singleSectionCredits = hasMultipleSections
+                        ? estimateSingleSectionRevisionCredits(
+                            ch.pageBudget,
+                            ch.sectionHeadings.length
+                          )
+                        : fullRevCredits;
+                      const selectedCredits =
+                        hasMultipleSections && revisionTargetSection
+                          ? singleSectionCredits
+                          : fullRevCredits;
+                      const creditWord = (n: number) => (n === 1 ? "credit" : "credits");
+
+                      return (
+                        <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] flex flex-col gap-3">
+                          <div className="flex flex-col gap-1">
+                            <label
+                              htmlFor={`rev-note-${ch.id}`}
+                              className="block text-xs font-medium text-[var(--neutral-800)]"
+                            >
+                              What should be revised in Chapter {ch.number}?
+                            </label>
+                            <p className="text-xs text-[var(--neutral-500)] m-0">
+                              Requesting changes deducts credits when the revision finishes
+                              (refunded automatically if it fails).{" "}
+                              {hasMultipleSections
+                                ? "Select a specific section to send only that section to Collate and use fewer credits."
+                                : "Untouched sentences and verified citations are preserved."}
+                            </p>
+                          </div>
+                          {hasMultipleSections ? (
+                            <div className="flex flex-col gap-1">
+                              <label
+                                htmlFor={`rev-section-${ch.id}`}
+                                className="block text-xs font-medium text-[var(--neutral-700)]"
+                              >
+                                Section to update
+                              </label>
+                              <CustomSelect
+                                id={`rev-section-${ch.id}`}
+                                ariaLabel="Section to update"
+                                size="sm"
+                                value={revisionTargetSection}
+                                onChange={setRevisionTargetSection}
+                                options={[
+                                  {
+                                    value: "",
+                                    label: `Auto-detect from my note · ${fullRevCredits} ${creditWord(fullRevCredits)}`,
+                                    description:
+                                      "May review the whole chapter · deducts the full chapter credit cost",
+                                  },
+                                  ...ch.sectionHeadings.map((heading, idx) => ({
+                                    value: heading,
+                                    label: `${ch.number}.${idx + 1} ${heading} · ${singleSectionCredits} ${creditWord(singleSectionCredits)}`,
+                                    description:
+                                      "Sends only this section to Collate · untouched sections stay unchanged",
+                                  })),
+                                ]}
+                              />
+                            </div>
+                          ) : null}
+                          <textarea
+                            id={`rev-note-${ch.id}`}
+                            rows={3}
+                            value={revisionNote}
+                            onChange={(e) => setRevisionNote(e.target.value)}
+                            placeholder="e.g. In section 1.1, add a verified photograph of beetroot and clarify the antioxidant pathway."
+                            className="block w-full px-3 py-2 text-sm bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
+                          />
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                            <p className="text-xs text-[var(--neutral-600)] tabular-nums m-0">
+                              Estimated deduction:{" "}
+                              <span className="font-semibold text-[var(--neutral-900)]">
+                                {selectedCredits} {creditWord(selectedCredits)}
+                              </span>{" "}
+                              {hasMultipleSections && revisionTargetSection
+                                ? "(only this section is sent to Collate)"
+                                : "(full chapter estimate)"}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                loading={isBusy}
+                                loadingLabel="Queueing revision..."
+                                onClick={() => submitRevision(ch.id)}
+                              >
+                                Start revision ({selectedCredits} {creditWord(selectedCredits)})
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => {
+                                  setRevisingChapterId(null);
+                                  setRevisionNote("");
+                                  setRevisionTargetSection("");
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  : null}
               </li>
             );
           })}
