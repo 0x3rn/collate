@@ -1,5 +1,8 @@
 import type { FormattedCitationCluster } from "@/lib/citations/reader-format";
-import { isSafeAcademicImageUrl } from "@/lib/export/figure-layout";
+import {
+  formatFigureAttributionForDisplay,
+  isSafeAcademicImageUrl,
+} from "@/lib/export/figure-layout";
 
 export const PAGE_BREAK_TOKEN = "<!-- pagebreak -->";
 export const SPACER_TOKEN = "<!-- spacer -->";
@@ -9,6 +12,7 @@ export interface AcademicFigureData {
   alt: string;
   caption: string;
   attribution: string;
+  sourceUrl?: string;
   width?: number;
   height?: number;
 }
@@ -27,13 +31,17 @@ function makeBlockId(index: number): string {
 }
 
 export function formatFigureBlockMarkdown(figure: AcademicFigureData): string {
+  const formattedAttr = formatFigureAttributionForDisplay(figure.attribution, figure.sourceUrl);
   const lines = [
     ":::figure",
     `url: ${figure.url.trim()}`,
     `alt: ${figure.alt.trim() || figure.caption.trim() || "Academic figure"}`,
     `caption: ${figure.caption.trim() || figure.alt.trim() || "Figure"}`,
-    `attribution: ${figure.attribution.trim() || "Source verified"}`,
+    `attribution: ${formattedAttr.displayText || "Source verified"}`,
   ];
+  if (formattedAttr.sourceUrl && isSafeAcademicImageUrl(formattedAttr.sourceUrl)) {
+    lines.push(`sourceUrl: ${formattedAttr.sourceUrl}`);
+  }
   if (typeof figure.width === "number" && Number.isFinite(figure.width) && figure.width > 0) {
     lines.push(`width: ${Math.round(figure.width)}`);
   }
@@ -60,12 +68,15 @@ function parseFigureLines(lines: string[]): AcademicFigureData | null {
 
   const widthNum = fields.width ? Number.parseInt(fields.width, 10) : undefined;
   const heightNum = fields.height ? Number.parseInt(fields.height, 10) : undefined;
+  const rawSourceUrl = fields.sourceurl || fields.source_url || fields.sourcepageurl;
+  const formattedAttr = formatFigureAttributionForDisplay(fields.attribution || "", rawSourceUrl);
 
   return {
     url,
     alt: fields.alt || fields.caption || "Academic figure",
     caption: fields.caption || fields.alt || "Figure",
-    attribution: fields.attribution || "",
+    attribution: formattedAttr.displayText,
+    ...(formattedAttr.sourceUrl ? { sourceUrl: formattedAttr.sourceUrl } : {}),
     ...(widthNum && Number.isFinite(widthNum) && widthNum > 0 ? { width: widthNum } : {}),
     ...(heightNum && Number.isFinite(heightNum) && heightNum > 0 ? { height: heightNum } : {}),
   };

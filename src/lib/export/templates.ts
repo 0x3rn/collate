@@ -2,7 +2,10 @@ import type { LineSpacing, PageSize } from "@/db/schema";
 import type { CoverDetails, FrontMatterToggles } from "@/lib/wizard/schema";
 import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
 import type { ResolvedExportFigureAsset } from "./figure-assets";
-import { computeControlledFigureDimensions } from "./figure-layout";
+import {
+  computeControlledFigureDimensions,
+  formatFigureAttributionForDisplay,
+} from "./figure-layout";
 import { getPageSizeSpec } from "./page-sizes";
 
 export interface ExportFormattingSettings {
@@ -141,8 +144,12 @@ export function markdownToPrintHtml(
         });
         const imgSrc = asset ? asset.dataUrl : escapeHtml(block.figure.url);
         const captionHtml = `<div class="figure-caption">${formatInlineMarkdown(block.figure.caption)}</div>`;
-        const attrHtml = block.figure.attribution
-          ? `<div class="figure-attribution">${escapeHtml(block.figure.attribution)}</div>`
+        const cleanAttr = formatFigureAttributionForDisplay(
+          block.figure.attribution,
+          block.figure.sourceUrl
+        ).displayText;
+        const attrHtml = cleanAttr
+          ? `<div class="figure-attribution">${escapeHtml(cleanAttr)}</div>`
           : "";
 
         htmlParts.push(

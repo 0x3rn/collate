@@ -11,6 +11,7 @@ import {
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
+import { formatFigureAttributionForDisplay } from "@/lib/export/figure-layout";
 import { searchWikimediaAcademicImages } from "@/lib/research/connectors/wikimedia-images";
 
 const FigureSearchSchema = z.object({
@@ -55,7 +56,7 @@ export async function handleListProjectFigures(
         title: f.title,
         alt: f.alt,
         caption: f.caption,
-        attribution: f.attribution,
+        attribution: formatFigureAttributionForDisplay(f.attribution, f.sourcePageUrl).displayText,
         license: f.license,
         mimeType: f.mimeType,
         naturalWidth: f.naturalWidth,

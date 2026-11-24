@@ -23,6 +23,7 @@ import {
 } from "@/db/schema";
 import type { CallLLMContext } from "@/lib/ai/call-llm";
 import { captureChapterReservation, refundChapterReservation } from "@/lib/billing/ledger";
+import { formatFigureAttributionForDisplay } from "@/lib/export/figure-layout";
 import { createBrowserRunPageMeasurer } from "@/lib/export/pdf-assembler";
 import type { ExportFormattingSettings } from "@/lib/export/templates";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
@@ -536,9 +537,10 @@ export async function runWriteChapterOrchestration(
       const availableFigures: DraftFigureContext[] = figureRows.map((f) => ({
         id: f.id,
         url: f.url,
+        sourceUrl: f.sourcePageUrl,
         alt: f.alt,
         caption: f.caption,
-        attribution: f.attribution,
+        attribution: formatFigureAttributionForDisplay(f.attribution, f.sourcePageUrl).displayText,
         width: f.naturalWidth,
         height: f.naturalHeight,
       }));

@@ -8,7 +8,9 @@ import {
   type HttpAuthDeps,
 } from "@/lib/auth/http-handlers";
 import {
+  buildCleanWikimediaAttribution,
   computeControlledFigureDimensions,
+  formatFigureAttributionForDisplay,
   isSafeAcademicImageUrl,
 } from "@/lib/export/figure-layout";
 import {
@@ -91,7 +93,8 @@ describe("Formatted Editor Block Parser, Page Breaks, Figures & Citation Preserv
       "url: https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Beetroot.jpg/800px-Beetroot.jpg",
       "alt: Fresh Beta vulgaris roots",
       "caption: Figure 1.1: Fresh Beta vulgaris (beetroot) roots showing betalain pigmentation.",
-      "attribution: Source: Wikimedia Commons · Photo by Example Author · CC BY-SA 4.0",
+      "attribution: Source: Example Author, Wikimedia Commons (CC BY-SA 4.0)",
+      "sourceUrl: https://commons.wikimedia.org/wiki/File:Beetroot.jpg",
       "width: 800",
       "height: 533",
       ":::",
@@ -125,11 +128,38 @@ describe("Formatted Editor Block Parser, Page Breaks, Figures & Citation Preserv
     if (figureBlock?.type === "figure") {
       expect(figureBlock.figure.width).toBe(800);
       expect(figureBlock.figure.height).toBe(533);
-      expect(figureBlock.figure.attribution).toContain("CC BY-SA 4.0");
+      expect(figureBlock.figure.attribution).toBe(
+        "Source: Example Author, Wikimedia Commons (CC BY-SA 4.0)"
+      );
+      expect(figureBlock.figure.sourceUrl).toBe(
+        "https://commons.wikimedia.org/wiki/File:Beetroot.jpg"
+      );
     }
 
     const roundTripped = serializeBlocksToMarkdown(blocks);
     expect(roundTripped).toBe(sample);
+
+    // Legacy figure blocks with raw File:... URLs embedded inside attribution are cleaned automatically
+    const legacyMd = [
+      ":::figure",
+      "url: https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Beetroot.jpg/800px-Beetroot.jpg",
+      "alt: Beetroot",
+      "caption: Beetroot roots",
+      "attribution: Source: Wikimedia Commons · Photo by Sanjay Acharya · CC BY-SA 4.0 (https://commons.wikimedia.org/wiki/File:Beetroot_jm26647.jpg)",
+      ":::",
+    ].join("\n");
+    const legacyBlocks = parseMarkdownToBlocks(legacyMd);
+    expect(legacyBlocks[0]?.type).toBe("figure");
+    if (legacyBlocks[0]?.type === "figure") {
+      expect(legacyBlocks[0].figure.attribution).toBe(
+        "Source: Sanjay Acharya, Wikimedia Commons (CC BY-SA 4.0)"
+      );
+      expect(legacyBlocks[0].figure.attribution).not.toContain("File:");
+      expect(legacyBlocks[0].figure.attribution).not.toContain("https://");
+      expect(legacyBlocks[0].figure.sourceUrl).toBe(
+        "https://commons.wikimedia.org/wiki/File:Beetroot_jm26647.jpg"
+      );
+    }
 
     // Explicit page break immediately pushes the following section to Page 2
     const pageNums = computeBlockPageNumbers(blocks, 275);
@@ -431,9 +461,74 @@ describe("Wikimedia Commons Open-License Image Search & Figures HTTP API", () =>
     expect(images[0]?.caption).toBe(
       "Fresh Beta vulgaris (beetroot) roots sliced to show betalain pigment."
     );
-    expect(images[0]?.attribution).toContain("Photo by Dr. Jane Botanist");
-    expect(images[0]?.attribution).toContain("CC BY-SA 4.0");
+    expect(images[0]?.attribution).toBe(
+      "Source: Dr. Jane Botanist, Wikimedia Commons (CC BY-SA 4.0)"
+    );
+    expect(images[0]?.attribution).not.toContain("File:");
+    expect(images[0]?.attribution).not.toContain("https://");
     expect(images[0]?.attribution).not.toContain("<a");
+    expect(images[0]?.sourcePageUrl).toBe(
+      "https://commons.wikimedia.org/wiki/File:Beta_vulgaris.jpg"
+    );
+
+    // Verify clean attribution formatter directly across legacy, contributor, custom, and unsafe inputs
+    expect(
+      buildCleanWikimediaAttribution({ author: "Wikimedia Commons contributor", license: "CC0" })
+    ).toBe("Source: Wikimedia Commons (CC0)");
+    expect(
+      buildCleanWikimediaAttribution({ author: "User:JaneBotanist", license: "CC BY 4.0" })
+    ).toBe("Source: JaneBotanist, Wikimedia Commons (CC BY 4.0)");
+
+    const legacyFormatted = formatFigureAttributionForDisplay(
+      "Source: Wikimedia Commons · Wikimedia Commons contributor · Public domain (https://commons.wikimedia.org/wiki/File:Beetroot_01.jpg)"
+    );
+    expect(legacyFormatted.displayText).toBe("Source: Wikimedia Commons (Public domain)");
+    expect(legacyFormatted.sourceUrl).toBe(
+      "https://commons.wikimedia.org/wiki/File:Beetroot_01.jpg"
+    );
+    expect(legacyFormatted.linkSegments).toEqual({
+      before: "Source: ",
+      label: "Wikimedia Commons",
+      after: " (Public domain)",
+      href: "https://commons.wikimedia.org/wiki/File:Beetroot_01.jpg",
+    });
+
+    const customCleaned = formatFigureAttributionForDisplay(
+      "Source: FAO Report 2024 (https://www.fao.org/docs/chart_1.png)"
+    );
+    expect(customCleaned.displayText).toBe("Source: FAO Report 2024");
+    expect(customCleaned.linkSegments).toEqual({
+      before: "Source: ",
+      label: "FAO Report 2024",
+      after: "",
+      href: "https://www.fao.org/docs/chart_1.png",
+    });
+
+    const bareFilenameAndWwwCleaned = formatFigureAttributionForDisplay(
+      "Source: World Health Organization, oxidative_chart.png (www.who.int/report) (CC BY 4.0)"
+    );
+    expect(bareFilenameAndWwwCleaned.displayText).toBe(
+      "Source: World Health Organization (CC BY 4.0)"
+    );
+    expect(bareFilenameAndWwwCleaned.linkSegments).toBeNull();
+
+    const parenthesizedUrlFormatted = formatFigureAttributionForDisplay(
+      "Source: Wikimedia Commons · Photo by Sanjay Acharya · CC BY-SA 4.0 (https://commons.wikimedia.org/wiki/File:Beta_vulgaris_(beetroot).jpg)"
+    );
+    expect(parenthesizedUrlFormatted.displayText).toBe(
+      "Source: Sanjay Acharya, Wikimedia Commons (CC BY-SA 4.0)"
+    );
+    expect(parenthesizedUrlFormatted.sourceUrl).toBe(
+      "https://commons.wikimedia.org/wiki/File:Beta_vulgaris_(beetroot).jpg"
+    );
+
+    const unsafeUrlCleaned = formatFigureAttributionForDisplay(
+      "Source: Lab Data (javascript:alert(1))",
+      "http://127.0.0.1/internal"
+    );
+    expect(unsafeUrlCleaned.displayText).toBe("Source: Lab Data");
+    expect(unsafeUrlCleaned.sourceUrl).toBeNull();
+    expect(unsafeUrlCleaned.linkSegments).toBeNull();
 
     // Verify authenticated figures search & IDOR isolation
     const d1Ctx = createInMemoryD1();

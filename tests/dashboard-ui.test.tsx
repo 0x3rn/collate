@@ -494,7 +494,7 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
       "url: https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Beetroot.jpg/800px-Beetroot.jpg",
       "alt: Fresh Beta vulgaris roots",
       "caption: Figure 1.1: Fresh *Beta vulgaris* (beetroot) roots.",
-      "attribution: Source: Wikimedia Commons · Photo by Example Author · CC BY-SA 4.0",
+      "attribution: Source: Wikimedia Commons · Photo by Example Author · CC BY-SA 4.0 (https://commons.wikimedia.org/wiki/File:Beetroot.jpg)",
       "width: 800",
       "height: 533",
       ":::",
@@ -582,7 +582,13 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(readyReaderHtml).not.toContain("AI revision");
     expect(readyReaderHtml).toContain("Current");
     expect(readyReaderHtml).toContain("<figure");
-    expect(readyReaderHtml).toContain("CC BY-SA 4.0");
+    expect(readyReaderHtml).toContain("Source: Example Author, ");
+    expect(readyReaderHtml).toContain(
+      'href="https://commons.wikimedia.org/wiki/File:Beetroot.jpg"'
+    );
+    expect(readyReaderHtml).toContain(">Wikimedia Commons</a> (CC BY-SA 4.0)");
+    // Raw File: URL is never printed as visible text inside the figcaption
+    expect(readyReaderHtml).not.toContain("(https://commons.wikimedia.org/wiki/File:Beetroot.jpg)");
     // Read mode keeps subtle page indicators while hiding literal Page break editor bars
     expect(readyReaderHtml).not.toContain("Page break");
     expect(readyReaderHtml).toContain("~Page 1");
@@ -606,6 +612,10 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(editorHtml).toContain("Document size");
     expect(editorHtml).toContain("Page 1 · A4");
     expect(editorHtml).toContain("210 × 297 mm");
+    // Editor displays clean plain-text attribution without raw URLs or File: clutter
+    expect(editorHtml).toContain("Source: Example Author, Wikimedia Commons (CC BY-SA 4.0)");
+    expect(editorHtml).not.toContain("File:Beetroot.jpg");
+    expect(editorHtml).not.toContain("commons.wikimedia.org");
   });
 
   it("uses student-friendly Research copy without Workspace and computes auto-hide scrollbar metrics accurately", () => {

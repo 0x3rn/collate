@@ -139,6 +139,7 @@ function parseDraftJsonOrFallback(
 export interface DraftFigureContext {
   id: string;
   url: string;
+  sourceUrl?: string;
   alt: string;
   caption: string;
   attribution: string;
@@ -259,7 +260,7 @@ export async function draftAndVerifySection(
       ? input.availableFigures
           .map(
             (f, idx) =>
-              `[FIGURE ${idx + 1}]\nurl: ${f.url}\nalt: ${f.alt}\ncaption: ${f.caption}\nattribution: ${f.attribution}\nwidth: ${f.width}\nheight: ${f.height}`
+              `[FIGURE ${idx + 1}]\nurl: ${f.url}\nalt: ${f.alt}\ncaption: ${f.caption}\nattribution: ${f.attribution}${f.sourceUrl ? `\nsourceUrl: ${f.sourceUrl}` : ""}\nwidth: ${f.width}\nheight: ${f.height}`
           )
           .join("\n\n")
       : "";
@@ -278,7 +279,7 @@ export async function draftAndVerifySection(
       : []),
     ...(figuresBlock
       ? [
-          `${isSurgicalRevision ? "5" : "4"}. VERIFIED FIGURES: Never invent or generate image URLs. When an illustration strengthens this section (or the user requested an image), insert ONLY from VERIFIED FIGURES using the exact fenced block syntax:\n:::figure\nurl: <exact url>\nalt: <alt text>\ncaption: <academic caption explaining the figure>\nattribution: <exact attribution>\nwidth: <exact width>\nheight: <exact height>\n:::`,
+          `${isSurgicalRevision ? "5" : "4"}. VERIFIED FIGURES: Never invent or generate image URLs. When an illustration strengthens this section (or the user requested an image), insert ONLY from VERIFIED FIGURES using the exact fenced block syntax:\n:::figure\nurl: <exact url>\nalt: <alt text>\ncaption: <academic caption explaining the figure>\nattribution: <exact attribution>\nsourceUrl: <exact sourceUrl if provided>\nwidth: <exact width>\nheight: <exact height>\n:::`,
         ]
       : []),
     `${isSurgicalRevision ? (figuresBlock ? "6" : "5") : figuresBlock ? "5" : "4"}. Return ONLY a valid JSON object: { "prose": "...", "claims": [{ "text": "...", "citeKey": "bare_key_without_at", "passageId": "..." }] }.`,

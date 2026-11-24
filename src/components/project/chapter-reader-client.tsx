@@ -19,7 +19,10 @@ import {
 import { useToast } from "@/components/ui/toast";
 import type { PageSize } from "@/db/schema";
 import type { FormattedCitationCluster } from "@/lib/citations/reader-format";
-import { computeControlledFigureDimensions } from "@/lib/export/figure-layout";
+import {
+  computeControlledFigureDimensions,
+  formatFigureAttributionForDisplay,
+} from "@/lib/export/figure-layout";
 import { getPageSizeSpec } from "@/lib/export/page-sizes";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 import { computeBlockPageNumbers, parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
@@ -724,6 +727,14 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                       block.figure.width,
                       block.figure.height
                     );
+                    const matchedFigureSourceUrl =
+                      block.figure.sourceUrl ??
+                      initial.projectFigures?.find((f) => f.url === block.figure.url)
+                        ?.sourcePageUrl;
+                    const formattedAttr = formatFigureAttributionForDisplay(
+                      block.figure.attribution,
+                      matchedFigureSourceUrl
+                    );
                     blockNode = (
                       <figure
                         key={block.id}
@@ -742,9 +753,24 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                           <span className="w-full text-sm font-medium text-[var(--neutral-800)] leading-snug [overflow-wrap:anywhere]">
                             {renderInlineFormatting(block.figure.caption, `figcap-${idx}`)}
                           </span>
-                          {block.figure.attribution ? (
+                          {formattedAttr.displayText ? (
                             <span className="w-full text-[11px] text-[var(--neutral-500)] leading-relaxed [overflow-wrap:anywhere]">
-                              {block.figure.attribution}
+                              {formattedAttr.linkSegments ? (
+                                <>
+                                  {formattedAttr.linkSegments.before}
+                                  <a
+                                    href={formattedAttr.linkSegments.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="underline decoration-[var(--neutral-300)] hover:decoration-[var(--accent-600)] hover:text-[var(--accent-600)] underline-offset-2 transition-colors"
+                                  >
+                                    {formattedAttr.linkSegments.label}
+                                  </a>
+                                  {formattedAttr.linkSegments.after}
+                                </>
+                              ) : (
+                                formattedAttr.displayText
+                              )}
                             </span>
                           ) : null}
                         </figcaption>

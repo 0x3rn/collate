@@ -1,4 +1,5 @@
 import { PDFDocument } from "pdf-lib";
+import { inflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { buildThesisDocx } from "@/lib/export/docx-builder";
 import {
@@ -177,7 +178,7 @@ describe("Phase 9 — Two-Pass Thesis PDF & DOCX Export Engine", () => {
       `url: ${figUrl}`,
       "alt: Fresh Beta vulgaris root",
       "caption: Figure 1.1: Fresh *Beta vulgaris* (beetroot) roots.",
-      "attribution: Source: Wikimedia Commons · Photo by Dr. Botanist · CC BY-SA 4.0",
+      "attribution: Source: Wikimedia Commons · Photo by Dr. Botanist · CC BY-SA 4.0 (https://commons.wikimedia.org/wiki/File:Beetroot_sample.png)",
       "width: 1200",
       "height: 800",
       ":::",
@@ -201,16 +202,19 @@ describe("Phase 9 — Two-Pass Thesis PDF & DOCX Export Engine", () => {
     );
     expect(resolvedFigures[figUrl]?.dataUrl).toMatch(/^data:image\/png;base64,/);
 
-    // 1. Verify PDF HTML renders inline data URI, controlled dimensions, caption, attribution, and page-break
+    // 1. Verify PDF HTML renders inline data URI, controlled dimensions, caption, clean attribution (no URL/File:), and page-break
     const printHtml = markdownToPrintHtml(chapterWithFigureMd, resolvedFigures);
     expect(printHtml).toContain('<figure class="academic-figure">');
     expect(printHtml).toContain("data:image/png;base64,");
     expect(printHtml).toContain("<em>Beta vulgaris</em>");
-    expect(printHtml).toContain("figure-attribution");
-    expect(printHtml).toContain("CC BY-SA 4.0");
+    expect(printHtml).toContain(
+      '<div class="figure-attribution">Source: Dr. Botanist, Wikimedia Commons (CC BY-SA 4.0)</div>'
+    );
+    expect(printHtml).not.toContain("File:Beetroot_sample.png");
+    expect(printHtml).not.toContain("commons.wikimedia.org");
     expect(printHtml).toContain('<div class="page-break"></div>');
 
-    // 2. Verify native Word (.docx) embeds real image bytes inside ZIP (word/media/) + page break
+    // 2. Verify native Word (.docx) embeds real image bytes inside ZIP (word/media/), page break, and clean attribution text
     const docxWithImage = await buildThesisDocx(
       {
         ...SAMPLE_DOC,
@@ -223,8 +227,24 @@ describe("Phase 9 — Two-Pass Thesis PDF & DOCX Export Engine", () => {
     expect(docxWithImage[0]).toBe(0x50);
     expect(docxWithImage[1]).toBe(0x4b);
     // ZIP directory entries contain the embedded media file inside word/media/
-    const zipAscii = Buffer.from(docxWithImage).toString("latin1");
+    const zipBuf = Buffer.from(docxWithImage);
+    const zipAscii = zipBuf.toString("latin1");
     expect(zipAscii).toContain("word/media/");
     expect(zipAscii).toContain("word/document.xml");
+
+    // Extract word/document.xml from ZIP local file header to verify clean plain-text attribution in DOCX
+    const docEntryIdx = zipBuf.indexOf(Buffer.from("word/document.xml", "utf8"));
+    expect(docEntryIdx).toBeGreaterThan(30);
+    const headerStart = docEntryIdx - 30;
+    const compMethod = zipBuf.readUInt16LE(headerStart + 8);
+    const compSize = zipBuf.readUInt32LE(headerStart + 18);
+    const nameLen = zipBuf.readUInt16LE(headerStart + 26);
+    const extraLen = zipBuf.readUInt16LE(headerStart + 28);
+    const dataStart = headerStart + 30 + nameLen + extraLen;
+    const rawEntry = zipBuf.subarray(dataStart, dataStart + compSize);
+    const documentXml = (compMethod === 8 ? inflateRawSync(rawEntry) : rawEntry).toString("utf8");
+    expect(documentXml).toContain("Source: Dr. Botanist, Wikimedia Commons (CC BY-SA 4.0)");
+    expect(documentXml).not.toContain("File:Beetroot_sample.png");
+    expect(documentXml).not.toContain("commons.wikimedia.org");
   });
 });

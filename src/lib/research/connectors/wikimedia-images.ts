@@ -1,4 +1,4 @@
-import { isSafeAcademicImageUrl } from "@/lib/export/figure-layout";
+import { buildCleanWikimediaAttribution, isSafeAcademicImageUrl } from "@/lib/export/figure-layout";
 
 export interface VerifiedAcademicImage {
   url: string;
@@ -148,20 +148,23 @@ export async function searchWikimediaAcademicImages(params: {
       if (ratio < 0.35 || ratio > 3.5) continue;
 
       const title = cleanFileTitle(page.title ?? trimmedQuery) || trimmedQuery;
-      const rawDesc = stripHtmlTags(meta.ImageDescription?.value ?? "");
+      const rawDesc = stripHtmlTags(meta.ImageDescription?.value ?? "")
+        .replace(/https?:\/\/\S+/gi, " ")
+        .replace(/\bFile:[^\s,)]+/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
       const caption = rawDesc.length >= 12 && rawDesc.length <= 220 ? rawDesc : title;
 
       const rawAuthor = stripHtmlTags(meta.Artist?.value ?? "");
-      const authorPart =
-        rawAuthor.length > 0 && rawAuthor.length <= 80
-          ? `Photo by ${rawAuthor}`
-          : "Wikimedia Commons contributor";
       const sourcePageUrl =
         info.descriptionurl && isSafeAcademicImageUrl(info.descriptionurl)
           ? info.descriptionurl
           : "https://commons.wikimedia.org";
 
-      const attribution = `Source: Wikimedia Commons · ${authorPart} · ${licenseRaw} (${sourcePageUrl})`;
+      const attribution = buildCleanWikimediaAttribution({
+        author: rawAuthor,
+        license: licenseRaw,
+      });
 
       seenUrls.add(imageUrl);
       results.push({

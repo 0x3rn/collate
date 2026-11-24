@@ -14,6 +14,7 @@ import { loadProjectCitationMap } from "@/db/queries/citations";
 import { chapters, chapterVersions, claims, originalityReports, projectFigures } from "@/db/schema";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
 import { buildReaderCitationLabels } from "@/lib/citations/reader-format";
+import { formatFigureAttributionForDisplay } from "@/lib/export/figure-layout";
 import type { R2ReadWriteBucket } from "@/lib/export/http-handlers";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
 import { loadChapterAttentionMap } from "@/lib/writing/attention";
@@ -140,7 +141,7 @@ export default async function ChapterReaderPage({
       title: f.title,
       alt: f.alt,
       caption: f.caption,
-      attribution: f.attribution,
+      attribution: formatFigureAttributionForDisplay(f.attribution, f.sourcePageUrl).displayText,
       license: f.license,
       naturalWidth: f.naturalWidth,
       naturalHeight: f.naturalHeight,

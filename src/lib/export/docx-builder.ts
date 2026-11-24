@@ -16,7 +16,10 @@ import {
 } from "docx";
 import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
 import type { ResolvedExportFigureAsset } from "./figure-assets";
-import { computeControlledFigureDimensions } from "./figure-layout";
+import {
+  computeControlledFigureDimensions,
+  formatFigureAttributionForDisplay,
+} from "./figure-layout";
 import { getPageSizeSpec } from "./page-sizes";
 import type { ThesisExportDocument } from "./templates";
 
@@ -214,23 +217,28 @@ function markdownToDocxBlocks(
           );
         }
 
+        const cleanAttr = formatFigureAttributionForDisplay(
+          block.figure.attribution,
+          block.figure.sourceUrl
+        ).displayText;
+
         blocks.push(
           new Paragraph({
             alignment: AlignmentType.CENTER,
-            keepNext: Boolean(block.figure.attribution),
-            spacing: { before: asset ? 40 : 180, after: block.figure.attribution ? 40 : 180 },
+            keepNext: Boolean(cleanAttr),
+            spacing: { before: asset ? 40 : 180, after: cleanAttr ? 40 : 180 },
             children: parseInlineMarkdownRuns(block.figure.caption, font, 20),
           })
         );
 
-        if (block.figure.attribution) {
+        if (cleanAttr) {
           blocks.push(
             new Paragraph({
               alignment: AlignmentType.CENTER,
               spacing: { after: 180 },
               children: [
                 new TextRun({
-                  text: block.figure.attribution,
+                  text: cleanAttr,
                   font,
                   size: 16, // 8pt fine print
                   color: "555555",

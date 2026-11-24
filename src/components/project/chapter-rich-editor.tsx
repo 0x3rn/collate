@@ -8,7 +8,10 @@ import { ModalCard } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
 import type { PageSize } from "@/db/schema";
 import type { FormattedCitationCluster } from "@/lib/citations/reader-format";
-import { computeControlledFigureDimensions } from "@/lib/export/figure-layout";
+import {
+  computeControlledFigureDimensions,
+  formatFigureAttributionForDisplay,
+} from "@/lib/export/figure-layout";
 import { getEditorPageBodyHeightPx, getPageSizeSpec } from "@/lib/export/page-sizes";
 import {
   inlineMarkdownToEditableHtml,
@@ -865,11 +868,13 @@ export function ChapterRichEditor({
   }
 
   function handleInsertFigureOption(fig: ProjectFigureOption) {
+    const cleanAttr = formatFigureAttributionForDisplay(fig.attribution, fig.sourcePageUrl);
     const figureData: AcademicFigureData = {
       url: fig.url,
       alt: fig.alt || fig.title,
       caption: fig.caption || fig.title,
-      attribution: fig.attribution,
+      attribution: cleanAttr.displayText,
+      ...(cleanAttr.sourceUrl ? { sourceUrl: cleanAttr.sourceUrl } : {}),
       width: fig.naturalWidth,
       height: fig.naturalHeight,
     };
@@ -1367,11 +1372,17 @@ export function ChapterRichEditor({
                         }
                         className="w-full px-3 py-2 text-sm bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[4px]"
                       />
-                      {block.figure.attribution ? (
-                        <p className="w-full min-w-0 text-[11px] text-[var(--neutral-500)] leading-relaxed m-0 [overflow-wrap:anywhere]">
-                          {block.figure.attribution}
-                        </p>
-                      ) : null}
+                      {(() => {
+                        const cleanAttr = formatFigureAttributionForDisplay(
+                          block.figure.attribution,
+                          block.figure.sourceUrl
+                        ).displayText;
+                        return cleanAttr ? (
+                          <p className="w-full min-w-0 text-[11px] text-[var(--neutral-500)] leading-relaxed m-0 [overflow-wrap:anywhere]">
+                            {cleanAttr}
+                          </p>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 ) : block.type === "heading" ? (
