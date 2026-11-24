@@ -2,7 +2,9 @@ import { z } from "zod";
 import {
   CITATION_INLINE_MODES,
   CITATION_STYLES,
+  EXPERIMENTAL_DATA_MODES,
   LINE_SPACINGS,
+  PAGE_SIZES,
   PROJECT_TYPES,
   SPELLING_VARIANTS,
   type ProjectType,
@@ -64,6 +66,8 @@ export const WizardStep2TopicSchema = z.object({
   level: z.string().trim().max(100).optional().default(""),
   institution: z.string().trim().max(200).optional().default(""),
   supervisorNotes: z.string().trim().max(2000).optional().default(""),
+  isExperimental: z.boolean().optional().default(false),
+  experimentalDataMode: z.enum(EXPERIMENTAL_DATA_MODES).optional().default("user_provided"),
   questions: z
     .array(
       z
@@ -136,6 +140,7 @@ export const WizardStep7FormattingSchema = z.object({
   fontSizePt: z.number().int().min(10).max(14),
   lineSpacing: z.enum(LINE_SPACINGS),
   marginsMm: z.number().int().min(15).max(40),
+  pageSize: z.enum(PAGE_SIZES).optional().default("a4"),
   pageNumbering: z.boolean(),
   spelling: z.enum(SPELLING_VARIANTS),
   cover: CoverDetailsSchema,

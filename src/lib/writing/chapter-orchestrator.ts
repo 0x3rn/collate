@@ -93,7 +93,8 @@ export interface LoadedChapterContext {
   startedAtIso: string;
   priorSummaryText: string;
   glossaryText: string;
-  resultsMode: "standard" | "user_dataset" | "public_dataset" | "labelled_framework";
+  resultsMode:
+    "standard" | "user_dataset" | "public_dataset" | "published_benchmarks" | "labelled_framework";
   datasetMarkdown: string | null;
   existingProseBySectionId?: Record<string, string>;
   targetedSectionIds?: string[];
@@ -334,6 +335,29 @@ export async function runWriteChapterOrchestration(
           } catch {
             datasetMarkdown = null;
           }
+        } else if (
+          settingsRow?.isExperimental &&
+          settingsRow?.experimentalDataMode === "published_benchmarks"
+        ) {
+          const benchmarkPassages = await retrieveEvidencePassages(deps.db, {
+            projectId: project.id,
+            queryText: `${project.title} experimental values control treatment mean standard deviation range findings`,
+            topK: 6,
+            embedder: deps.embedder,
+            vectorStore: deps.vectorStore,
+          });
+          if (benchmarkPassages.length >= 1) {
+            resultsMode = "published_benchmarks";
+            datasetMarkdown = [
+              "EXPERIMENTAL BENCHMARK MODE (PUBLISHED LITERATURE RANGES):",
+              "The author selected published benchmark grounding rather than uploading primary lab CSV data.",
+              "1. Extract documented experimental measurements, control vs. treatment comparisons, and accepted physiological/empirical ranges directly from the verified source passages below.",
+              "2. Present structured Markdown summary tables of expected/benchmark values and discuss the directional findings with exact [@citeKey] citations for every reported range or metric.",
+              "3. Keep EVERY reported numerical value and range strictly within the accepted empirical bounds documented in the verified cited studies. Never extrapolate or invent out-of-range figures, and clearly label comparative benchmark tables as literature-grounded reference values with their governing citations.",
+            ].join("\n");
+          } else {
+            resultsMode = "labelled_framework";
+          }
         } else {
           const publicDataPassages = await retrieveEvidencePassages(deps.db, {
             projectId: project.id,
@@ -366,6 +390,7 @@ export async function runWriteChapterOrchestration(
         fontSizePt: settingsRow?.fontSizePt ?? 12,
         lineSpacing: settingsRow?.lineSpacing ?? "double",
         marginsMm: settingsRow?.marginsMm ?? 25,
+        pageSize: settingsRow?.pageSize ?? "a4",
         pageNumbering: settingsRow?.pageNumbering ?? true,
         frontMatter,
         cover,
@@ -1277,6 +1302,7 @@ export async function runWriteAssignmentOrchestration(
         fontSizePt: settingsRow?.fontSizePt ?? 12,
         lineSpacing: settingsRow?.lineSpacing ?? "double",
         marginsMm: settingsRow?.marginsMm ?? 25,
+        pageSize: settingsRow?.pageSize ?? "a4",
         pageNumbering: settingsRow?.pageNumbering ?? true,
         frontMatter,
         cover,

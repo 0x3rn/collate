@@ -184,7 +184,7 @@ export async function handleStartResearchSweep(
             code: err.code,
             creditsRequired: sweepCost,
             creditsAvailable: err.availableCredits ?? session.user.creditsBalance,
-            error: `You have used your ${BILLING_POLICY.freeFeasibilitySweepsPerUser} free topic sweeps. Additional sweeps require ${sweepCost} credits — top up on Credits & Billing.`,
+            error: `You have used your ${BILLING_POLICY.freeFeasibilitySweepsPerUser} free topic sweeps. Additional sweeps require ${sweepCost} credits. Top up on Credits & Billing.`,
           },
           err.status
         );

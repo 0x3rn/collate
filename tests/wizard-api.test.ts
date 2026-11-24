@@ -11,6 +11,7 @@ import {
   handleCreateProjectDraft,
   handleGetWizardState,
   handleSaveWizardStep,
+  handleUpdateProjectSettings,
   type SerializedWizardState,
 } from "@/lib/wizard/http-handlers";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
@@ -187,9 +188,59 @@ describe("Phase 2 Setup Wizard HTTP API", () => {
         overrideDeps
       );
 
-    expect(
-      (await patch({ step: 2, title: "Urban Flood Resilience in Lagos", level: "Masters" })).status
-    ).toBe(200);
+    const step2Res = await patch({
+      step: 2,
+      title: "Urban Flood Resilience in Lagos",
+      level: "Masters",
+      isExperimental: true,
+      experimentalDataMode: "published_benchmarks",
+    });
+    expect(step2Res.status).toBe(200);
+    const step2Body = (await step2Res.json()) as { ok: true; wizard: SerializedWizardState };
+    expect(step2Body.wizard.settings.isExperimental).toBe(true);
+    expect(step2Body.wizard.settings.experimentalDataMode).toBe("published_benchmarks");
+
+    // Document-wide page size endpoint: Alice switches to US Letter, Bob is blocked (404)
+    const bobPageSizeRes = await handleUpdateProjectSettings(
+      new Request(`https://collate.app/api/projects/${projectId}/settings`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: bobCookie,
+        },
+        body: JSON.stringify({ pageSize: "letter" }),
+      }),
+      projectId,
+      deps
+    );
+    expect(bobPageSizeRes.status).toBe(404);
+
+    const alicePageSizeRes = await handleUpdateProjectSettings(
+      new Request(`https://collate.app/api/projects/${projectId}/settings`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: aliceCookie,
+        },
+        body: JSON.stringify({ pageSize: "letter" }),
+      }),
+      projectId,
+      deps
+    );
+    expect(alicePageSizeRes.status).toBe(200);
+    expect(await alicePageSizeRes.json()).toEqual({ ok: true, pageSize: "letter" });
+
+    const reloadedRes = await handleGetWizardState(
+      new Request(`https://collate.app/api/projects/${projectId}/wizard`, {
+        headers: { cookie: aliceCookie },
+      }),
+      projectId,
+      deps
+    );
+    const reloadedJson = (await reloadedRes.json()) as { wizard: SerializedWizardState };
+    expect(reloadedJson.wizard.settings.pageSize).toBe("letter");
 
     // NN-1 production guard: simulated verdicts are strictly forbidden in prod (403)
     const prodMockBlocked = await patch({ step: 3, simulateVerdict: "feasible" });

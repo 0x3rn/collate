@@ -64,6 +64,8 @@ describe("Landing page copy quality, pricing & credit calculation", () => {
     for (const tech of INTERNAL_TECH_JARGON) {
       expect(allText, `Leaked technical jargon found: ${tech}`).not.toContain(tech);
     }
+
+    expect(allText, "Avoid em-dashes in public marketing copy").not.toContain("\u2014");
   });
 
   it("matches exact $10/10k, $25/30k, $50/60k credit packs and calculates project credits accurately", () => {

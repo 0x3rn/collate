@@ -2,9 +2,16 @@
 
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { FormField } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
-import type { CitationInlineMode, CitationStyle, LineSpacing, SpellingVariant } from "@/db/schema";
+import type {
+  CitationInlineMode,
+  CitationStyle,
+  LineSpacing,
+  PageSize,
+  SpellingVariant,
+} from "@/db/schema";
 import type { SerializedWizardState } from "@/lib/wizard/http-handlers";
 import { ALLOWED_FONTS, type FrontMatterToggles } from "@/lib/wizard/schema";
 
@@ -130,25 +137,24 @@ export function StepChaptersForm({
               >
                 Chapter number
               </label>
-              <select
+              <CustomSelect
                 id={`ch-num-${idx}`}
-                value={row.number}
-                onChange={(e) => {
-                  const val = Number(e.target.value);
+                ariaLabel={`Chapter ${idx + 1} number`}
+                value={String(row.number)}
+                onChange={(val) => {
+                  const num = Number(val);
                   setChapterRows((prev) =>
-                    prev.map((item, i) => (i === idx ? { ...item, number: val } : item))
+                    prev.map((item, i) => (i === idx ? { ...item, number: num } : item))
                   );
                 }}
-                className="block w-full min-h-[44px] px-3 py-2 text-base bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-              >
-                {Array.from({ length: Math.max(20, chapterRows.length) }, (_, n) => n + 1).map(
-                  (num) => (
-                    <option key={num} value={num}>
-                      Chapter {num}
-                    </option>
-                  )
-                )}
-              </select>
+                options={Array.from(
+                  { length: Math.max(20, chapterRows.length) },
+                  (_, n) => n + 1
+                ).map((num) => ({
+                  value: String(num),
+                  label: `Chapter ${num}`,
+                }))}
+              />
             </div>
 
             <div className="sm:col-span-8">
@@ -354,6 +360,7 @@ export function StepFormattingForm({
   const [fontSizePt, setFontSizePt] = useState(wizard.settings.fontSizePt);
   const [lineSpacing, setLineSpacing] = useState<LineSpacing>(wizard.settings.lineSpacing);
   const [marginsMm, setMarginsMm] = useState(wizard.settings.marginsMm);
+  const [pageSize, setPageSize] = useState<PageSize>(wizard.settings.pageSize);
   const [pageNumbering, setPageNumbering] = useState(wizard.settings.pageNumbering);
   const [spelling, setSpelling] = useState<SpellingVariant>(wizard.settings.spelling);
   const [authorName, setAuthorName] = useState(wizard.settings.cover.authorName);
@@ -372,6 +379,7 @@ export function StepFormattingForm({
       fontSizePt,
       lineSpacing,
       marginsMm,
+      pageSize,
       pageNumbering,
       spelling,
       cover: {
@@ -398,36 +406,26 @@ export function StepFormattingForm({
           <label htmlFor="fmt-font" className="block text-sm font-medium text-[var(--neutral-800)]">
             Font family
           </label>
-          <select
+          <CustomSelect
             id="fmt-font"
+            ariaLabel="Font family"
             value={font}
-            onChange={(e) => setFont(e.target.value)}
-            className="block w-full min-h-[44px] px-3 py-2 text-base bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-          >
-            {ALLOWED_FONTS.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
+            onChange={setFont}
+            options={ALLOWED_FONTS.map((f) => ({ value: f, label: f }))}
+          />
         </div>
 
         <div className="space-y-1.5">
           <label htmlFor="fmt-size" className="block text-sm font-medium text-[var(--neutral-800)]">
             Font size
           </label>
-          <select
+          <CustomSelect
             id="fmt-size"
-            value={fontSizePt}
-            onChange={(e) => setFontSizePt(Number(e.target.value))}
-            className="block w-full min-h-[44px] px-3 py-2 text-base bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-          >
-            {[10, 11, 12, 13, 14].map((pt) => (
-              <option key={pt} value={pt}>
-                {pt} pt
-              </option>
-            ))}
-          </select>
+            ariaLabel="Font size"
+            value={String(fontSizePt)}
+            onChange={(val) => setFontSizePt(Number(val))}
+            options={[10, 11, 12, 13, 14].map((pt) => ({ value: String(pt), label: `${pt} pt` }))}
+          />
         </div>
 
         <div className="space-y-1.5">
@@ -437,16 +435,36 @@ export function StepFormattingForm({
           >
             Line spacing
           </label>
-          <select
+          <CustomSelect<LineSpacing>
             id="fmt-spacing"
+            ariaLabel="Line spacing"
             value={lineSpacing}
-            onChange={(e) => setLineSpacing(e.target.value as LineSpacing)}
-            className="block w-full min-h-[44px] px-3 py-2 text-base bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
+            onChange={setLineSpacing}
+            options={[
+              { value: "double", label: "Double spacing" },
+              { value: "one_half", label: "1.5 spacing" },
+              { value: "single", label: "Single spacing" },
+            ]}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label
+            htmlFor="fmt-page-size"
+            className="block text-sm font-medium text-[var(--neutral-800)]"
           >
-            <option value="double">Double spacing</option>
-            <option value="one_half">1.5 spacing</option>
-            <option value="single">Single spacing</option>
-          </select>
+            Page size
+          </label>
+          <CustomSelect<PageSize>
+            id="fmt-page-size"
+            ariaLabel="Page size"
+            value={pageSize}
+            onChange={setPageSize}
+            options={[
+              { value: "a4", label: "A4 (210 × 297 mm)" },
+              { value: "letter", label: "US Letter (8.5 × 11 in)" },
+            ]}
+          />
         </div>
 
         <div className="space-y-1.5">
@@ -456,18 +474,13 @@ export function StepFormattingForm({
           >
             Margins (mm)
           </label>
-          <select
+          <CustomSelect
             id="fmt-margins"
-            value={marginsMm}
-            onChange={(e) => setMarginsMm(Number(e.target.value))}
-            className="block w-full min-h-[44px] px-3 py-2 text-base bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-          >
-            {[20, 25, 30, 35].map((mm) => (
-              <option key={mm} value={mm}>
-                {mm} mm
-              </option>
-            ))}
-          </select>
+            ariaLabel="Margins"
+            value={String(marginsMm)}
+            onChange={(val) => setMarginsMm(Number(val))}
+            options={[20, 25, 30, 35].map((mm) => ({ value: String(mm), label: `${mm} mm` }))}
+          />
         </div>
 
         <div className="space-y-1.5">
@@ -477,15 +490,16 @@ export function StepFormattingForm({
           >
             Spelling variant
           </label>
-          <select
+          <CustomSelect<SpellingVariant>
             id="fmt-spelling"
+            ariaLabel="Spelling variant"
             value={spelling}
-            onChange={(e) => setSpelling(e.target.value as SpellingVariant)}
-            className="block w-full min-h-[44px] px-3 py-2 text-base bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-          >
-            <option value="uk">UK English (colour, analyse)</option>
-            <option value="us">US English (color, analyze)</option>
-          </select>
+            onChange={setSpelling}
+            options={[
+              { value: "uk", label: "UK English (colour, analyse)" },
+              { value: "us", label: "US English (color, analyze)" },
+            ]}
+          />
         </div>
 
         <div className="flex items-end">

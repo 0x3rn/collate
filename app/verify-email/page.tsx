@@ -7,7 +7,7 @@ import { getCurrentUser } from "@/lib/auth/server";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Verify email — Collate",
+  title: "Verify email | Collate",
   description: "Confirm your email address to activate your Collate account.",
 };
 

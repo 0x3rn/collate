@@ -77,6 +77,12 @@ h3 {
   line-height: 1.2;
 }
 
+/* Keep all textareas fixed-height with clean internal scrolling and no bottom-right browser resize grip */
+textarea {
+  resize: none;
+  overflow-y: auto;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }

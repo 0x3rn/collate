@@ -14,7 +14,7 @@ import { checkSpendCircuitBreaker } from "@/lib/billing/ledger";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Admin operations — Collate",
+  title: "Admin operations | Collate",
   description: "Monitor users, AI job costs, failures, circuit breakers, and manual refunds.",
 };
 

@@ -14,7 +14,7 @@ const FEATURES: Array<{
     id: "citations",
     title: "Verified citations in six official styles",
     summary:
-      "References are formatted from checked publisher records—never guessed or typed from memory.",
+      "References are formatted from checked publisher records, never guessed or typed from memory.",
   },
   {
     id: "claims",
@@ -26,7 +26,7 @@ const FEATURES: Array<{
     id: "results",
     title: "Honest Results for empirical work",
     summary:
-      "Calculate real tables from your uploaded data or generate clearly marked placeholders—never invented figures.",
+      "Calculate real tables from your uploaded data or ground benchmark tables in verified studies, never invented figures.",
   },
   {
     id: "exports",
@@ -331,7 +331,7 @@ export function DeliverablesBento() {
                     Chapter 1: Introduction
                   </p>
                   <p className="text-[11px] text-[var(--neutral-600)] leading-relaxed m-0">
-                    Formatted in your exact font, size, line spacing, and margins—available as both
+                    Formatted in your exact font, size, line spacing, and margins, available as both
                     print-ready PDF and editable Word (.docx).
                   </p>
                 </div>

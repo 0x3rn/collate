@@ -5,11 +5,11 @@ import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Collate — Evidence-backed academic projects and theses",
+  title: "Collate | Evidence-backed academic projects and theses",
   description:
     "Check whether real scholarly sources support your topic, then draft projects, theses, and assignments one verified chapter at a time.",
   openGraph: {
-    title: "Collate — Evidence-backed academic projects and theses",
+    title: "Collate | Evidence-backed academic projects and theses",
     description:
       "Check whether real scholarly sources support your topic, then draft projects, theses, and assignments one verified chapter at a time.",
     type: "website",

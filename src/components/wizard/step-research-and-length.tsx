@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { FormField } from "@/components/ui/field";
 import {
   InsufficientCreditsModal,
@@ -43,7 +44,7 @@ const RUN_STAGE_LABELS: Record<ResearchRunStatus, string> = {
   fetching: "Fetching pages, extracting passages, and saving snapshots",
   scoring: "Evaluating credibility, coverage, and feasibility verdict",
   completed: "Source sweep and feasibility check completed",
-  failed: "Sweep interrupted — ready to resume without losing progress",
+  failed: "Sweep interrupted. Ready to resume without losing progress.",
 };
 
 const VERDICT_META: Record<
@@ -264,7 +265,7 @@ export function StepResearchSweep({
       {primaryReport ? (
         <div className="space-y-4">
           <FormAlert tone={VERDICT_META[primaryReport.verdict].tone}>
-            <span className="font-semibold">{VERDICT_META[primaryReport.verdict].title}</span> —
+            <span className="font-semibold">{VERDICT_META[primaryReport.verdict].title}:</span>{" "}
             Evidence score {primaryReport.score}/100 (
             {primaryReport.coverage.credibleRelevantSources ?? primaryReport.coverage.sourcesFound}{" "}
             credible sources, {primaryReport.coverage.subtopicsCovered} subtopics covered
@@ -385,16 +386,18 @@ export function StepResearchSweep({
               >
                 Simulate verdict outcome
               </label>
-              <select
+              <CustomSelect<FeasibilityVerdict>
                 id="mock-verdict"
+                ariaLabel="Simulate verdict outcome"
                 value={simulateVerdict}
-                onChange={(e) => setSimulateVerdict(e.target.value as FeasibilityVerdict)}
-                className="block w-full sm:max-w-[320px] min-h-[44px] px-3.5 py-2.5 text-base bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-              >
-                <option value="feasible">Feasible (sufficient evidence)</option>
-                <option value="needs_refinement">Needs refinement (too broad/narrow)</option>
-                <option value="not_feasible">Not feasible (cannot guess)</option>
-              </select>
+                onChange={setSimulateVerdict}
+                className="sm:max-w-[340px]"
+                options={[
+                  { value: "feasible", label: "Feasible (sufficient evidence)" },
+                  { value: "needs_refinement", label: "Needs refinement (too broad/narrow)" },
+                  { value: "not_feasible", label: "Not feasible (cannot guess)" },
+                ]}
+              />
             </div>
             <Button
               type="button"

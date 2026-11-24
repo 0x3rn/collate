@@ -22,7 +22,7 @@ import { extractMarkdownHeadings } from "@/lib/writing/chapter-reader-handlers";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Chapter reader — Collate",
+  title: "Chapter reader | Collate",
   description: "Read, inspect verified citations, review similarity metrics, and make light edits.",
 };
 
@@ -109,6 +109,8 @@ export default async function ChapterReaderPage({
     projectId: id,
     projectTitle: state.project.title,
     wordsPerPage,
+    pageSize: state.settings.pageSize,
+    marginsMm: state.settings.marginsMm,
     chapter: {
       id: chapter.id,
       number: chapter.number,

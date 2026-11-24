@@ -46,6 +46,12 @@ export type LineSpacing = (typeof LINE_SPACINGS)[number];
 export const SPELLING_VARIANTS = ["uk", "us"] as const;
 export type SpellingVariant = (typeof SPELLING_VARIANTS)[number];
 
+export const PAGE_SIZES = ["a4", "letter"] as const;
+export type PageSize = (typeof PAGE_SIZES)[number];
+
+export const EXPERIMENTAL_DATA_MODES = ["user_provided", "published_benchmarks"] as const;
+export type ExperimentalDataMode = (typeof EXPERIMENTAL_DATA_MODES)[number];
+
 export const FEASIBILITY_VERDICTS = ["feasible", "not_feasible", "needs_refinement"] as const;
 export type FeasibilityVerdict = (typeof FEASIBILITY_VERDICTS)[number];
 
@@ -265,8 +271,13 @@ export const projectSettings = sqliteTable(
     fontSizePt: integer("font_size_pt").notNull().default(12),
     lineSpacing: text("line_spacing", { enum: LINE_SPACINGS }).notNull().default("double"),
     marginsMm: integer("margins_mm").notNull().default(25),
+    pageSize: text("page_size", { enum: PAGE_SIZES }).notNull().default("a4"),
     pageNumbering: integer("page_numbering", { mode: "boolean" }).notNull().default(true),
     spelling: text("spelling", { enum: SPELLING_VARIANTS }).notNull().default("uk"),
+    isExperimental: integer("is_experimental", { mode: "boolean" }).notNull().default(false),
+    experimentalDataMode: text("experimental_data_mode", { enum: EXPERIMENTAL_DATA_MODES })
+      .notNull()
+      .default("user_provided"),
     frontMatterJson: text("front_matter_json").notNull(),
     coverJson: text("cover_json").notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),

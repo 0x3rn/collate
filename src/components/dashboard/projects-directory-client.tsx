@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { STATUS_BADGE_CLASSES } from "@/components/dashboard/project-card";
 import { ArrowRightIcon, SearchIcon } from "@/components/layout/workspace-icons";
 import { Button, LinkButton } from "@/components/ui/button";
+import { CustomSelect } from "@/components/ui/custom-select";
 import {
   SETUP_PROJECT_STATUSES,
   type DashboardProjectSummary,
@@ -63,14 +64,14 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
   return (
     <section
       aria-label="Projects directory"
-      className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] overflow-hidden"
+      className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]"
     >
       {/* Integrated Hunter-style underline tabs + inline search/filter bar */}
       <div className="px-5 sm:px-6 border-b border-[var(--neutral-200)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div
           role="tablist"
           aria-label="Filter projects by status"
-          className="flex items-center gap-5 overflow-x-auto"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:gap-x-5"
         >
           {tabs.map((tab) => {
             const selected = activeTab === tab.id;
@@ -81,7 +82,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                 role="tab"
                 aria-selected={selected}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative py-3.5 text-sm font-medium inline-flex items-center gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+                className={`relative py-3 text-[13px] sm:text-sm font-medium inline-flex items-center gap-1.5 sm:gap-2 whitespace-nowrap transition-colors cursor-pointer ${
                   selected
                     ? "text-[var(--neutral-900)] font-semibold"
                     : "text-[var(--neutral-500)] hover:text-[var(--neutral-800)]"
@@ -128,18 +129,23 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
             <label htmlFor="projects-type-filter" className="sr-only">
               Filter by work type
             </label>
-            <select
+            <CustomSelect<TypeFilter>
               id="projects-type-filter"
+              ariaLabel="Filter by work type"
+              size="sm"
+              align="right"
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-              className="min-h-[36px] px-3 py-1.5 text-sm bg-[var(--neutral-50)] focus:bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] text-[var(--neutral-800)]"
-            >
-              <option value="all">All types</option>
-              <option value="project">Projects</option>
-              <option value="research">Research papers</option>
-              <option value="thesis">Theses</option>
-              <option value="assignment">Assignments</option>
-            </select>
+              onChange={setTypeFilter}
+              className="sm:w-[170px]"
+              buttonClassName="bg-[var(--neutral-50)] hover:bg-white border-[var(--neutral-200)]"
+              options={[
+                { value: "all", label: "All types" },
+                { value: "project", label: "Projects" },
+                { value: "research", label: "Research papers" },
+                { value: "thesis", label: "Theses" },
+                { value: "assignment", label: "Assignments" },
+              ]}
+            />
           </div>
         ) : null}
       </div>

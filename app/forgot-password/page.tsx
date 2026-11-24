@@ -7,7 +7,7 @@ import { getCurrentUser } from "@/lib/auth/server";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Reset password — Collate",
+  title: "Reset password | Collate",
   description: "Request a single-use password reset link for your Collate account.",
 };
 

@@ -26,17 +26,13 @@ export function extractMarkdownHeadings(
   const headings: Array<{ id: string; text: string; level: number }> = [];
   for (const line of markdown.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (trimmed.startsWith("## ")) {
+    const match = trimmed.match(/^(#{2,6})\s+(.+)$/);
+    if (match) {
+      const level = Math.min(4, match[1]!.length);
       headings.push({
         id: `sec-${headings.length + 1}`,
-        text: trimmed.slice(3).trim(),
-        level: 2,
-      });
-    } else if (trimmed.startsWith("### ")) {
-      headings.push({
-        id: `sec-${headings.length + 1}`,
-        text: trimmed.slice(4).trim(),
-        level: 3,
+        text: match[2]!.trim(),
+        level,
       });
     }
   }

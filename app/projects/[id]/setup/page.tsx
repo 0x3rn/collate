@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { env } from "cloudflare:workers";
+import { ArrowLeftIcon } from "@/components/layout/workspace-icons";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { SetupWizardClient } from "@/components/wizard/setup-wizard-client";
 import { getCurrentUserWizardState } from "@/lib/auth/server";
@@ -11,7 +12,7 @@ import { serializeWizardState } from "@/lib/wizard/http-handlers";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Project setup — Collate",
+  title: "Project setup | Collate",
   description: "Configure your topic, length, chapters, citations, and formatting.",
 };
 
@@ -33,9 +34,9 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
         <div className="space-y-3">
           <Link
             href="/projects"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
+            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
           >
-            <span aria-hidden="true">←</span>
+            <ArrowLeftIcon className="w-4 h-4 shrink-0" />
             <span>Back to projects</span>
           </Link>
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">

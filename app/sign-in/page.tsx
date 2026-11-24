@@ -12,7 +12,7 @@ import { resolveTurnstileSiteKey } from "@/lib/security/turnstile";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Sign in — Collate",
+  title: "Sign in | Collate",
   description: "Sign in to Collate to view your projects and continue writing chapters.",
 };
 

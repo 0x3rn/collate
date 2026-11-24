@@ -408,7 +408,7 @@ export async function runOriginalityGateWithRewrite(params: {
       "FLAGGED ITEMS:",
       ...evaluation.flaggedSpans
         .slice(0, 12)
-        .map((f, i) => `${i + 1}. [${f.kind}] ${f.reason} — "${f.sentence}"`),
+        .map((f, i) => `${i + 1}. [${f.kind}] ${f.reason}: "${f.sentence}"`),
       "",
       `CHAPTER MARKDOWN (${params.chapterTitle}):\n${markdown}`,
       "",
@@ -424,7 +424,7 @@ export async function runOriginalityGateWithRewrite(params: {
         step: `originality_rewrite_${rewritePasses}`,
         task: "draft",
         system:
-          "You are an academic integrity editor rewriting flagged overlapping sentences into original cited prose without losing any factual claim or [@citeKey].",
+          "You are an academic integrity editor rewriting flagged overlapping sentences into original cited prose without losing any factual claim or [@citeKey]. Do not use em-dashes (\u2014) as sentence punctuation; use commas, colons, or separate sentences instead.",
         messages: [{ role: "user", content: prompt }],
         maxTokens: 8000,
         temperature: 0.35,

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ArrowLeftIcon } from "@/components/layout/workspace-icons";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { NewProjectSelector } from "@/components/wizard/new-project-selector";
 import { requireUser } from "@/lib/auth/server";
@@ -7,7 +8,7 @@ import { requireUser } from "@/lib/auth/server";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Start a new project — Collate",
+  title: "Start a new project | Collate",
   description: "Choose whether you are writing a project, research paper, thesis, or assignment.",
 };
 
@@ -20,9 +21,9 @@ export default async function NewProjectPage() {
         <div className="space-y-4">
           <Link
             href="/projects"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
+            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--neutral-600)] hover:text-[var(--neutral-900)] transition-colors"
           >
-            <span aria-hidden="true">←</span>
+            <ArrowLeftIcon className="w-4 h-4 shrink-0" />
             <span>Back to projects</span>
           </Link>
           <div className="space-y-1.5">

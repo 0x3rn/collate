@@ -153,7 +153,7 @@ export async function handleCreateCheckout(
     customer_email: session.user.email,
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(pack.amountUsdCents),
-    "line_items[0][price_data][product_data][name]": `Collate — ${pack.label}`,
+    "line_items[0][price_data][product_data][name]": `Collate: ${pack.label}`,
     "line_items[0][quantity]": "1",
     "metadata[userId]": session.user.id,
     "metadata[credits]": String(pack.credits),

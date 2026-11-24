@@ -7,7 +7,7 @@ import { getCurrentUser } from "@/lib/auth/server";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Terms of service — Collate",
+  title: "Terms of service | Collate",
   description: "Terms of service, acceptable use, refund policy, and AI-disclosure guidance.",
 };
 
@@ -21,7 +21,7 @@ export default async function TermsPage() {
         <div className="space-y-2 border-b border-[var(--neutral-200)] pb-6">
           <h1 className="text-[2rem] font-medium">Terms of service</h1>
           <p className="text-sm text-[var(--neutral-600)]">
-            Pre-launch draft — legal counsel review required before public launch.
+            Pre-launch draft: legal counsel review required before public launch.
           </p>
         </div>
 

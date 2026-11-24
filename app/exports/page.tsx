@@ -9,7 +9,7 @@ import { requireUser } from "@/lib/auth/server";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Exports — Collate",
+  title: "Exports | Collate",
   description: "Download saved PDF and Word documents from your Collate projects.",
 };
 

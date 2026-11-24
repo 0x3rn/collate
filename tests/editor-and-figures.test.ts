@@ -18,6 +18,10 @@ import {
   searchWikimediaAcademicImages,
 } from "@/lib/research/connectors/wikimedia-images";
 import { handleListProjectFigures, handleSearchProjectFigures } from "@/lib/research/figures-http";
+import { buildThesisDocx } from "@/lib/export/docx-builder";
+import { getEditorPageBodyHeightPx, getPageSizeSpec } from "@/lib/export/page-sizes";
+import { buildChapterHtmlDocument, markdownToPrintHtml } from "@/lib/export/templates";
+import { extractMarkdownHeadings } from "@/lib/writing/chapter-reader-handlers";
 import {
   computeBlockPageNumbers,
   inlineMarkdownToEditableHtml,
@@ -25,6 +29,7 @@ import {
   parseMarkdownToBlocks,
   serializeBlocksToMarkdown,
   serializeEditableNodeToMarkdown,
+  SPACER_TOKEN,
   type MinimalDomNode,
 } from "@/lib/writing/editor-blocks";
 import { createInMemoryD1 } from "./helpers/in-memory-d1";
@@ -186,6 +191,150 @@ describe("Formatted Editor Block Parser, Page Breaks, Figures & Citation Preserv
     expect(serializeEditableNodeToMarkdown(mockRoot)).toBe(
       "Beetroot (*Beta vulgaris*) lowers **oxidative stress** [@poncedvila2026]."
     );
+  });
+
+  it("parses, serializes, indexes, and exports level-4 (####) headings without leaking raw hashtags", async () => {
+    const md = [
+      "## 2.1 Antioxidant Activity",
+      "",
+      "### 2.1.1 Betalain Pathways",
+      "",
+      "#### Effects of *Beta vulgaris* on Total Antioxidant Capacity and Oxidative Damage Biomarkers",
+      "",
+      "##### Normalized Deep Subheading",
+      "",
+      "Evidence paragraph explaining biomarker shifts.",
+    ].join("\n");
+
+    const blocks = parseMarkdownToBlocks(md);
+    expect(blocks.map((b) => (b.type === "heading" ? `h${b.level}` : b.type))).toEqual([
+      "h2",
+      "h3",
+      "h4",
+      "h4",
+      "paragraph",
+    ]);
+
+    const serialized = serializeBlocksToMarkdown(blocks);
+    expect(serialized).toContain(
+      "#### Effects of *Beta vulgaris* on Total Antioxidant Capacity and Oxidative Damage Biomarkers"
+    );
+
+    const toc = extractMarkdownHeadings(md);
+    expect(toc).toHaveLength(4);
+    expect(toc[2]).toEqual({
+      id: "sec-3",
+      level: 4,
+      text: "Effects of *Beta vulgaris* on Total Antioxidant Capacity and Oxidative Damage Biomarkers",
+    });
+
+    const printHtml = markdownToPrintHtml(md);
+    expect(printHtml).toContain(
+      "<h4>Effects of <em>Beta vulgaris</em> on Total Antioxidant Capacity and Oxidative Damage Biomarkers</h4>"
+    );
+    expect(printHtml).not.toContain("####");
+
+    const docxBytes = await buildThesisDocx(
+      {
+        projectTitle: "Beetroot Study",
+        workTypeLabel: "Project",
+        formatting: {
+          font: "Times New Roman",
+          fontSizePt: 12,
+          lineSpacing: "double",
+          marginsMm: 25,
+          pageNumbering: true,
+          frontMatter: {
+            coverPage: false,
+            certification: false,
+            dedication: false,
+            acknowledgements: false,
+            preface: false,
+            abstract: false,
+            tableOfContents: false,
+            listOfFiguresAndTables: false,
+            appendices: false,
+          },
+          cover: {
+            authorName: "",
+            institution: "",
+            department: "",
+            supervisor: "",
+            submissionDate: "",
+          },
+        },
+        chapters: [{ number: 2, title: "Literature Review", markdown: md }],
+        bibliographyEntries: [],
+      },
+      { includeFrontMatter: false, includeReferences: false }
+    );
+    expect(docxBytes.byteLength).toBeGreaterThan(2000);
+  });
+
+  it("persists explicit Enter blank lines (<!-- spacer -->) and pushes following blocks onto the next page", () => {
+    const blocks = parseMarkdownToBlocks(
+      [
+        "## 1.1 Intro",
+        "",
+        "Opening paragraph with enough words to start Page 1.",
+        "",
+        ...Array.from({ length: 24 }, () => SPACER_TOKEN),
+        "",
+        "## 1.2 Pushed heading",
+      ].join("\n\n")
+    );
+
+    const blankLines = blocks.filter((b) => b.type === "paragraph" && b.text === "");
+    expect(blankLines).toHaveLength(24);
+
+    const roundTrip = serializeBlocksToMarkdown(blocks);
+    expect(roundTrip.match(/<!-- spacer -->/g)?.length).toBe(24);
+
+    const pages = computeBlockPageNumbers(blocks, 275);
+    expect(pages[0]).toBe(1);
+    expect(pages[pages.length - 1]).toBeGreaterThanOrEqual(2);
+
+    const printHtml = markdownToPrintHtml(roundTrip);
+    expect(printHtml).toContain('<p class="blank-line">&nbsp;</p>');
+
+    // Constant physical dimensions for A4 vs US Letter across editor, PDF, and DOCX
+    expect(getEditorPageBodyHeightPx("a4", 25)).toBe(934);
+    expect(getEditorPageBodyHeightPx("letter", 25)).toBe(867);
+    expect(getPageSizeSpec("a4").docxWidthTwips).toBe(11906);
+    expect(getPageSizeSpec("a4").docxHeightTwips).toBe(16838);
+    expect(getPageSizeSpec("letter").docxWidthTwips).toBe(12240);
+    expect(getPageSizeSpec("letter").docxHeightTwips).toBe(15840);
+
+    const letterHtml = buildChapterHtmlDocument(
+      { number: 1, title: "Intro", markdown: "# Chapter 1\n\nBody text." },
+      {
+        font: "Times New Roman",
+        fontSizePt: 12,
+        lineSpacing: "double",
+        marginsMm: 25,
+        pageSize: "letter",
+        pageNumbering: true,
+        frontMatter: {
+          coverPage: false,
+          certification: false,
+          dedication: false,
+          acknowledgements: false,
+          preface: false,
+          abstract: false,
+          tableOfContents: false,
+          listOfFiguresAndTables: false,
+          appendices: false,
+        },
+        cover: {
+          authorName: "",
+          institution: "",
+          department: "",
+          supervisor: "",
+          submissionDate: "",
+        },
+      }
+    );
+    expect(letterHtml).toContain("size: letter;");
   });
 });
 

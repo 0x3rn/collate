@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { Button, LinkButton } from "@/components/ui/button";
+import { CustomSelect } from "@/components/ui/custom-select";
 import {
   DownloadMenuButton,
   type DownloadExportFormat,
@@ -13,7 +14,7 @@ import {
   type InsufficientCreditsDetails,
 } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
-import type { ChapterStatus } from "@/db/schema";
+import type { ChapterStatus, ExperimentalDataMode } from "@/db/schema";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 import { canStartChapter } from "@/lib/writing/state-machine";
 
@@ -74,10 +75,14 @@ export function ChapterPipelinePanel({
   projectId,
   chapters,
   datasets,
+  isExperimental = false,
+  experimentalDataMode = "user_provided",
 }: {
   projectId: string;
   chapters: ChapterPanelItem[];
   datasets: DatasetPanelItem[];
+  isExperimental?: boolean;
+  experimentalDataMode?: ExperimentalDataMode;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -340,9 +345,11 @@ export function ChapterPipelinePanel({
                 Results data (optional)
               </h3>
               <p className="text-sm text-[var(--neutral-600)] leading-relaxed max-w-[62ch]">
-                Upload a CSV file from your survey or lab work so Collate calculates real tables
-                automatically. Without one, it uses cited public data or clearly marked placeholders
-                — never invented numbers.
+                {isExperimental &&
+                experimentalDataMode === "published_benchmarks" &&
+                datasets.length === 0
+                  ? "Published benchmark mode is active. Without an uploaded CSV, Collate will gather verified experimental value ranges from cited studies for your Results tables. Upload your own CSV anytime to use your primary measurements instead."
+                  : "Upload a CSV file from your survey or lab work so Collate calculates real tables automatically. Without one, it uses cited public data or clearly marked placeholders, never invented numbers."}
               </p>
             </div>
             <label className="inline-flex items-center justify-center min-h-[42px] px-4 py-2 text-sm font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] cursor-pointer shrink-0 whitespace-nowrap transition-colors">
@@ -472,8 +479,8 @@ export function ChapterPipelinePanel({
                           />
                           <span>
                             {ch.status === "queued"
-                              ? "Queued for drafting — status updates automatically"
-                              : "Drafting in progress — status updates automatically"}
+                              ? "Queued for drafting. Status updates automatically."
+                              : "Drafting in progress. Status updates automatically."}
                           </span>
                         </p>
                       ) : null}
@@ -624,19 +631,24 @@ export function ChapterPipelinePanel({
                         >
                           Section to update (optional)
                         </label>
-                        <select
+                        <CustomSelect
                           id={`rev-section-${ch.id}`}
+                          ariaLabel="Section to update"
+                          size="sm"
                           value={revisionTargetSection}
-                          onChange={(e) => setRevisionTargetSection(e.target.value)}
-                          className="block w-full px-3 py-2 text-sm bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-                        >
-                          <option value="">Auto-detect from my note (recommended)</option>
-                          {ch.sectionHeadings.map((heading, idx) => (
-                            <option key={heading} value={heading}>
-                              {ch.number}.{idx + 1} {heading}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={setRevisionTargetSection}
+                          options={[
+                            {
+                              value: "",
+                              label: "Auto-detect from my note (recommended)",
+                              description: "Updates only the sections mentioned in your note",
+                            },
+                            ...ch.sectionHeadings.map((heading, idx) => ({
+                              value: heading,
+                              label: `${ch.number}.${idx + 1} ${heading}`,
+                            })),
+                          ]}
+                        />
                       </div>
                     ) : null}
                     <textarea
@@ -654,7 +666,7 @@ export function ChapterPipelinePanel({
                         loadingLabel="Queueing revision..."
                         onClick={() => submitRevision(ch.id)}
                       >
-                        Start revision run
+                        Start revision
                       </Button>
                       <Button
                         type="button"

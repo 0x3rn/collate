@@ -2,10 +2,17 @@
 
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { FormField } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
+import type { ExperimentalDataMode } from "@/db/schema";
 import type { SerializedWizardState } from "@/lib/wizard/http-handlers";
 import { ACADEMIC_LEVELS } from "@/lib/wizard/schema";
+
+const LEVEL_OPTIONS = [
+  { value: "", label: "Select level" },
+  ...ACADEMIC_LEVELS.map((lvl) => ({ value: lvl, label: lvl })),
+];
 
 export function StepTopicForm({
   wizard,
@@ -25,6 +32,10 @@ export function StepTopicForm({
   const [level, setLevel] = useState(wizard.project.level ?? "");
   const [institution, setInstitution] = useState(wizard.project.institution ?? "");
   const [supervisorNotes, setSupervisorNotes] = useState(wizard.project.supervisorNotes ?? "");
+  const [isExperimental, setIsExperimental] = useState<boolean>(wizard.settings.isExperimental);
+  const [experimentalDataMode, setExperimentalDataMode] = useState<ExperimentalDataMode>(
+    wizard.settings.experimentalDataMode
+  );
   const [questionList, setQuestionList] = useState<string[]>(
     wizard.questions.length > 0 ? wizard.questions.map((q) => q.text) : [""]
   );
@@ -84,6 +95,8 @@ export function StepTopicForm({
       level: level.trim(),
       institution: institution.trim(),
       supervisorNotes: supervisorNotes.trim(),
+      isExperimental,
+      experimentalDataMode: isExperimental ? experimentalDataMode : "user_provided",
     });
   }
 
@@ -184,19 +197,14 @@ export function StepTopicForm({
           >
             Academic level (optional)
           </label>
-          <select
+          <CustomSelect
             id="wizard-level"
+            ariaLabel="Academic level"
             value={level}
-            onChange={(e) => setLevel(e.target.value)}
-            className="block w-full min-h-[44px] px-3.5 py-2.5 text-base bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] focus:border-[var(--accent-600)]"
-          >
-            <option value="">Select level</option>
-            {ACADEMIC_LEVELS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {lvl}
-              </option>
-            ))}
-          </select>
+            onChange={setLevel}
+            placeholder="Select level"
+            options={LEVEL_OPTIONS}
+          />
         </div>
       </div>
 
@@ -208,6 +216,119 @@ export function StepTopicForm({
         onChange={(e) => setInstitution(e.target.value)}
         placeholder="e.g. University of Lagos"
       />
+
+      {!isAssignment ? (
+        <fieldset className="rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]/70 p-4 sm:p-5 space-y-4">
+          <legend className="sr-only">Experimental or empirical study settings</legend>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
+              Does this study involve an experiment or empirical data?
+            </p>
+            <p className="text-xs text-[var(--neutral-600)] leading-relaxed m-0">
+              Tell Collate if your topic includes lab assays, animal or clinical trials, field
+              measurements, or survey datasets that require numerical results.
+            </p>
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label="Experimental or empirical study"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-2.5"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!isExperimental}
+              onClick={() => setIsExperimental(false)}
+              className={`text-left px-3.5 py-3 rounded-[var(--radius-sm)] border transition-colors cursor-pointer ${
+                !isExperimental
+                  ? "border-[var(--accent-600)] bg-white ring-1 ring-[var(--accent-600)]/20"
+                  : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
+              }`}
+            >
+              <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                No, standard / literature study
+              </p>
+              <p className="text-xs text-[var(--neutral-500)] mt-0.5 m-0">
+                No primary lab or experimental values needed
+              </p>
+            </button>
+
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isExperimental}
+              onClick={() => setIsExperimental(true)}
+              className={`text-left px-3.5 py-3 rounded-[var(--radius-sm)] border transition-colors cursor-pointer ${
+                isExperimental
+                  ? "border-[var(--accent-600)] bg-white ring-1 ring-[var(--accent-600)]/20"
+                  : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
+              }`}
+            >
+              <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                Yes, experimental / empirical study
+              </p>
+              <p className="text-xs text-[var(--neutral-500)] mt-0.5 m-0">
+                Includes lab assays, trials, or numerical findings
+              </p>
+            </button>
+          </div>
+
+          {isExperimental ? (
+            <div className="pt-3 border-t border-[var(--neutral-200)] space-y-2.5">
+              <p className="text-xs font-semibold text-[var(--neutral-800)] m-0">
+                How should experimental results and figures be handled?
+              </p>
+              <div
+                role="radiogroup"
+                aria-label="Experimental data handling"
+                className="flex flex-col gap-2"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={experimentalDataMode === "user_provided"}
+                  onClick={() => setExperimentalDataMode("user_provided")}
+                  className={`text-left p-3.5 rounded-[var(--radius-sm)] border transition-colors cursor-pointer ${
+                    experimentalDataMode === "user_provided"
+                      ? "border-[var(--accent-600)] bg-[var(--accent-100)]/45"
+                      : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
+                  }`}
+                >
+                  <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                    I will provide my own lab or survey data
+                  </p>
+                  <p className="text-xs text-[var(--neutral-600)] mt-1 leading-relaxed m-0">
+                    Upload your CSV file on the project page before starting Results so Collate
+                    calculates your tables directly from your real readings.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={experimentalDataMode === "published_benchmarks"}
+                  onClick={() => setExperimentalDataMode("published_benchmarks")}
+                  className={`text-left p-3.5 rounded-[var(--radius-sm)] border transition-colors cursor-pointer ${
+                    experimentalDataMode === "published_benchmarks"
+                      ? "border-[var(--accent-600)] bg-[var(--accent-100)]/45"
+                      : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
+                  }`}
+                >
+                  <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                    Gather published benchmark data from similar studies
+                  </p>
+                  <p className="text-xs text-[var(--neutral-600)] mt-1 leading-relaxed m-0">
+                    Collate gathers verified published experimental studies, extracts accepted
+                    physiological or empirical value ranges, and builds range-grounded comparative
+                    tables strictly within those cited bounds.
+                  </p>
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </fieldset>
+      ) : null}
 
       <div className="space-y-1.5">
         <label

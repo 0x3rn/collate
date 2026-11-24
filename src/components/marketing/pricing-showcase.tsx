@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LinkButton } from "@/components/ui/button";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { calculateProjectCreditEstimate } from "@/config/pricing";
 import type { ProjectType } from "@/db/schema";
 
@@ -63,17 +64,20 @@ export function PricingShowcase({
               >
                 Work type
               </label>
-              <select
+              <CustomSelect<ProjectType>
                 id="calc-work-type"
+                ariaLabel="Work type"
+                size="sm"
                 value={workType}
-                onChange={(e) => handleWorkTypeChange(e.target.value as ProjectType)}
-                className="block w-full min-h-[42px] px-3 py-2 text-sm bg-[var(--neutral-50)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-              >
-                <option value="project">Project (40–70 pages)</option>
-                <option value="research">Research paper (15–40 pages)</option>
-                <option value="thesis">Thesis (50–300 pages)</option>
-                <option value="assignment">Assignment (2–6 pages / question)</option>
-              </select>
+                onChange={handleWorkTypeChange}
+                buttonClassName="bg-[var(--neutral-50)] hover:bg-white"
+                options={[
+                  { value: "project", label: "Project (40-70 pages)" },
+                  { value: "research", label: "Research paper (15-40 pages)" },
+                  { value: "thesis", label: "Thesis (50-300 pages)" },
+                  { value: "assignment", label: "Assignment (2-6 pages / question)" },
+                ]}
+              />
             </div>
 
             <div className="space-y-1.5">

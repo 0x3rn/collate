@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
+import { CustomSelect } from "@/components/ui/custom-select";
 import { FormField } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 
@@ -185,18 +186,17 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
               >
                 User
               </label>
-              <select
+              <CustomSelect
                 id="refund-user"
+                ariaLabel="User"
                 value={targetUserId}
-                onChange={(e) => setTargetUserId(e.target.value)}
-                className="block w-full min-h-[44px] px-3 py-2 text-sm bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
-              >
-                {initial.users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.email} ({u.creditsBalance.toLocaleString("en-US")} credits)
-                  </option>
-                ))}
-              </select>
+                onChange={setTargetUserId}
+                placeholder="Select user"
+                options={initial.users.map((u) => ({
+                  value: u.id,
+                  label: `${u.email} (${u.creditsBalance.toLocaleString("en-US")} credits)`,
+                }))}
+              />
             </div>
             <FormField
               id="refund-credits"
@@ -241,7 +241,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
                 >
                   {j.status}
                 </span>
-                {j.error ? ` — ${j.error.slice(0, 90)}` : ""}
+                {j.error ? `: ${j.error.slice(0, 90)}` : ""}
               </span>
               <span className="text-[var(--neutral-600)]">${j.costEstimateUsd.toFixed(5)}</span>
             </li>

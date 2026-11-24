@@ -250,6 +250,7 @@ export async function handleCreateExport(
       fontSizePt: wizard.settings.fontSizePt,
       lineSpacing: wizard.settings.lineSpacing,
       marginsMm: wizard.settings.marginsMm,
+      pageSize: wizard.settings.pageSize,
       pageNumbering: wizard.settings.pageNumbering,
       frontMatter: wizard.settings.frontMatter,
       cover: wizard.settings.cover,

@@ -20,7 +20,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Overview — Collate",
+  title: "Overview | Collate",
   description: "Start a topic check, continue active drafts, and access recent exports.",
 };
 

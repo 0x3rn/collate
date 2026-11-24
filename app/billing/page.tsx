@@ -14,7 +14,7 @@ import { formatCredits } from "@/lib/ui/formatters";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Credits & Billing — Collate",
+  title: "Credits & Billing | Collate",
   description: "Check your credit balance, buy credit packs, and review your credit history.",
 };
 
@@ -52,15 +52,14 @@ export default async function BillingPage({
             Credits &amp; Billing
           </h1>
           <p className="text-sm text-[var(--neutral-600)]">
-            Pay as you write — one credit per target page, with automatic refunds if any draft
-            fails.
+            Pay as you write: one credit per target page, with automatic refunds if any draft fails.
           </p>
         </header>
 
         {payment === "stripe_success" ? (
           <FormAlert tone="success">
-            Payment received. Your new credits will appear in your balance within a few seconds —
-            refresh if they have not updated yet.
+            Payment received. Your new credits will appear in your balance within a few seconds.
+            Refresh if they have not updated yet.
           </FormAlert>
         ) : payment === "paystack_pending" ? (
           <FormAlert tone="info">

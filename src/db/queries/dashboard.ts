@@ -322,7 +322,7 @@ export async function listEnrichedProjectsForUser(
                   : needsUserDetails
                     ? `Chapter ${ch.number} needs your details`
                     : `Chapter ${ch.number} paused temporarily`,
-              detail: att?.title ? `${ch.title} — ${att.title}` : ch.title,
+              detail: att?.title ? `${ch.title}: ${att.title}` : ch.title,
               actionLabel: needsUserDetails
                 ? "Provide Details"
                 : project.type === "assignment"

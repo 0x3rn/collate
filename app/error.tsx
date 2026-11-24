@@ -22,7 +22,7 @@ export default function AppError({ error, reset }: ErrorBoundaryProps) {
         <p className="text-sm font-medium text-[var(--neutral-500)]">Collate</p>
         <h1 className="text-2xl font-medium">Something went wrong</h1>
         <p className="text-[var(--neutral-600)] leading-relaxed">
-          An unexpected error interrupted this page. Your saved work is unaffected—try loading the
+          An unexpected error interrupted this page. Your saved work is unaffected; try loading the
           page again.
         </p>
         {error.digest ? (

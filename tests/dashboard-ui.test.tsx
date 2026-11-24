@@ -333,7 +333,7 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(integrityHtml).toContain("Text (.txt)");
     expect(integrityHtml).toContain("Markdown (.md)");
     expect(integrityHtml).toContain(
-      "Optional — only use if your institution requires an AI-use disclosure."
+      "Optional. Only use if your institution requires an AI-use disclosure."
     );
     expect(integrityHtml).not.toContain("JSON");
 
@@ -574,13 +574,16 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(readyReaderHtml).toContain("Shared across projects");
     expect(readyReaderHtml).not.toContain("Gate:");
     expect(readyReaderHtml).toContain("Draft history (1)");
-    expect(readyReaderHtml).toContain("Version 1 · AI draft");
+    expect(readyReaderHtml).toContain("Version 1 · Original draft");
+    expect(readyReaderHtml).not.toContain("AI draft");
+    expect(readyReaderHtml).not.toContain("AI revision");
     expect(readyReaderHtml).toContain("Current");
     expect(readyReaderHtml).toContain("<figure");
     expect(readyReaderHtml).toContain("CC BY-SA 4.0");
-    // Read mode stays clean without editor page-break chrome; page-break markers belong in Light edit only
+    // Read mode keeps subtle page indicators while hiding literal Page break editor bars
     expect(readyReaderHtml).not.toContain("Page break");
-    expect(readyReaderHtml).not.toContain("~Page");
+    expect(readyReaderHtml).toContain("~Page 1");
+    expect(readyReaderHtml).toContain("~Page 2");
 
     const editorHtml = renderToStaticMarkup(
       <ChapterRichEditor
@@ -597,8 +600,9 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(editorHtml).toContain("+ Page break");
     expect(editorHtml).toContain("+ Verified image");
     expect(editorHtml).toContain("Markdown source");
-    expect(editorHtml).toContain("~Page 1");
-    expect(editorHtml).toContain("~Page 2");
+    expect(editorHtml).toContain("Document size");
+    expect(editorHtml).toContain("Page 1 · A4");
+    expect(editorHtml).toContain("210 × 297 mm");
   });
 
   it("uses student-friendly Research copy without Workspace and computes auto-hide scrollbar metrics accurately", () => {

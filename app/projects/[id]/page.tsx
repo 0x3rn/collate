@@ -37,7 +37,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Project overview — Collate",
+  title: "Project overview | Collate",
   description: "Manage chapters, datasets, outline, citations, and formatting for your project.",
 };
 
@@ -220,7 +220,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-[var(--neutral-500)]">Layout</dt>
                 <dd className="text-[var(--neutral-800)] text-right tabular-nums m-0">
-                  {settings.marginsMm}mm margins · {settings.spelling.toUpperCase()} English ·{" "}
+                  {settings.pageSize === "letter" ? "US Letter" : "A4"} · {settings.marginsMm}mm
+                  margins · {settings.spelling.toUpperCase()} English ·{" "}
                   {settings.pageNumbering ? "Page numbers included" : "No page numbers"}
                 </dd>
               </div>
@@ -253,6 +254,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <ChapterPipelinePanel
             projectId={project.id}
             chapters={chapterPanelItems}
+            isExperimental={settings.isExperimental}
+            experimentalDataMode={settings.experimentalDataMode}
             datasets={datasetRows.map((d) => ({
               id: d.id,
               filename: d.filename,

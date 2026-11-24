@@ -3,10 +3,11 @@ import {
   createWizardDraftProject,
   getWizardStateForUser,
   saveWizardStepForUser,
+  updateProjectPageSizeForUser,
   WizardError,
   type HydratedWizardState,
 } from "@/db/queries/wizard";
-import { PROJECT_TYPES } from "@/db/schema";
+import { PAGE_SIZES, PROJECT_TYPES } from "@/db/schema";
 import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { getSessionFromToken } from "@/lib/auth/service";
@@ -35,8 +36,11 @@ export interface SerializedWizardState {
     fontSizePt: number;
     lineSpacing: HydratedWizardState["settings"]["lineSpacing"];
     marginsMm: number;
+    pageSize: HydratedWizardState["settings"]["pageSize"];
     pageNumbering: boolean;
     spelling: HydratedWizardState["settings"]["spelling"];
+    isExperimental: boolean;
+    experimentalDataMode: HydratedWizardState["settings"]["experimentalDataMode"];
     frontMatter: HydratedWizardState["settings"]["frontMatter"];
     cover: HydratedWizardState["settings"]["cover"];
     updatedAt: string;
@@ -105,8 +109,11 @@ export function serializeWizardState(state: HydratedWizardState): SerializedWiza
       fontSizePt: state.settings.fontSizePt,
       lineSpacing: state.settings.lineSpacing,
       marginsMm: state.settings.marginsMm,
+      pageSize: state.settings.pageSize,
       pageNumbering: state.settings.pageNumbering,
       spelling: state.settings.spelling,
+      isExperimental: state.settings.isExperimental,
+      experimentalDataMode: state.settings.experimentalDataMode,
       frontMatter: state.settings.frontMatter,
       cover: state.settings.cover,
       updatedAt: state.settings.updatedAt.toISOString(),
@@ -289,5 +296,58 @@ export async function handleSaveWizardStep(
     return jsonNoStore({ ok: true, wizard: serializeWizardState(state) }, 200);
   } catch (err) {
     return handleWizardRouteError(err, "save_wizard_step");
+  }
+}
+
+const UpdateProjectSettingsSchema = z.object({
+  pageSize: z.enum(PAGE_SIZES, {
+    message: "Choose A4 or US Letter page size.",
+  }),
+});
+
+export async function handleUpdateProjectSettings(
+  request: Request,
+  rawProjectId: string,
+  deps: HttpAuthDeps
+): Promise<Response> {
+  if (!isAllowedOrigin(request, deps.appUrl)) {
+    return jsonNoStore({ ok: false, error: "Forbidden cross-origin request." }, 403);
+  }
+
+  const session = await requireApiSession(request, deps);
+  if (!session) {
+    return jsonNoStore({ ok: false, error: "Authentication required." }, 401);
+  }
+
+  const parsedId = ProjectIdSchema.safeParse(rawProjectId);
+  if (!parsedId.success) {
+    return jsonNoStore({ ok: false, error: "Invalid project ID." }, 400);
+  }
+
+  const parsedBody = await readJsonBody(request);
+  if (!parsedBody.ok) {
+    return jsonNoStore({ ok: false, error: "Invalid JSON request body." }, 400);
+  }
+
+  const validated = UpdateProjectSettingsSchema.safeParse(parsedBody.data);
+  if (!validated.success) {
+    return jsonNoStore(
+      { ok: false, error: validated.error.issues[0]?.message ?? "Invalid settings update." },
+      400
+    );
+  }
+
+  try {
+    const now = (deps.nowFn ?? (() => new Date()))();
+    const updated = await updateProjectPageSizeForUser(
+      deps.db,
+      session.user.id,
+      parsedId.data,
+      validated.data.pageSize,
+      now
+    );
+    return jsonNoStore({ ok: true, pageSize: updated.pageSize }, 200);
+  } catch (err) {
+    return handleWizardRouteError(err, "update_project_settings");
   }
 }

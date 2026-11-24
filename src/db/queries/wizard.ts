@@ -11,6 +11,7 @@ import {
   type ProjectRecord,
   type ProjectSettingsRecord,
   type ProjectType,
+  type PageSize,
   type QuestionRecord,
 } from "@/db/schema";
 import {
@@ -109,8 +110,11 @@ async function ensureDefaultSettings(
       fontSizePt: 12,
       lineSpacing: "double",
       marginsMm: 25,
+      pageSize: "a4",
       pageNumbering: true,
       spelling: "uk",
+      isExperimental: false,
+      experimentalDataMode: "user_provided",
       frontMatterJson: JSON.stringify(DEFAULT_FRONT_MATTER),
       coverJson: JSON.stringify(DEFAULT_COVER_DETAILS),
       updatedAt: now,
@@ -241,8 +245,11 @@ export async function getWizardStateForUser(
       fontSizePt: settingsRow.fontSizePt,
       lineSpacing: settingsRow.lineSpacing,
       marginsMm: settingsRow.marginsMm,
+      pageSize: settingsRow.pageSize,
       pageNumbering: settingsRow.pageNumbering,
       spelling: settingsRow.spelling,
+      isExperimental: settingsRow.isExperimental,
+      experimentalDataMode: settingsRow.experimentalDataMode,
       updatedAt: settingsRow.updatedAt,
       frontMatter: safeParseFrontMatter(settingsRow.frontMatterJson),
       cover: safeParseCover(settingsRow.coverJson),
@@ -379,6 +386,19 @@ export async function saveWizardStepForUser(
         updatedAt: now,
       })
       .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+
+    if (existing.project.type !== "assignment") {
+      const nextIsExperimental = Boolean(payload.isExperimental);
+      const nextDataMode = nextIsExperimental ? payload.experimentalDataMode : "user_provided";
+      await db
+        .update(projectSettings)
+        .set({
+          isExperimental: nextIsExperimental,
+          experimentalDataMode: nextDataMode,
+          updatedAt: now,
+        })
+        .where(eq(projectSettings.projectId, projectId));
+    }
   } else if (payload.step === 3) {
     if (!options.allowMockVerdict) {
       throw new WizardError(
@@ -575,6 +595,7 @@ export async function saveWizardStepForUser(
         fontSizePt: payload.fontSizePt,
         lineSpacing: payload.lineSpacing,
         marginsMm: payload.marginsMm,
+        pageSize: payload.pageSize,
         pageNumbering: payload.pageNumbering,
         spelling: payload.spelling,
         coverJson: JSON.stringify(payload.cover),
@@ -605,4 +626,29 @@ export async function saveWizardStepForUser(
     throw new Error("Failed to reload wizard state after save");
   }
   return refreshed;
+}
+
+export async function updateProjectPageSizeForUser(
+  db: AppDb,
+  userId: string,
+  projectId: string,
+  pageSize: PageSize,
+  now: Date = new Date()
+): Promise<{ pageSize: PageSize }> {
+  const existing = await getWizardStateForUser(db, userId, projectId);
+  if (!existing) {
+    throw new WizardError("NOT_FOUND", "Project not found.", 404);
+  }
+
+  await db
+    .update(projectSettings)
+    .set({ pageSize, updatedAt: now })
+    .where(eq(projectSettings.projectId, projectId));
+
+  await db
+    .update(projects)
+    .set({ updatedAt: now })
+    .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
+
+  return { pageSize };
 }

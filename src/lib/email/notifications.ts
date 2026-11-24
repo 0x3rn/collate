@@ -102,7 +102,7 @@ export function buildChapterNeedsAttentionEmail(params: {
 
   if (isTechnical) {
     return {
-      subject: `Chapter ${params.chapterNumber} paused temporarily — ${params.projectTitle}`,
+      subject: `Chapter ${params.chapterNumber} paused temporarily: ${params.projectTitle}`,
       text: [
         `Hi ${safeName},`,
         "",
@@ -118,7 +118,7 @@ export function buildChapterNeedsAttentionEmail(params: {
   }
 
   return {
-    subject: `Chapter ${params.chapterNumber} needs your input — ${params.projectTitle}`,
+    subject: `Chapter ${params.chapterNumber} needs your input: ${params.projectTitle}`,
     text: [
       `Hi ${safeName},`,
       "",
@@ -159,7 +159,7 @@ export function buildPaymentReceiptEmail(params: {
 }): Omit<EmailMessage, "to"> {
   const safeName = params.name.trim() || "there";
   return {
-    subject: `Collate receipt — ${params.creditsAdded} credits added`,
+    subject: `Collate receipt: ${params.creditsAdded} credits added`,
     text: [
       `Hi ${safeName},`,
       "",

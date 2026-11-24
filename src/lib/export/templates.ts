@@ -1,14 +1,16 @@
-import type { LineSpacing } from "@/db/schema";
+import type { LineSpacing, PageSize } from "@/db/schema";
 import type { CoverDetails, FrontMatterToggles } from "@/lib/wizard/schema";
 import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
 import type { ResolvedExportFigureAsset } from "./figure-assets";
 import { computeControlledFigureDimensions } from "./figure-layout";
+import { getPageSizeSpec } from "./page-sizes";
 
 export interface ExportFormattingSettings {
   font: string;
   fontSizePt: number;
   lineSpacing: LineSpacing;
   marginsMm: number;
+  pageSize?: PageSize;
   pageNumbering: boolean;
   frontMatter: FrontMatterToggles;
   cover: CoverDetails;
@@ -74,12 +76,17 @@ export function markdownToPrintHtml(
         break;
       }
       case "heading": {
-        const tag = block.level === 1 ? "h1" : block.level === 2 ? "h2" : "h3";
+        const tag =
+          block.level === 1 ? "h1" : block.level === 2 ? "h2" : block.level === 3 ? "h3" : "h4";
         htmlParts.push(`<${tag}>${formatInlineMarkdown(block.text)}</${tag}>`);
         break;
       }
       case "paragraph": {
-        htmlParts.push(`<p>${formatInlineMarkdown(block.text)}</p>`);
+        htmlParts.push(
+          block.text.trim().length === 0
+            ? '<p class="blank-line">&nbsp;</p>'
+            : `<p>${formatInlineMarkdown(block.text)}</p>`
+        );
         break;
       }
       case "blockquote": {
@@ -154,9 +161,10 @@ export function markdownToPrintHtml(
 
 function buildPrintCss(fmt: ExportFormattingSettings): string {
   const safeFont = escapeHtml(fmt.font);
+  const pageSpec = getPageSizeSpec(fmt.pageSize);
   return `
     @page {
-      size: A4;
+      size: ${pageSpec.cssPageSize};
       margin: ${fmt.marginsMm}mm;
     }
     body {
@@ -211,7 +219,9 @@ function buildPrintCss(fmt: ExportFormattingSettings): string {
     h1 { font-size: 16pt; font-weight: 700; margin: 0 0 12pt 0; }
     h2 { font-size: 13.5pt; font-weight: 700; margin: 16pt 0 8pt 0; }
     h3 { font-size: 12pt; font-weight: 700; margin: 12pt 0 6pt 0; }
+    h4 { font-size: 11.5pt; font-weight: 700; margin: 10pt 0 4pt 0; }
     p { margin: 0 0 10pt 0; text-align: left; }
+    p.blank-line { margin: 0 0 10pt 0; min-height: 1em; }
     blockquote {
       margin: 10pt 0 10pt 16pt;
       padding-left: 10pt;
@@ -311,7 +321,7 @@ export function buildFrontMatterHtml(doc: ThesisExportDocument, tocEntries: TocE
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>${escapeHtml(doc.projectTitle)} — Front Matter</title>
+    <title>${escapeHtml(doc.projectTitle)} | Front Matter</title>
     <style>${buildPrintCss(doc.formatting)}</style>
   </head>
   <body>${blocks.join("\n")}</body>

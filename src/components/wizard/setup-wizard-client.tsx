@@ -65,7 +65,7 @@ export function SetupWizardClient({
       }
     } catch {
       toast.error(
-        "Network error while saving your progress. Your inputs are still here—try again.",
+        "Network error while saving your progress. Your inputs are still here; try again.",
         "Connection error"
       );
     } finally {

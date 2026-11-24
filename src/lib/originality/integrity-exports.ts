@@ -198,10 +198,11 @@ function formatReadableDate(iso: string): string {
   }).format(date);
 }
 
-function formatVersionCreator(createdBy: string): string {
+function formatVersionLabel(version: number, createdBy: string): string {
+  if (version === 1 && createdBy !== "user") return "Original draft";
   if (createdBy === "user") return "Author edit";
-  if (createdBy === "revision") return "Requested revision";
-  return "AI draft";
+  if (createdBy === "revision") return "Collate revision";
+  return "Collate draft";
 }
 
 function formatVerificationLabel(status: string): string {
@@ -273,7 +274,7 @@ export function formatWritingProcessLogReport(
   } else {
     log.researchHistory.forEach((run, idx) => {
       lines.push(
-        `${idx + 1}. Source check on ${formatReadableDate(run.startedAt)} — Status: ${run.status} | Sources found: ${run.sourcesFound.toLocaleString("en-US")} | Retrieved: ${run.sourcesFetched.toLocaleString("en-US")} | Subtopics covered: ${run.subtopicsCovered}`
+        `${idx + 1}. Source check on ${formatReadableDate(run.startedAt)} | Status: ${run.status} | Sources found: ${run.sourcesFound.toLocaleString("en-US")} | Retrieved: ${run.sourcesFetched.toLocaleString("en-US")} | Subtopics covered: ${run.subtopicsCovered}`
       );
     });
   }
@@ -288,7 +289,7 @@ export function formatWritingProcessLogReport(
       const yearPart = src.year ? ` (${src.year})` : "";
       const idPart = src.doi ? `DOI: ${src.doi}` : src.url || "No link recorded";
       lines.push(
-        `${idx + 1}. ${src.title}${yearPart} — ${formatVerificationLabel(src.verificationStatus)} | ${idPart} | Retrieved ${formatReadableDate(src.retrievedAt)}`
+        `${idx + 1}. ${src.title}${yearPart} | ${formatVerificationLabel(src.verificationStatus)} | ${idPart} | Retrieved ${formatReadableDate(src.retrievedAt)}`
       );
     });
   }
@@ -316,7 +317,7 @@ export function formatWritingProcessLogReport(
                   v.overlapScore !== null ? ` (${v.overlapScore}% source overlap)` : ""
                 }`;
           lines.push(
-            `  - Version ${v.version} (${formatVersionCreator(v.createdBy)}, ${formatReadableDate(v.createdAt)}): ${v.wordCount.toLocaleString("en-US")} words, ${v.pageCount.toLocaleString("en-US")} pages — ${checkText}`
+            `  - Version ${v.version} (${formatVersionLabel(v.version, v.createdBy)}, ${formatReadableDate(v.createdAt)}): ${v.wordCount.toLocaleString("en-US")} words, ${v.pageCount.toLocaleString("en-US")} pages | ${checkText}`
           );
         }
       }
@@ -389,7 +390,7 @@ export async function formatWritingProcessLogPdf(
   disclosureStatement: string
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  doc.setTitle(`${log.project.title} — Writing Process Log`);
+  doc.setTitle(`${log.project.title} | Writing Process Log`);
   doc.setAuthor("Collate");
 
   const bodyFont = await doc.embedFont(StandardFonts.Helvetica);
@@ -545,7 +546,7 @@ export async function formatWritingProcessLogPdf(
                   v.overlapScore !== null ? ` (${v.overlapScore}% source overlap)` : ""
                 }`;
           drawParagraph(
-            `- Version ${v.version} (${formatVersionCreator(v.createdBy)}, ${formatReadableDate(v.createdAt)}): ${v.wordCount.toLocaleString("en-US")} words, ${v.pageCount.toLocaleString("en-US")} pages - ${checkText}`,
+            `- Version ${v.version} (${formatVersionLabel(v.version, v.createdBy)}, ${formatReadableDate(v.createdAt)}): ${v.wordCount.toLocaleString("en-US")} words, ${v.pageCount.toLocaleString("en-US")} pages - ${checkText}`,
             { size: 9.5, indent: 12, after: 3 }
           );
         }

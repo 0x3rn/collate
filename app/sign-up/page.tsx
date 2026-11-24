@@ -11,7 +11,7 @@ import { resolveTurnstileSiteKey } from "@/lib/security/turnstile";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Create account — Collate",
+  title: "Create account | Collate",
   description: "Create a Collate account to start checking topics and drafting chapters.",
 };
 

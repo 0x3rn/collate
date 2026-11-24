@@ -189,7 +189,7 @@ export async function draftAndVerifySection(
     "STRICT EVIDENCE RULES (NON-NEGOTIABLE):",
     "1. Use ONLY the provided passages and verified data tables. Never invent statistics, quotes, or sources.",
     `2. You may cite ONLY these registered citation keys using [@key] syntax: ${allowedKeys.map((k) => `@${k}`).join(", ") || "(none)"}.`,
-    "3. Write in original academic prose without copying source sentences verbatim.",
+    "3. Write in original academic prose without copying source sentences verbatim. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
     ...(isSurgicalRevision
       ? [
           "4. SURGICAL REVISION MODE: Preserve all unaffected sentences, existing verified [@key] citations, tables, page breaks (<!-- pagebreak -->), and :::figure blocks from CURRENT SECTION TEXT verbatim. Modify ONLY what the user's revision request specifically asks to add, fix, expand, or tighten.",
@@ -427,8 +427,8 @@ export async function enforceChapterLengthBand(
     const targetWords = params.targetPages * params.wordsPerPage;
 
     const instruction = isShort
-      ? `The chapter currently measures ${pageCount} pages, below the minimum target band (${minPages}–${maxPages} pages; ~${targetWords} words). Expand the analysis using ONLY the verified evidence passages below—add deeper synthesis and comparisons, never filler or repetition. Keep all existing [@citeKey] markers intact.`
-      : `The chapter currently measures ${pageCount} pages, above the maximum target band (${minPages}–${maxPages} pages; ~${targetWords} words). Tighten wordy prose while keeping every cited factual claim and [@citeKey] intact.`;
+      ? `The chapter currently measures ${pageCount} pages, below the minimum target band (${minPages}-${maxPages} pages; ~${targetWords} words). Expand the analysis using ONLY the verified evidence passages below: add deeper synthesis and comparisons, never filler or repetition. Keep all existing [@citeKey] markers intact and avoid em-dashes (\u2014).`
+      : `The chapter currently measures ${pageCount} pages, above the maximum target band (${minPages}-${maxPages} pages; ~${targetWords} words). Tighten wordy prose while keeping every cited factual claim and [@citeKey] intact, and avoid em-dashes (\u2014).`;
 
     const res = await callLLM(
       {
@@ -437,7 +437,7 @@ export async function enforceChapterLengthBand(
         step: isShort ? `length_expand_${adjustments}` : `length_trim_${adjustments}`,
         task: "draft",
         system:
-          "You are an academic editor calibrating chapter depth strictly from verified evidence passages. Output ONLY the revised chapter Markdown.",
+          "You are an academic editor calibrating chapter depth strictly from verified evidence passages. Do not use em-dashes (\u2014) as sentence punctuation. Output ONLY the revised chapter Markdown.",
         messages: [
           {
             role: "user",

@@ -17,10 +17,12 @@ import {
   type InsufficientCreditsDetails,
 } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
+import type { PageSize } from "@/db/schema";
 import type { FormattedCitationCluster } from "@/lib/citations/reader-format";
 import { computeControlledFigureDimensions } from "@/lib/export/figure-layout";
+import { getPageSizeSpec } from "@/lib/export/page-sizes";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
-import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
+import { computeBlockPageNumbers, parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
 
 export interface ReaderCitationCard {
   citeKey: string;
@@ -46,6 +48,8 @@ export interface ChapterReaderInitialData {
   projectId: string;
   projectTitle?: string;
   wordsPerPage?: number;
+  pageSize?: PageSize;
+  marginsMm?: number;
   chapter: {
     id: string;
     number: number;
@@ -69,10 +73,11 @@ export interface ChapterReaderInitialData {
   } | null;
 }
 
-function formatVersionCreator(createdBy: string): string {
+function formatVersionLabel(version: number, createdBy: string): string {
+  if (version === 1 && createdBy !== "user") return "Original draft";
   if (createdBy === "user") return "Your edit";
-  if (createdBy === "revision") return "AI revision";
-  return "AI draft";
+  if (createdBy === "revision") return "Collate revision";
+  return "Collate draft";
 }
 
 function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
@@ -159,6 +164,8 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
   } | null>(null);
   const [loadingVersionId, setLoadingVersionId] = useState<string | null>(null);
   const [restoringVersion, setRestoringVersion] = useState(false);
+  const [pageSize, setPageSize] = useState<PageSize>(initial.pageSize ?? "a4");
+  const [savingPageSize, setSavingPageSize] = useState(false);
 
   const citationByKey = new Map(initial.citations.map((c) => [c.citeKey, c]));
   const singleKeyLabels: Record<string, string> = {};
@@ -348,6 +355,40 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
     }
   }
 
+  async function handleChangePageSize(nextSize: PageSize) {
+    if (nextSize === pageSize) return;
+    const prevSize = pageSize;
+    setPageSize(nextSize);
+    setSavingPageSize(true);
+    try {
+      const res = await fetch(`/api/projects/${initial.projectId}/settings`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pageSize: nextSize }),
+      });
+      const data = (await res.json()) as { ok: boolean; pageSize?: PageSize; error?: string };
+      if (!res.ok || !data.ok) {
+        setPageSize(prevSize);
+        toast.error(
+          data.error ?? "Could not update the document page size. Please try again.",
+          "Update failed"
+        );
+        return;
+      }
+      const label = getPageSizeSpec(nextSize).shortLabel;
+      toast.success(
+        `Document page size updated to ${label} for the entire project (PDF and Word exports).`,
+        "Page size saved"
+      );
+      router.refresh();
+    } catch {
+      setPageSize(prevSize);
+      toast.error("Network error while saving document page size.", "Connection error");
+    } finally {
+      setSavingPageSize(false);
+    }
+  }
+
   async function handleRestorePreviewVersion() {
     if (!previewVersion) return;
     setRestoringVersion(true);
@@ -385,7 +426,9 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
   }
 
   let headingCounter = 0;
+  let lastShownPage = 0;
   const parsedReadBlocks = parseMarkdownToBlocks(activeReadMarkdown);
+  const readPageNumbers = computeBlockPageNumbers(parsedReadBlocks, initial.wordsPerPage ?? 275);
   const pageTitleLower = `chapter ${initial.chapter.number}: ${initial.chapter.title}`
     .trim()
     .toLowerCase();
@@ -515,6 +558,10 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 projectTitle={initial.projectTitle ?? initial.chapter.title}
                 markdown={markdown}
                 wordsPerPage={initial.wordsPerPage ?? 275}
+                pageSize={pageSize}
+                marginsMm={initial.marginsMm ?? 25}
+                savingPageSize={savingPageSize}
+                onChangePageSize={(next) => void handleChangePageSize(next)}
                 citationClusters={initial.citationClusters}
                 singleKeyLabels={singleKeyLabels}
                 initialFigures={initial.projectFigures ?? []}
@@ -562,7 +609,11 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                   <div className="flex flex-col gap-0.5 text-xs text-[var(--info-text)]">
                     <p className="font-semibold m-0">
                       Viewing Version {previewVersion.version.version} (
-                      {formatVersionCreator(previewVersion.version.createdBy)}) — read-only preview
+                      {formatVersionLabel(
+                        previewVersion.version.version,
+                        previewVersion.version.createdBy
+                      )}
+                      ) · read-only preview
                     </p>
                     {previewVersion.version.revisionNotes ? (
                       <p className="m-0 opacity-90">{previewVersion.version.revisionNotes}</p>
@@ -591,17 +642,42 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
 
               <article className="flex flex-col gap-4 max-w-[68ch]">
                 {parsedReadBlocks.map((block, idx) => {
-                  // Page break controls belong strictly in Light edit; Read mode flows cleanly like a finished document.
+                  // Page break bars belong strictly in Light edit; Read mode keeps subtle page indicators only.
                   if (block.type === "page_break") {
-                    return <div key={block.id} aria-hidden="true" className="h-2" />;
+                    return null;
                   }
 
+                  if (
+                    block.type === "heading" &&
+                    block.level === 1 &&
+                    block.text.trim().toLowerCase() === pageTitleLower
+                  ) {
+                    return null;
+                  }
+
+                  const pageNum = readPageNumbers[idx] ?? 1;
+                  const showPageMarker = pageNum !== lastShownPage;
+                  if (showPageMarker) {
+                    lastShownPage = pageNum;
+                  }
+
+                  const pageDivider = showPageMarker ? (
+                    <div
+                      key={`pg-${pageNum}-${idx}`}
+                      className={`flex items-center gap-2.5 ${idx > 0 ? "pt-3" : ""}`}
+                    >
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--neutral-500)] tabular-nums">
+                        ~Page {pageNum}
+                      </span>
+                      <span className="h-px flex-1 bg-[var(--neutral-100)]" aria-hidden="true" />
+                    </div>
+                  ) : null;
+
+                  let blockNode: ReactNode;
+
                   if (block.type === "heading") {
-                    if (block.level === 1 && block.text.trim().toLowerCase() === pageTitleLower) {
-                      return null;
-                    }
                     if (block.level === 1) {
-                      return (
+                      blockNode = (
                         <h2
                           key={block.id}
                           className="text-2xl font-medium leading-snug text-[var(--neutral-900)] mt-2 first:mt-0 m-0"
@@ -609,10 +685,9 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                           {renderInlineFormatting(block.text, `h1-${idx}`)}
                         </h2>
                       );
-                    }
-                    if (block.level === 2) {
+                    } else if (block.level === 2) {
                       headingCounter++;
-                      return (
+                      blockNode = (
                         <h3
                           key={block.id}
                           id={`sec-${headingCounter}`}
@@ -621,25 +696,35 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                           {renderInlineFormatting(block.text, `h2-${idx}`)}
                         </h3>
                       );
+                    } else if (block.level === 3) {
+                      headingCounter++;
+                      blockNode = (
+                        <h4
+                          key={block.id}
+                          id={`sec-${headingCounter}`}
+                          className="text-base font-semibold leading-snug text-[var(--neutral-900)] mt-2 first:mt-0 m-0"
+                        >
+                          {renderInlineFormatting(block.text, `h3-${idx}`)}
+                        </h4>
+                      );
+                    } else {
+                      headingCounter++;
+                      blockNode = (
+                        <h5
+                          key={block.id}
+                          id={`sec-${headingCounter}`}
+                          className="text-[0.9375rem] font-semibold leading-snug text-[var(--neutral-800)] mt-2 first:mt-0 m-0"
+                        >
+                          {renderInlineFormatting(block.text, `h4-${idx}`)}
+                        </h5>
+                      );
                     }
-                    headingCounter++;
-                    return (
-                      <h4
-                        key={block.id}
-                        id={`sec-${headingCounter}`}
-                        className="text-base font-semibold leading-snug text-[var(--neutral-900)] mt-2 first:mt-0 m-0"
-                      >
-                        {renderInlineFormatting(block.text, `h3-${idx}`)}
-                      </h4>
-                    );
-                  }
-
-                  if (block.type === "figure") {
+                  } else if (block.type === "figure") {
                     const dims = computeControlledFigureDimensions(
                       block.figure.width,
                       block.figure.height
                     );
-                    return (
+                    blockNode = (
                       <figure
                         key={block.id}
                         className="my-2 w-full flex flex-col items-center gap-2.5 p-3 sm:p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]/50 overflow-hidden"
@@ -665,10 +750,8 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                         </figcaption>
                       </figure>
                     );
-                  }
-
-                  if (block.type === "table") {
-                    return (
+                  } else if (block.type === "table") {
+                    blockNode = (
                       <pre
                         key={block.id}
                         className="overflow-x-auto text-xs bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-3 m-0"
@@ -676,10 +759,8 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                         {block.raw}
                       </pre>
                     );
-                  }
-
-                  if (block.type === "bullet_list") {
-                    return (
+                  } else if (block.type === "bullet_list") {
+                    blockNode = (
                       <ul
                         key={block.id}
                         className="list-disc pl-5 flex flex-col gap-2 text-base text-[var(--neutral-800)] leading-[1.7] m-0"
@@ -696,10 +777,8 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                         ))}
                       </ul>
                     );
-                  }
-
-                  if (block.type === "blockquote") {
-                    return (
+                  } else if (block.type === "blockquote") {
+                    blockNode = (
                       <blockquote
                         key={block.id}
                         className="pl-4 border-l-2 border-[var(--neutral-300)] text-base text-[var(--neutral-700)] italic leading-[1.75] m-0"
@@ -712,20 +791,31 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                         )}
                       </blockquote>
                     );
+                  } else if (block.text.trim().length === 0) {
+                    blockNode = <div key={block.id} aria-hidden="true" className="h-[1.75rem]" />;
+                  } else {
+                    blockNode = (
+                      <p
+                        key={block.id}
+                        className="text-base text-[var(--neutral-800)] leading-[1.75] m-0"
+                      >
+                        {renderParagraphWithCitations(
+                          block.text,
+                          citationByKey,
+                          activeCitationClusters,
+                          setInspectedCitations
+                        )}
+                      </p>
+                    );
                   }
 
-                  return (
-                    <p
-                      key={block.id}
-                      className="text-base text-[var(--neutral-800)] leading-[1.75] m-0"
-                    >
-                      {renderParagraphWithCitations(
-                        block.text,
-                        citationByKey,
-                        activeCitationClusters,
-                        setInspectedCitations
-                      )}
-                    </p>
+                  return pageDivider ? (
+                    <div key={`wrap-${block.id}`} className="flex flex-col gap-3">
+                      {pageDivider}
+                      {blockNode}
+                    </div>
+                  ) : (
+                    blockNode
                   );
                 })}
               </article>
@@ -741,12 +831,21 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
               <nav aria-label="Chapter sections">
                 <ul className="flex flex-col gap-2.5 list-none p-0 m-0 text-sm leading-snug">
                   {initial.headings.map((h) => (
-                    <li key={h.id} className={h.level === 3 ? "pl-3" : ""}>
+                    <li
+                      key={h.id}
+                      className={
+                        h.level === 3
+                          ? "pl-3"
+                          : h.level >= 4
+                            ? "pl-6 text-xs text-[var(--neutral-600)]"
+                            : ""
+                      }
+                    >
                       <a
                         href={`#${h.id}`}
                         className="text-[var(--neutral-700)] hover:text-[var(--accent-600)] hover:underline underline-offset-4"
                       >
-                        {h.text}
+                        {renderInlineFormatting(h.text, `toc-${h.id}`)}
                       </a>
                     </li>
                   ))}
@@ -860,7 +959,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                   Draft history ({initial.versions.length})
                 </h2>
                 <p className="text-xs text-[var(--neutral-500)] m-0">
-                  Every save and AI revision is preserved. Select a draft to preview or restore.
+                  Every save and revision is preserved. Select a draft to preview or restore.
                 </p>
               </div>
               <ul className="flex flex-col gap-2 list-none p-0 m-0 text-xs tabular-nums">
@@ -885,7 +984,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-semibold text-[var(--neutral-900)]">
-                            Version {v.version} · {formatVersionCreator(v.createdBy)}
+                            Version {v.version} · {formatVersionLabel(v.version, v.createdBy)}
                           </span>
                           {isCurrent ? (
                             <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-700)]">

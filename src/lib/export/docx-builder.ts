@@ -17,6 +17,7 @@ import {
 import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
 import type { ResolvedExportFigureAsset } from "./figure-assets";
 import { computeControlledFigureDimensions } from "./figure-layout";
+import { getPageSizeSpec } from "./page-sizes";
 import type { ThesisExportDocument } from "./templates";
 
 function lineSpacingTwips(spacing: ThesisExportDocument["formatting"]["lineSpacing"]): number {
@@ -85,11 +86,19 @@ function markdownToDocxBlocks(
               children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt + 2, true),
             })
           );
-        } else {
+        } else if (block.level === 3) {
           blocks.push(
             new Paragraph({
               heading: HeadingLevel.HEADING_3,
               spacing: { before: 200, after: 100 },
+              children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt, true),
+            })
+          );
+        } else {
+          blocks.push(
+            new Paragraph({
+              heading: HeadingLevel.HEADING_4,
+              spacing: { before: 160, after: 80 },
               children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt, true),
             })
           );
@@ -100,7 +109,10 @@ function markdownToDocxBlocks(
         blocks.push(
           new Paragraph({
             spacing: { after: 140, line: lineTwips },
-            children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt),
+            children:
+              block.text.trim().length === 0
+                ? [new TextRun({ text: "", font, size: sizeHalfPt })]
+                : parseInlineMarkdownRuns(block.text, font, sizeHalfPt),
           })
         );
         break;
@@ -351,11 +363,16 @@ export async function buildThesisDocx(
     );
   }
 
+  const pageSpec = getPageSizeSpec(doc.formatting.pageSize);
   const wordDoc = new Document({
     sections: [
       {
         properties: {
           page: {
+            size: {
+              width: pageSpec.docxWidthTwips,
+              height: pageSpec.docxHeightTwips,
+            },
             margin: {
               top: marginTwips,
               right: marginTwips,

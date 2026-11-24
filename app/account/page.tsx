@@ -13,7 +13,7 @@ import { formatCredits, formatShortDate } from "@/lib/ui/formatters";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Account — Collate",
+  title: "Account | Collate",
   description: "Manage your profile, email updates, and account settings.",
 };
 

@@ -98,7 +98,7 @@ export default async function HomePage() {
                 </h2>
                 <p className="text-[var(--neutral-600)] leading-relaxed m-0">
                   Collate adapts source thresholds, chapter templates, and recommended lengths to
-                  what you are writing—and lets you adjust the final page count.
+                  what you are writing, and lets you adjust the final page count.
                 </p>
               </div>
             </Reveal>

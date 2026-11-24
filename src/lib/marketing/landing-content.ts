@@ -140,7 +140,7 @@ export const LANDING_FAQS: readonly LandingFaqItem[] = [
   {
     question: "How do I know every citation and reference is real?",
     answer:
-      "References are collected from verified academic indexes and checked before use. While drafting, the writer can only cite sources stored in your project—it cannot invent new citations.",
+      "References are collected from verified academic indexes and checked before use. While drafting, the writer can only cite sources stored in your project, and it cannot invent new citations.",
   },
   {
     question: "Can Collate write a Results chapter for my survey or lab project?",

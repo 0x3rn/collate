@@ -1,6 +1,8 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import type { PageSize } from "@/db/schema";
 import { hasPdfMagicHeader, type BrowserRunPdfBinding } from "@/lib/pdf/render-pdf";
 import type { MeasurePagesFn } from "@/lib/writing/section-pipeline";
+import { getPageSizeSpec } from "./page-sizes";
 import {
   buildChapterHtmlDocument,
   buildFrontMatterHtml,
@@ -41,13 +43,15 @@ export function toRomanNumeral(num: number): string {
 async function renderHtmlViaBrowserRun(
   browser: BrowserRunPdfBinding,
   html: string,
-  marginsMm: number
+  marginsMm: number,
+  pageSize: PageSize = "a4"
 ): Promise<Uint8Array> {
   const marginStr = `${marginsMm}mm`;
+  const spec = getPageSizeSpec(pageSize);
   const res = await browser.quickAction("pdf", {
     html,
     pdfOptions: {
-      format: "a4",
+      format: spec.pdfFormat,
       printBackground: true,
       displayHeaderFooter: false,
       margin: { top: marginStr, right: marginStr, bottom: marginStr, left: marginStr },
@@ -160,7 +164,12 @@ export async function buildThesisPdfTwoPass(
 
   for (const ch of doc.chapters) {
     const html = buildChapterHtmlDocument(ch, doc.formatting, doc.resolvedFigures);
-    const bytes = await renderHtmlViaBrowserRun(browser, html, doc.formatting.marginsMm);
+    const bytes = await renderHtmlViaBrowserRun(
+      browser,
+      html,
+      doc.formatting.marginsMm,
+      doc.formatting.pageSize
+    );
     const pages = await countPdfPages(bytes);
 
     tocEntries.push({
@@ -178,7 +187,12 @@ export async function buildThesisPdfTwoPass(
       doc.formatting,
       doc.appendicesMarkdown
     );
-    const refBytes = await renderHtmlViaBrowserRun(browser, refHtml, doc.formatting.marginsMm);
+    const refBytes = await renderHtmlViaBrowserRun(
+      browser,
+      refHtml,
+      doc.formatting.marginsMm,
+      doc.formatting.pageSize
+    );
 
     tocEntries.push({
       label: "",
@@ -192,7 +206,12 @@ export async function buildThesisPdfTwoPass(
   if (includeFrontMatter) {
     const fmHtml = buildFrontMatterHtml(doc, tocEntries);
     if (fmHtml) {
-      frontMatterPdf = await renderHtmlViaBrowserRun(browser, fmHtml, doc.formatting.marginsMm);
+      frontMatterPdf = await renderHtmlViaBrowserRun(
+        browser,
+        fmHtml,
+        doc.formatting.marginsMm,
+        doc.formatting.pageSize
+      );
     }
   }
 
@@ -215,7 +234,12 @@ export function createBrowserRunPageMeasurer(
 ): MeasurePagesFn {
   return async (markdown: string) => {
     const html = buildChapterHtmlDocument({ number: 1, title: "Measure", markdown }, formatting);
-    const pdfBytes = await renderHtmlViaBrowserRun(browser, html, formatting.marginsMm);
+    const pdfBytes = await renderHtmlViaBrowserRun(
+      browser,
+      html,
+      formatting.marginsMm,
+      formatting.pageSize
+    );
     return countPdfPages(pdfBytes);
   };
 }

@@ -2,6 +2,7 @@ import type { FormattedCitationCluster } from "@/lib/citations/reader-format";
 import { isSafeAcademicImageUrl } from "@/lib/export/figure-layout";
 
 export const PAGE_BREAK_TOKEN = "<!-- pagebreak -->";
+export const SPACER_TOKEN = "<!-- spacer -->";
 
 export interface AcademicFigureData {
   url: string;
@@ -13,7 +14,7 @@ export interface AcademicFigureData {
 }
 
 export type ChapterDocBlock =
-  | { id: string; type: "heading"; level: 1 | 2 | 3; text: string }
+  | { id: string; type: "heading"; level: 1 | 2 | 3 | 4; text: string }
   | { id: string; type: "paragraph"; text: string }
   | { id: string; type: "bullet_list"; items: string[] }
   | { id: string; type: "blockquote"; text: string }
@@ -95,6 +96,13 @@ export function parseMarkdownToBlocks(markdown: string): ChapterDocBlock[] {
       continue;
     }
 
+    // Explicit blank spacing line (created by pressing Enter to push content down)
+    if (/^<!--\s*spacer\s*-->$/i.test(trimmed)) {
+      blocks.push({ id: makeBlockId(blocks.length), type: "paragraph", text: "" });
+      i++;
+      continue;
+    }
+
     // Fenced academic figure block :::figure ... :::
     if (/^:::figure\b/i.test(trimmed)) {
       const figLines: string[] = [];
@@ -129,33 +137,15 @@ export function parseMarkdownToBlocks(markdown: string): ChapterDocBlock[] {
       continue;
     }
 
-    // Markdown headings
-    if (trimmed.startsWith("### ")) {
+    // Markdown headings (supports #, ##, ###, #### and normalizes #####/###### to level 4)
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = Math.min(4, headingMatch[1]!.length) as 1 | 2 | 3 | 4;
       blocks.push({
         id: makeBlockId(blocks.length),
         type: "heading",
-        level: 3,
-        text: trimmed.slice(4).trim(),
-      });
-      i++;
-      continue;
-    }
-    if (trimmed.startsWith("## ")) {
-      blocks.push({
-        id: makeBlockId(blocks.length),
-        type: "heading",
-        level: 2,
-        text: trimmed.slice(3).trim(),
-      });
-      i++;
-      continue;
-    }
-    if (trimmed.startsWith("# ")) {
-      blocks.push({
-        id: makeBlockId(blocks.length),
-        type: "heading",
-        level: 1,
-        text: trimmed.slice(2).trim(),
+        level,
+        text: headingMatch[2]!.trim(),
       });
       i++;
       continue;
@@ -219,9 +209,10 @@ export function parseMarkdownToBlocks(markdown: string): ChapterDocBlock[] {
       if (
         !t ||
         /^<!--\s*page-?break\s*-->$/i.test(t) ||
+        /^<!--\s*spacer\s*-->$/i.test(t) ||
         /^:::figure\b/i.test(t) ||
         /^!\[([^\]]*)\]\((https:\/\/[^)\s]+)\)$/.test(t) ||
-        /^#{1,3}\s+/.test(t) ||
+        /^#{1,6}\s+/.test(t) ||
         (t.startsWith("|") && t.endsWith("|")) ||
         /^[-*]\s+/.test(t) ||
         t.startsWith("> ")
@@ -253,13 +244,13 @@ export function serializeBlocksToMarkdown(blocks: ChapterDocBlock[]): string {
       case "heading": {
         const text = block.text.trim();
         if (!text) break;
-        const prefix = block.level === 1 ? "#" : block.level === 2 ? "##" : "###";
+        const prefix = "#".repeat(block.level);
         parts.push(`${prefix} ${text}`);
         break;
       }
       case "paragraph": {
         const text = block.text.trim();
-        if (text) parts.push(text);
+        parts.push(text ? text : SPACER_TOKEN);
         break;
       }
       case "bullet_list": {
@@ -298,7 +289,11 @@ function estimateBlockWordWeight(block: ChapterDocBlock, wordsPerPage: number): 
   switch (block.type) {
     case "heading":
       return Math.max(12, block.text.trim().split(/\s+/).filter(Boolean).length + 8);
-    case "paragraph":
+    case "paragraph": {
+      const words = block.text.trim().split(/\s+/).filter(Boolean).length;
+      // Blank line pushed via Enter occupies ~1 vertical line on an academic page (~22 lines/page)
+      return words > 0 ? words : Math.max(10, Math.round(wordsPerPage / 22));
+    }
     case "blockquote":
       return block.text.trim().split(/\s+/).filter(Boolean).length;
     case "bullet_list":
@@ -426,16 +421,44 @@ export function serializeEditableNodeToMarkdown(root: MinimalDomNode): string {
 
       if (!inner) return "";
 
-      if (tag === "STRONG" || tag === "B") {
+      const styleAttr = (node.getAttribute?.("style") ?? "").toLowerCase();
+      const isBold =
+        tag === "STRONG" ||
+        tag === "B" ||
+        (tag === "SPAN" && /font-weight\s*:\s*(bold|[6-9]00)/.test(styleAttr));
+      const isItalic =
+        tag === "EM" ||
+        tag === "I" ||
+        (tag === "SPAN" && /font-style\s*:\s*italic/.test(styleAttr));
+
+      if (isBold && isItalic) {
         const trimmed = inner.trim();
         if (!trimmed) return inner;
         const lead = inner.match(/^\s*/)?.[0] ?? "";
         const trail = inner.match(/\s*$/)?.[0] ?? "";
-        return `${lead}**${trimmed}**${trail}`;
+        return `${lead}***${trimmed}***${trail}`;
       }
-      if (tag === "EM" || tag === "I") {
+      if (isBold) {
         const trimmed = inner.trim();
         if (!trimmed) return inner;
+        if (trimmed.startsWith("**") && trimmed.endsWith("**") && trimmed.length > 4) {
+          return inner;
+        }
+        const lead = inner.match(/^\s*/)?.[0] ?? "";
+        const trail = inner.match(/\s*$/)?.[0] ?? "";
+        return `${lead}**${trimmed}**${trail}`;
+      }
+      if (isItalic) {
+        const trimmed = inner.trim();
+        if (!trimmed) return inner;
+        if (
+          trimmed.startsWith("*") &&
+          trimmed.endsWith("*") &&
+          !trimmed.startsWith("**") &&
+          trimmed.length > 2
+        ) {
+          return inner;
+        }
         const lead = inner.match(/^\s*/)?.[0] ?? "";
         const trail = inner.match(/\s*$/)?.[0] ?? "";
         return `${lead}*${trimmed}*${trail}`;
