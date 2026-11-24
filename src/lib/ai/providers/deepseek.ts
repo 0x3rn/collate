@@ -62,11 +62,18 @@ const DeepSeekResponseSchema = z.object({
           cached_tokens: z.number().int().nonnegative().optional(),
         })
         .optional(),
+      completion_tokens_details: z
+        .object({
+          reasoning_tokens: z.number().int().nonnegative().optional(),
+        })
+        .optional(),
     })
     .optional(),
 });
 
-const DEEPSEEK_REASONING_MODEL_PATTERN = /(?:reasoner|v4-pro|(?:-|_)r1(?:$|-))/i;
+const DEEPSEEK_REASONING_MODEL_PATTERN = /(?:reasoner|flash|v4|chat|(?:-|_)r1(?:$|-))/i;
+
+export const DEEPSEEK_THINKING_TOKEN_HEADROOM = 8192;
 
 export function isDeepSeekReasoningModel(model: string): boolean {
   return DEEPSEEK_REASONING_MODEL_PATTERN.test(model.trim());
@@ -139,13 +146,23 @@ export function buildDeepSeekRequestBody(
     messages.push({ role: message.role, content: message.content });
   }
 
+  const reasoningEnabled = isDeepSeekReasoningModel(model);
+  // DeepSeek counts internal reasoning_content tokens inside max_tokens.
+  // Add 8,192 tokens of thinking headroom so HIGH reasoning never starves visible output.
+  const effectiveMaxTokens = reasoningEnabled
+    ? Math.min(65536, input.maxTokens + DEEPSEEK_THINKING_TOKEN_HEADROOM)
+    : input.maxTokens;
+
   const body: Record<string, unknown> = {
     model,
     messages,
-    max_tokens: input.maxTokens,
+    max_tokens: effectiveMaxTokens,
   };
 
-  if (!isDeepSeekReasoningModel(model)) {
+  if (reasoningEnabled) {
+    body.thinking = { type: "enabled" };
+    body.reasoning_effort = "high";
+  } else {
     body.temperature = input.temperature;
   }
 
@@ -182,11 +199,20 @@ export function parseDeepSeekResponse(
 
   if (!text.trim()) {
     const blocked = finishReason === "content_filter";
+    const reasoningTokens = data.usage?.completion_tokens_details?.reasoning_tokens ?? 0;
+    const reasonDetail = [
+      finishReason ? `finishReason=${finishReason}` : null,
+      reasoningTokens > 0 ? `reasoningTokens=${reasoningTokens}` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
     throw new LLMError({
       code: "BAD_RESPONSE",
       message: blocked
         ? "DeepSeek filtered the response (content_filter)"
-        : "DeepSeek returned no text content",
+        : reasonDetail
+          ? `DeepSeek returned no text content (${reasonDetail})`
+          : "DeepSeek returned no text content",
       retryable: !blocked,
     });
   }

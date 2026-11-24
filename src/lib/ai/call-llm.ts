@@ -39,7 +39,7 @@ import {
 } from "./providers/openai";
 
 const ANTHROPIC_API_VERSION = "2023-06-01";
-const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_TIMEOUT_MS = 120_000;
 
 export const LLMMessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
@@ -279,6 +279,8 @@ function buildProviderRequestBody(
   switch (provider) {
     case "google":
       return buildGoogleRequestBody({
+        model,
+        task: input.task,
         system: input.system,
         messages: input.messages,
         maxTokens: input.maxTokens,

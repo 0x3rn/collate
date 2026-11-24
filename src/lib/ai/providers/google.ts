@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { TokenUsage } from "@/config/ai-models";
+import type { AiTask, TokenUsage } from "@/config/ai-models";
 import { LLMError } from "../errors";
 import {
   isCloudflareAiGatewayEnabled,
@@ -32,6 +32,8 @@ export interface GoogleMessageInput {
 }
 
 export interface GoogleRequestInput {
+  model?: string;
+  task?: AiTask;
   system?: string;
   messages: GoogleMessageInput[];
   maxTokens: number;
@@ -239,16 +241,56 @@ export function resolveGoogleEndpoint(
   };
 }
 
+function isGoogleThinkingModel(model?: string): boolean {
+  if (!model) return false;
+  return /^gemini-(?:3|4)(?:$|[.-])/i.test(model.trim());
+}
+
+function isGemini4Model(model?: string): boolean {
+  if (!model) return false;
+  return /^gemini-4(?:$|-)/i.test(model.trim());
+}
+
+function resolveGemini4ThinkingLevel(model: string, task?: AiTask): "MEDIUM" | "HIGH" {
+  // gemini-4-hydrogen completes HIGH thinking reliably (~26-39s), ideal for strict
+  // claim verification, classification, and extraction.
+  if (
+    /^gemini-4-hydrogen(?:$|-)/i.test(model.trim()) &&
+    (task === "verify" || task === "classify" || task === "extract")
+  ) {
+    return "HIGH";
+  }
+  // For heavy flagship Gemini 4 models (e.g. gemini-4-neon, where HIGH can exceed 90s),
+  // MEDIUM delivers ~3,500+ thinking tokens reliably across drafting, classification, and extraction.
+  return "MEDIUM";
+}
+
+export const GOOGLE_THINKING_TOKEN_HEADROOM = 8192;
+
 export function buildGoogleRequestBody(input: GoogleRequestInput): Record<string, unknown> {
+  // Gemini 3.x and 4.x thinking models count internal thoughtsTokenCount inside maxOutputTokens.
+  // Add 8,192 tokens of thinking headroom so deep reasoning never starves visible academic prose.
+  const effectiveMaxOutputTokens = isGoogleThinkingModel(input.model)
+    ? Math.min(24576, input.maxTokens + GOOGLE_THINKING_TOKEN_HEADROOM)
+    : input.maxTokens;
+
+  const generationConfig: Record<string, unknown> = {
+    maxOutputTokens: effectiveMaxOutputTokens,
+    temperature: input.temperature,
+  };
+
+  if (isGemini4Model(input.model) && input.model) {
+    generationConfig.thinkingConfig = {
+      thinkingLevel: resolveGemini4ThinkingLevel(input.model, input.task),
+    };
+  }
+
   const body: Record<string, unknown> = {
     contents: input.messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
-    generationConfig: {
-      maxOutputTokens: input.maxTokens,
-      temperature: input.temperature,
-    },
+    generationConfig,
   };
 
   if (input.system) {
@@ -298,11 +340,20 @@ export function parseGoogleResponse(
 
   if (!text.trim()) {
     const blockedFinish = finishReason !== null && NON_RETRYABLE_FINISH_REASONS.has(finishReason);
+    const thoughtsCount = data.usageMetadata?.thoughtsTokenCount ?? 0;
+    const reasonDetail = [
+      finishReason ? `finishReason=${finishReason}` : null,
+      thoughtsCount > 0 ? `thoughtsTokenCount=${thoughtsCount}` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
     throw new LLMError({
       code: "BAD_RESPONSE",
       message: blockedFinish
         ? `Google Gemini stopped without text output (${finishReason})`
-        : "Google Gemini returned no text content parts",
+        : reasonDetail
+          ? `Google Gemini returned no text content parts (${reasonDetail})`
+          : "Google Gemini returned no text content parts",
       retryable: !blockedFinish,
     });
   }

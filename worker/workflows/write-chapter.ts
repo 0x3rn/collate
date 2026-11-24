@@ -117,6 +117,14 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
       },
     };
 
+    const llmStepRetryConfig = {
+      retries: {
+        limit: 4,
+        delay: "20 seconds" as const,
+        backoff: "exponential" as const,
+      },
+    };
+
     if (event.payload.mode === "assignment") {
       return runWriteAssignmentOrchestration(
         {
@@ -131,8 +139,8 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
         sharedDeps,
         {
           loadContext: (fn) => step.do("load-assignment-context", fn),
-          draftQuestion: (idx, fn) => step.do(`draft-question-${idx}`, fn),
-          assembleAndFinalize: (fn) => step.do("assemble-assignment", fn),
+          draftQuestion: (idx, fn) => step.do(`draft-question-${idx}`, llmStepRetryConfig, fn),
+          assembleAndFinalize: (fn) => step.do("assemble-assignment", llmStepRetryConfig, fn),
           notifyNeedsAttention: (fn) => step.do("notify-assignment-needs-attention", fn),
         }
       );
@@ -142,8 +150,8 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
       event.payload,
       {
         loadContext: (fn) => step.do("load-context", fn),
-        draftSection: (idx, fn) => step.do(`draft-section-${idx}`, fn),
-        assembleAndFinalize: (fn) => step.do("assemble-and-finalize", fn),
+        draftSection: (idx, fn) => step.do(`draft-section-${idx}`, llmStepRetryConfig, fn),
+        assembleAndFinalize: (fn) => step.do("assemble-and-finalize", llmStepRetryConfig, fn),
         notifyNeedsAttention: (fn) => step.do("notify-needs-attention", fn),
       },
       sharedDeps

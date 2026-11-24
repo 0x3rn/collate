@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button, LinkButton } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import { Toast, type ToastMessage } from "@/components/ui/toast";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 
 export interface ReaderCitationCard {
@@ -92,15 +93,40 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
   const [exporting, setExporting] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const citationByKey = new Map(initial.citations.map((c) => [c.citeKey, c]));
   const hasDraft = markdown.trim().length > 0;
   const isPausedWithoutDraft = initial.chapter.status === "needs_attention" && !hasDraft;
+  const isInFlight = initial.chapter.status === "queued" || initial.chapter.status === "writing";
+
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  function showToast(title: string, message: string, tone: ToastMessage["tone"] = "success") {
+    setToast({ id: `${Date.now()}-${Math.random()}`, tone, title, message });
+  }
+
+  useEffect(() => {
+    if (!isInFlight) return;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }, 8000);
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isInFlight, router]);
 
   async function handleResumeChapter() {
     setError(null);
-    setNotice(null);
     setResuming(true);
     try {
       const res = await fetch(
@@ -112,8 +138,9 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
         setError(data.error ?? "Could not resume this chapter. Please try again.");
         return;
       }
-      setNotice(
-        `Chapter ${initial.chapter.number} queued for drafting. You will receive an email as soon as it is ready to review.`
+      showToast(
+        "Chapter queued",
+        "Chapter queued for drafting. You will receive an email as soon as it is ready to review."
       );
       router.refresh();
     } catch {
@@ -125,7 +152,6 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
 
   async function handleSaveEdit() {
     setError(null);
-    setNotice(null);
     if (markdown.trim().length < 20) {
       setError("Chapter text is too short to save.");
       return;
@@ -152,8 +178,9 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
       }
       setEditSummary("");
       setMode("read");
-      setNotice(
-        `Saved version ${data.version?.version ?? ""} and updated project memory for subsequent chapters.`
+      showToast(
+        "Changes saved",
+        `Saved version ${data.version?.version ?? ""} and updated your project notes for later chapters.`
       );
       router.refresh();
     } catch {
@@ -233,7 +260,6 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
       ) : null}
 
       {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-      {notice ? <FormAlert tone="success">{notice}</FormAlert> : null}
 
       {initial.chapter.status === "needs_attention" && hasDraft && initial.attention ? (
         <div className="rounded-[var(--radius-md)] border border-[var(--warning-border)] bg-[var(--warning-bg)] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -495,6 +521,8 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
           ) : null}
         </aside>
       </div>
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </div>
   );
 }

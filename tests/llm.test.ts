@@ -13,6 +13,8 @@ import {
   type AIGatewayEnv,
 } from "@/lib/ai/call-llm";
 import { LLMError, sanitizeErrorMessage } from "@/lib/ai/errors";
+import { buildDeepSeekRequestBody } from "@/lib/ai/providers/deepseek";
+import { buildGoogleRequestBody } from "@/lib/ai/providers/google";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
 
 const GATEWAY_ENV: AIGatewayEnv = {
@@ -514,8 +516,10 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
         { role: "user", parts: [{ text: "Continue." }] },
       ],
       generationConfig: {
-        maxOutputTokens: 4096,
+        // Default 4096 + 8192 thinking token headroom for Gemini 4 models; MEDIUM effort for draft
+        maxOutputTokens: 12288,
         temperature: 0.25,
+        thinkingConfig: { thinkingLevel: "MEDIUM" },
       },
     });
 
@@ -545,6 +549,59 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
       tokensOut: 500,
       latencyMs: 320,
       error: null,
+    });
+
+    // Verify task-aware thinking levels & +8192 thinking headroom
+    const verifyBody = buildGoogleRequestBody({
+      model: "gemini-4-hydrogen",
+      task: "verify",
+      messages: [{ role: "user", content: "Check claims." }],
+      maxTokens: 1600,
+      temperature: 0.1,
+    });
+    expect(verifyBody.generationConfig).toEqual({
+      maxOutputTokens: 1600 + 8192,
+      temperature: 0.1,
+      thinkingConfig: { thinkingLevel: "HIGH" },
+    });
+
+    const classifyBody = buildGoogleRequestBody({
+      model: "gemini-4-hydrogen",
+      task: "classify",
+      messages: [{ role: "user", content: "Classify chapter." }],
+      maxTokens: 500,
+      temperature: 0.1,
+    });
+    expect(classifyBody.generationConfig).toEqual({
+      maxOutputTokens: 500 + 8192,
+      temperature: 0.1,
+      thinkingConfig: { thinkingLevel: "HIGH" },
+    });
+
+    const extractBody = buildGoogleRequestBody({
+      model: "gemini-4-hydrogen",
+      task: "extract",
+      messages: [{ role: "user", content: "Extract claims." }],
+      maxTokens: 800,
+      temperature: 0.1,
+    });
+    expect(extractBody.generationConfig).toEqual({
+      maxOutputTokens: 800 + 8192,
+      temperature: 0.1,
+      thinkingConfig: { thinkingLevel: "HIGH" },
+    });
+
+    const neonClassifyBody = buildGoogleRequestBody({
+      model: "gemini-4-neon",
+      task: "classify",
+      messages: [{ role: "user", content: "Classify topic." }],
+      maxTokens: 500,
+      temperature: 0.1,
+    });
+    expect(neonClassifyBody.generationConfig).toEqual({
+      maxOutputTokens: 500 + 8192,
+      temperature: 0.1,
+      thinkingConfig: { thinkingLevel: "MEDIUM" },
     });
   });
 
@@ -918,9 +975,25 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
 
     expect(deepSeekBody).toMatchObject({
       model: "deepseek-v4-pro",
-      max_tokens: 3000,
+      max_tokens: 3000 + 8192,
+      thinking: { type: "enabled" },
+      reasoning_effort: "high",
     });
     expect(deepSeekBody.temperature).toBeUndefined();
+
+    const deepSeekFlashBody = buildDeepSeekRequestBody("deepseek-flash", {
+      system: "Extract JSON.",
+      messages: [{ role: "user", content: "Extract structured claims." }],
+      maxTokens: 1200,
+      temperature: 0.1,
+    });
+    expect(deepSeekFlashBody).toMatchObject({
+      model: "deepseek-flash",
+      max_tokens: 1200 + 8192,
+      thinking: { type: "enabled" },
+      reasoning_effort: "high",
+    });
+    expect(deepSeekFlashBody.temperature).toBeUndefined();
     expect(verify.text).toBe("Final verified conclusion from DeepSeek.");
     expect(verify.text).not.toContain("Private chain-of-thought");
     expect(verify.usage).toEqual({

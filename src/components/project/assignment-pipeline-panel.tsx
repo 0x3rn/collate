@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button, LinkButton } from "@/components/ui/button";
+import { Toast, type ToastMessage } from "@/components/ui/toast";
 import type { ChapterStatus } from "@/db/schema";
 
 export interface AssignmentQuestionPlanItem {
@@ -67,14 +68,39 @@ export function AssignmentPipelinePanel({
   const [revising, setRevising] = useState(false);
   const [revisionNote, setRevisionNote] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const status: ChapterStatus = assignmentChapter?.status ?? "not_started";
   const badge = STATUS_BADGE[status];
+  const isInFlight = status === "queued" || status === "writing";
+
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  function showToast(title: string, message: string, tone: ToastMessage["tone"] = "success") {
+    setToast({ id: `${Date.now()}-${Math.random()}`, tone, title, message });
+  }
+
+  useEffect(() => {
+    if (!isInFlight) return;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }, 8000);
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isInFlight, router]);
 
   async function triggerStartAssignment() {
     setError(null);
-    setNotice(null);
     setBusy(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/assignment/start`, {
@@ -85,8 +111,9 @@ export function AssignmentPipelinePanel({
         setError(data.error ?? "Could not start assignment drafting.");
         return;
       }
-      setNotice(
-        "Assignment queued for evidence-bound drafting. Each question will be answered using its verified sources and emailed when ready."
+      showToast(
+        "Assignment queued",
+        "Your assignment is queued for drafting. You will receive an email as soon as it is ready to review."
       );
       router.refresh();
     } catch {
@@ -99,7 +126,6 @@ export function AssignmentPipelinePanel({
   async function triggerApprove() {
     if (!assignmentChapter) return;
     setError(null);
-    setNotice(null);
     setBusy(true);
     try {
       const res = await fetch(
@@ -111,7 +137,7 @@ export function AssignmentPipelinePanel({
         setError(data.error ?? "Could not approve assignment answers.");
         return;
       }
-      setNotice("Assignment approved. Download your formatted PDF or Word file below.");
+      showToast("Assignment approved", "Download your formatted PDF or Word file below.");
       router.refresh();
     } catch {
       setError("Network error while approving assignment.");
@@ -123,7 +149,6 @@ export function AssignmentPipelinePanel({
   async function submitRevision() {
     if (!assignmentChapter) return;
     setError(null);
-    setNotice(null);
     if (revisionNote.trim().length < 10) {
       setError("Describe the requested changes in at least 10 characters.");
       return;
@@ -145,7 +170,7 @@ export function AssignmentPipelinePanel({
       }
       setRevisionNote("");
       setRevising(false);
-      setNotice("Revision queued. A new assignment version will be saved when ready.");
+      showToast("Revision queued", "A new assignment version will be saved when ready.");
       router.refresh();
     } catch {
       setError("Network error while requesting assignment changes.");
@@ -234,7 +259,6 @@ export function AssignmentPipelinePanel({
       </div>
 
       {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-      {notice ? <FormAlert tone="success">{notice}</FormAlert> : null}
 
       {revising && assignmentChapter ? (
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-3">
@@ -296,6 +320,8 @@ export function AssignmentPipelinePanel({
           </li>
         ))}
       </ol>
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </section>
   );
 }

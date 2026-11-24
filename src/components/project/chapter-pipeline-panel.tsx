@@ -1,10 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { FormAlert } from "@/components/ui/alert";
 import { Button, LinkButton } from "@/components/ui/button";
+import { Toast, type ToastMessage } from "@/components/ui/toast";
 import type { ChapterStatus } from "@/db/schema";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 import { canStartChapter } from "@/lib/writing/state-machine";
@@ -80,9 +81,42 @@ export function ChapterPipelinePanel({
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [uploadingCsv, setUploadingCsv] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const hasResultsChapter = chapters.some((c) => c.chapterType === "results");
+  const hasInFlightChapter = chapters.some(
+    (c) => !c.isAutoReferences && (c.status === "queued" || c.status === "writing")
+  );
+
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  function showToast(title: string, message: string, tone: ToastMessage["tone"] = "success") {
+    setToast({ id: `${Date.now()}-${Math.random()}`, tone, title, message });
+  }
+
+  // Lightweight live refresh ONLY while a chapter is queued or actively drafting.
+  // Pauses when the browser tab is hidden and stops automatically once drafting finishes or pauses.
+  useEffect(() => {
+    if (!hasInFlightChapter) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }, 8000);
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        router.refresh();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [hasInFlightChapter, router]);
 
   useEffect(() => {
     if (!detailsChapter) return;
@@ -99,7 +133,6 @@ export function ChapterPipelinePanel({
   async function triggerStart(chapterId: string, providedDetails?: string) {
     setError(null);
     setDetailsError(null);
-    setNotice(null);
     setBusyChapterId(chapterId);
     try {
       const trimmedDetails = providedDetails?.trim();
@@ -124,7 +157,8 @@ export function ChapterPipelinePanel({
       }
       setDetailsChapter(null);
       setDetailsText("");
-      setNotice(
+      showToast(
+        "Chapter queued",
         "Chapter queued for drafting. You will receive an email as soon as it is ready to review."
       );
       router.refresh();
@@ -168,7 +202,6 @@ export function ChapterPipelinePanel({
 
   async function triggerApprove(chapterId: string) {
     setError(null);
-    setNotice(null);
     setBusyChapterId(chapterId);
     try {
       const res = await fetch(`/api/projects/${projectId}/chapters/${chapterId}/approve`, {
@@ -179,7 +212,7 @@ export function ChapterPipelinePanel({
         setError(data.error ?? "Could not approve chapter.");
         return;
       }
-      setNotice("Chapter approved. You can now start the next chapter whenever you are ready.");
+      showToast("Chapter approved", "You can now start the next chapter whenever you are ready.");
       router.refresh();
     } catch {
       setError("Network error while approving chapter.");
@@ -190,7 +223,6 @@ export function ChapterPipelinePanel({
 
   async function submitRevision(chapterId: string) {
     setError(null);
-    setNotice(null);
     if (revisionNote.trim().length < 10) {
       setError("Describe the requested changes in at least 10 characters.");
       return;
@@ -209,7 +241,7 @@ export function ChapterPipelinePanel({
       }
       setRevisionNote("");
       setRevisingChapterId(null);
-      setNotice("Revision queued. A new chapter version will be saved when ready.");
+      showToast("Revision queued", "A new chapter version will be saved as soon as it is ready.");
       router.refresh();
     } catch {
       setError("Network error while requesting changes.");
@@ -222,7 +254,6 @@ export function ChapterPipelinePanel({
     const file = e.target.files?.[0];
     if (!file) return;
     setError(null);
-    setNotice(null);
     setUploadingCsv(true);
     try {
       const csvContent = await file.text();
@@ -240,8 +271,9 @@ export function ChapterPipelinePanel({
         setError(data.error ?? "Could not upload CSV dataset.");
         return;
       }
-      setNotice(
-        `Uploaded ${data.dataset.filename} (${data.dataset.rowCount} rows, ${data.dataset.columnCount} columns). Real statistics will be used in your Results chapter.`
+      showToast(
+        "CSV uploaded",
+        `${data.dataset.filename} (${data.dataset.rowCount} rows, ${data.dataset.columnCount} columns) will be used in your Results chapter.`
       );
       router.refresh();
     } catch {
@@ -255,7 +287,6 @@ export function ChapterPipelinePanel({
   return (
     <div className="space-y-6">
       {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-      {notice ? <FormAlert tone="success">{notice}</FormAlert> : null}
 
       {hasResultsChapter ? (
         <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 space-y-3">
@@ -377,6 +408,20 @@ export function ChapterPipelinePanel({
                           · Source overlap {ch.originalityReport.overlapScore}% · Quotes{" "}
                           {ch.originalityReport.quoteSharePct}% · Cross-user{" "}
                           {ch.originalityReport.crossUserScore}%
+                        </p>
+                      ) : null}
+
+                      {ch.status === "queued" || ch.status === "writing" ? (
+                        <p className="inline-flex items-center gap-2 text-xs font-medium text-[var(--info-text)] pt-0.5 m-0">
+                          <span
+                            aria-hidden="true"
+                            className="w-1.5 h-1.5 rounded-full bg-[var(--accent-600)] animate-pulse"
+                          />
+                          <span>
+                            {ch.status === "queued"
+                              ? "Queued for drafting — status updates automatically"
+                              : "Drafting in progress — status updates automatically"}
+                          </span>
                         </p>
                       ) : null}
 
@@ -684,6 +729,8 @@ export function ChapterPipelinePanel({
             document.body
           )
         : null}
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </div>
   );
 }
