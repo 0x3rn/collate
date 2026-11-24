@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { ArrowRightIcon } from "@/components/layout/workspace-icons";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import type { ProjectType } from "@/db/schema";
 
 const WORKBENCH_TYPES: Array<{
@@ -42,17 +42,16 @@ const WORKBENCH_TYPES: Array<{
 
 export function QuickStartWorkbench() {
   const router = useRouter();
+  const toast = useToast();
   const [selectedType, setSelectedType] = useState<ProjectType>("project");
   const [topic, setTopic] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const activeSpec =
     WORKBENCH_TYPES.find((item) => item.type === selectedType) ?? WORKBENCH_TYPES[0]!;
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
     setSubmitting(true);
 
     try {
@@ -73,7 +72,10 @@ export function QuickStartWorkbench() {
         error?: string;
       };
       if (!res.ok || !data.ok || !data.wizard) {
-        setError(data.error ?? "Could not start your project right now. Please try again.");
+        toast.error(
+          data.error ?? "Could not start your project right now. Please try again.",
+          "Could not start project"
+        );
         setSubmitting(false);
         return;
       }
@@ -81,7 +83,10 @@ export function QuickStartWorkbench() {
       router.push(`/projects/${data.wizard.project.id}/setup`);
       router.refresh();
     } catch {
-      setError("Could not connect right now. Check your connection and try again.");
+      toast.error(
+        "Could not connect right now. Check your connection and try again.",
+        "Connection error"
+      );
       setSubmitting(false);
     }
   }
@@ -106,10 +111,7 @@ export function QuickStartWorkbench() {
                 type="button"
                 role="radio"
                 aria-checked={active}
-                onClick={() => {
-                  setSelectedType(item.type);
-                  setError(null);
-                }}
+                onClick={() => setSelectedType(item.type)}
                 className={`min-h-[34px] px-3 py-1 rounded-[5px] text-xs font-medium text-center transition-all duration-150 cursor-pointer ${
                   active
                     ? "bg-white text-[var(--neutral-900)] font-semibold shadow-[var(--shadow-subtle)]"
@@ -138,8 +140,6 @@ export function QuickStartWorkbench() {
             Enter a working title to jump straight into setup, or leave it blank to refine it next.
           </p>
         </div>
-
-        {error ? <FormAlert tone="error">{error}</FormAlert> : null}
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-1.5 rounded-[var(--radius-md)] border border-[var(--neutral-300)] bg-white focus-within:border-[var(--accent-600)] focus-within:ring-2 focus-within:ring-[var(--accent-100)] transition-all">
           <label htmlFor="workbench-topic-input" className="sr-only">

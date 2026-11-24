@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import type { ProjectType } from "@/db/schema";
 
 const WORK_TYPES: Array<{
@@ -44,12 +44,11 @@ const WORK_TYPES: Array<{
 
 export function NewProjectSelector() {
   const router = useRouter();
+  const toast = useToast();
   const [selected, setSelected] = useState<ProjectType>("project");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleStart() {
-    setError(null);
     setSubmitting(true);
     try {
       const res = await fetch("/api/projects", {
@@ -63,14 +62,20 @@ export function NewProjectSelector() {
         error?: string;
       };
       if (!res.ok || !data.ok || !data.wizard) {
-        setError(data.error ?? "Could not start your project. Please try again.");
+        toast.error(
+          data.error ?? "Could not start your project. Please try again.",
+          "Could not start project"
+        );
         return;
       }
 
       router.push(`/projects/${data.wizard.project.id}/setup`);
       router.refresh();
     } catch {
-      setError("Network error while creating your project draft. Try again.");
+      toast.error(
+        "Network error while creating your project draft. Try again.",
+        "Connection error"
+      );
     } finally {
       setSubmitting(false);
     }
@@ -78,8 +83,6 @@ export function NewProjectSelector() {
 
   return (
     <div className="space-y-6">
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-
       <div
         role="radiogroup"
         aria-label="Work type"
@@ -93,10 +96,7 @@ export function NewProjectSelector() {
               type="button"
               role="radio"
               aria-checked={isSelected}
-              onClick={() => {
-                setSelected(item.type);
-                setError(null);
-              }}
+              onClick={() => setSelected(item.type)}
               className={`text-left p-5 rounded-[var(--radius-md)] border transition-all duration-150 cursor-pointer min-h-[124px] ${
                 isSelected
                   ? "border-[var(--accent-600)] ring-1 ring-[var(--accent-600)] bg-[var(--accent-100)]/45 shadow-[var(--shadow-subtle)]"

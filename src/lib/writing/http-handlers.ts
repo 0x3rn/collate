@@ -20,9 +20,11 @@ import { getSessionFromToken } from "@/lib/auth/service";
 import {
   BillingError,
   checkSpendCircuitBreaker,
+  PUBLIC_WRITING_PAUSED_MESSAGE,
   refundChapterReservation,
   reserveChapterCredits,
 } from "@/lib/billing/ledger";
+import { logEvent } from "@/lib/observability/logger";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
 import type { R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { WriteChapterPayload } from "./chapter-orchestrator";
@@ -158,10 +160,16 @@ export async function handleStartChapter(
   const now = (deps.nowFn ?? (() => new Date()))();
   const breaker = await checkSpendCircuitBreaker(deps.db, now);
   if (!breaker.allowed) {
-    return jsonNoStore(
-      { ok: false, error: breaker.reason ?? "Chapter writing is temporarily paused." },
-      503
-    );
+    logEvent("warn", "circuit_breaker_blocked", {
+      projectId: auth.project.id,
+      data: {
+        action: "start_chapter",
+        chapterId: target.id,
+        reason: breaker.reason ?? "unknown",
+        globalDailySpendUsd: breaker.globalDailySpendUsd,
+      },
+    });
+    return jsonNoStore({ ok: false, error: PUBLIC_WRITING_PAUSED_MESSAGE }, 503);
   }
 
   const rl = await consumeAuthRateLimit(
@@ -202,7 +210,8 @@ export async function handleStartChapter(
           ok: false,
           code: err.code,
           creditsRequired,
-          error: `Chapter ${target.number} requires ${creditsRequired} credits. Top up your credit balance on your Account page to continue.`,
+          creditsAvailable: err.availableCredits ?? auth.session.user.creditsBalance,
+          error: `Chapter ${target.number} requires ${creditsRequired} credits. Top up your credit balance on Credits & Billing to continue.`,
         },
         err.status
       );
@@ -374,10 +383,16 @@ export async function handleRequestChapterChanges(
   const now = (deps.nowFn ?? (() => new Date()))();
   const breaker = await checkSpendCircuitBreaker(deps.db, now);
   if (!breaker.allowed) {
-    return jsonNoStore(
-      { ok: false, error: breaker.reason ?? "Chapter revisions are temporarily paused." },
-      503
-    );
+    logEvent("warn", "circuit_breaker_blocked", {
+      projectId: auth.project.id,
+      data: {
+        action: "revise_chapter",
+        chapterId: target.id,
+        reason: breaker.reason ?? "unknown",
+        globalDailySpendUsd: breaker.globalDailySpendUsd,
+      },
+    });
+    return jsonNoStore({ ok: false, error: PUBLIC_WRITING_PAUSED_MESSAGE }, 503);
   }
 
   const rl = await consumeAuthRateLimit(
@@ -419,7 +434,8 @@ export async function handleRequestChapterChanges(
           ok: false,
           code: err.code,
           creditsRequired,
-          error: `Revising Chapter ${target.number} requires ${creditsRequired} credits. Top up your credit balance on your Account page to continue.`,
+          creditsAvailable: err.availableCredits ?? auth.session.user.creditsBalance,
+          error: `Revising Chapter ${target.number} requires ${creditsRequired} credits. Top up your credit balance on Credits & Billing to continue.`,
         },
         err.status
       );
@@ -619,10 +635,15 @@ export async function handleStartAssignment(
   const now = (deps.nowFn ?? (() => new Date()))();
   const breaker = await checkSpendCircuitBreaker(deps.db, now);
   if (!breaker.allowed) {
-    return jsonNoStore(
-      { ok: false, error: breaker.reason ?? "Assignment drafting is temporarily paused." },
-      503
-    );
+    logEvent("warn", "circuit_breaker_blocked", {
+      projectId: auth.project.id,
+      data: {
+        action: "start_assignment",
+        reason: breaker.reason ?? "unknown",
+        globalDailySpendUsd: breaker.globalDailySpendUsd,
+      },
+    });
+    return jsonNoStore({ ok: false, error: PUBLIC_WRITING_PAUSED_MESSAGE }, 503);
   }
 
   const rl = await consumeAuthRateLimit(
@@ -700,7 +721,8 @@ export async function handleStartAssignment(
           ok: false,
           code: err.code,
           creditsRequired,
-          error: `Drafting this assignment requires ${creditsRequired} credits. Top up your credit balance on your Account page to continue.`,
+          creditsAvailable: err.availableCredits ?? auth.session.user.creditsBalance,
+          error: `Drafting this assignment requires ${creditsRequired} credits. Top up your credit balance on Credits & Billing to continue.`,
         },
         err.status
       );

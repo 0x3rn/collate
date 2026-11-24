@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import {
   distributeWordsAcrossSections,
   validateConfirmedOutline,
@@ -22,17 +23,16 @@ export function StepOutlineConfirm({
   onBack: () => void;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [outline, setOutline] = useState<ProjectOutlinePlan | null>(null);
   const [outlineLocked, setOutlineLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function loadOutline() {
       setLoading(true);
-      setError(null);
       try {
         const res = await fetch(`/api/projects/${wizard.project.id}/outline`);
         const data = (await res.json()) as {
@@ -43,14 +43,19 @@ export function StepOutlineConfirm({
         };
         if (!cancelled) {
           if (!res.ok || !data.ok || !data.outline) {
-            setError(data.error ?? "Could not load your outline plan.");
+            toast.error(
+              data.error ?? "Could not load your outline plan.",
+              "Could not load outline"
+            );
           } else {
             setOutline(data.outline);
             setOutlineLocked(Boolean(data.outlineLocked));
           }
         }
       } catch {
-        if (!cancelled) setError("Network error while loading your outline plan.");
+        if (!cancelled) {
+          toast.error("Network error while loading your outline plan.", "Connection error");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -59,10 +64,9 @@ export function StepOutlineConfirm({
     return () => {
       cancelled = true;
     };
-  }, [wizard.project.id]);
+  }, [wizard.project.id, toast]);
 
   async function handleUnlock() {
-    setError(null);
     setSubmitting(true);
     try {
       const res = await fetch(`/api/projects/${wizard.project.id}/outline/unlock`, {
@@ -70,12 +74,13 @@ export function StepOutlineConfirm({
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not unlock outline.");
+        toast.error(data.error ?? "Could not unlock outline.", "Could not unlock outline");
         return;
       }
       setOutlineLocked(false);
+      toast.success("You can now edit your outline before drafting resumes.", "Outline unlocked");
     } catch {
-      setError("Network error while unlocking outline.");
+      toast.error("Network error while unlocking outline.", "Connection error");
     } finally {
       setSubmitting(false);
     }
@@ -144,11 +149,13 @@ export function StepOutlineConfirm({
 
   async function handleConfirmAndSave() {
     if (!outline) return;
-    setError(null);
 
     const check = validateConfirmedOutline(outline);
     if (!check.valid) {
-      setError(check.errors[0] ?? "Please resolve outline issues before confirming.");
+      toast.error(
+        check.errors[0] ?? "Please resolve outline issues before confirming.",
+        "Check your outline"
+      );
       return;
     }
 
@@ -161,13 +168,16 @@ export function StepOutlineConfirm({
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not save your confirmed outline.");
+        toast.error(
+          data.error ?? "Could not save your confirmed outline.",
+          "Could not save outline"
+        );
         return;
       }
       router.push(`/projects/${wizard.project.id}`);
       router.refresh();
     } catch {
-      setError("Network error while saving your outline. Try again.");
+      toast.error("Network error while saving your outline. Try again.", "Connection error");
     } finally {
       setSubmitting(false);
     }
@@ -180,7 +190,10 @@ export function StepOutlineConfirm({
   if (!outline) {
     return (
       <div className="space-y-4">
-        <FormAlert tone="error">{error ?? "Outline plan could not be loaded."}</FormAlert>
+        <p className="text-sm text-[var(--neutral-600)]">
+          Your outline plan could not be loaded right now. Return to the previous step or try again
+          shortly.
+        </p>
         <Button type="button" variant="secondary" onClick={onBack}>
           Back
         </Button>
@@ -216,8 +229,6 @@ export function StepOutlineConfirm({
           </button>
         </FormAlert>
       ) : null}
-
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">

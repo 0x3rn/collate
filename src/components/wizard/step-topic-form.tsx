@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
 import type { SerializedWizardState } from "@/lib/wizard/http-handlers";
 import { ACADEMIC_LEVELS } from "@/lib/wizard/schema";
 
@@ -16,6 +16,7 @@ export function StepTopicForm({
   saving: boolean;
   onSave: (payload: Record<string, unknown>) => Promise<void>;
 }) {
+  const toast = useToast();
   const isAssignment = wizard.project.type === "assignment";
   const initialTitle = wizard.project.title.startsWith("Untitled ") ? "" : wizard.project.title;
 
@@ -27,7 +28,6 @@ export function StepTopicForm({
   const [questionList, setQuestionList] = useState<string[]>(
     wizard.questions.length > 0 ? wizard.questions.map((q) => q.text) : [""]
   );
-  const [localError, setLocalError] = useState<string | null>(null);
 
   function updateQuestion(index: number, value: string) {
     setQuestionList((prev) => prev.map((q, idx) => (idx === index ? value : q)));
@@ -45,13 +45,13 @@ export function StepTopicForm({
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLocalError(null);
 
     if (title.trim().length < 5) {
-      setLocalError(
+      toast.error(
         isAssignment
           ? "Enter an assignment title (at least 5 characters)."
-          : "Enter a clear topic title (at least 5 characters)."
+          : "Enter a clear topic title (at least 5 characters).",
+        "Check your title"
       );
       return;
     }
@@ -59,8 +59,9 @@ export function StepTopicForm({
     if (isAssignment) {
       const cleaned = questionList.map((q) => q.trim());
       if (cleaned.some((q) => q.length < 5)) {
-        setLocalError(
-          "Every assignment question must be at least 5 characters (or remove empty rows)."
+        toast.error(
+          "Every assignment question must be at least 5 characters (or remove empty rows).",
+          "Check your questions"
         );
         return;
       }
@@ -98,8 +99,6 @@ export function StepTopicForm({
             : "Give your working title and optional academic context so the source check targets the right literature."}
         </p>
       </div>
-
-      {localError ? <FormAlert tone="error">{localError}</FormAlert> : null}
 
       <FormField
         id="wizard-title"

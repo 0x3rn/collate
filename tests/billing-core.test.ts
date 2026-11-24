@@ -177,7 +177,7 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
     const cap = await captureChapterReservation(db, okRes.reservationId, now);
     expect(cap.status).toBe("captured");
 
-    // Insufficient credits throws 402
+    // Insufficient credits throws 402 with exact available balance attached
     await expect(
       reserveChapterCredits(db, {
         userId: "usr_pay",
@@ -186,7 +186,7 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
         idempotencyKey: "too_big",
         now,
       })
-    ).rejects.toMatchObject({ code: "INSUFFICIENT_CREDITS", status: 402 });
+    ).rejects.toMatchObject({ code: "INSUFFICIENT_CREDITS", status: 402, availableCredits: 12 });
 
     // Manual admin refund works idempotently
     const manual = await issueAdminManualRefund(db, {
@@ -224,5 +224,39 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
     const manualPause = await checkSpendCircuitBreaker(db, now);
     expect(manualPause.allowed).toBe(false);
     expect(manualPause.globalKillSwitchActive).toBe(true);
+  });
+
+  it("trips on consecutive recent failures, auto-recovers after cooldown, and clears immediately on admin resume", async () => {
+    // Insert 12 consecutive failed jobs over the last 3 minutes
+    const baseMs = now.getTime();
+    for (let i = 0; i < 12; i += 1) {
+      await db.insert(jobsLog).values({
+        id: `job_fail_${i}`,
+        workflowId: "wf_burst",
+        projectId: "prj_pay",
+        step: "draft",
+        model: "gemini-4-neon",
+        status: "failed",
+        tokensIn: 0,
+        tokensOut: 0,
+        costEstimateUsd: 0,
+        error: "HTTP 429",
+        createdAt: new Date(baseMs - (11 - i) * 10_000),
+      });
+    }
+
+    // Immediately after the 12th failure -> tripped
+    const tripped = await checkSpendCircuitBreaker(db, now);
+    expect(tripped.allowed).toBe(false);
+    expect(tripped.reason).toContain("consecutive AI job failures");
+
+    // 11 minutes after the latest failure -> cooldown expired (half-open), allows next run
+    const afterCooldown = await checkSpendCircuitBreaker(db, new Date(baseMs + 11 * 60 * 1000));
+    expect(afterCooldown.allowed).toBe(true);
+
+    // Explicit admin Resume during the cooldown window clears the trip immediately
+    await setGlobalCircuitBreaker(db, false, "Fixed upstream provider", now);
+    const afterAdminResume = await checkSpendCircuitBreaker(db, new Date(baseMs + 30_000));
+    expect(afterAdminResume.allowed).toBe(true);
   });
 });

@@ -5,20 +5,20 @@ import { useState, type FormEvent } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
 
 export function ForgotPasswordForm() {
+  const toast = useToast();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
     setSuccessMessage(null);
 
     if (!email.includes("@")) {
-      setError("Enter a valid email address.");
+      toast.error("Enter a valid email address.", "Invalid email");
       return;
     }
 
@@ -31,14 +31,17 @@ export function ForgotPasswordForm() {
       });
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "We could not process that request. Try again shortly.");
+        toast.error(
+          data.error ?? "We could not process that request. Try again shortly.",
+          "Request failed"
+        );
         return;
       }
       setSuccessMessage(
         data.message ?? "If an account exists for that email, we sent a password reset link."
       );
     } catch {
-      setError("Network error while reaching the server. Try again.");
+      toast.error("Network error while reaching the server. Try again.", "Connection error");
     } finally {
       setSubmitting(false);
     }
@@ -46,7 +49,6 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
       {successMessage ? <FormAlert tone="success">{successMessage}</FormAlert> : null}
 
       <FormField

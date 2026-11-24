@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { CREDIT_PACKS } from "@/config/pricing";
 import {
   formatCreditLedgerType,
@@ -27,13 +27,12 @@ export function CreditsPanel({
   balance: number;
   recentLedger: LedgerEntryDisplay[];
 }) {
+  const toast = useToast();
   const [currency, setCurrency] = useState<"ngn" | "usd">("ngn");
   const [busyPackId, setBusyPackId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   async function startCheckout(packId: string) {
     const provider = currency === "ngn" ? "paystack" : "stripe";
-    setError(null);
     setBusyPackId(packId);
     try {
       const res = await fetch("/api/billing/checkout", {
@@ -47,12 +46,15 @@ export function CreditsPanel({
         error?: string;
       };
       if (!res.ok || !json.ok || !json.checkoutUrl) {
-        setError(json.error ?? "Could not open checkout. Please try again.");
+        toast.error(json.error ?? "Could not open checkout. Please try again.", "Checkout failed");
         return;
       }
       window.location.href = json.checkoutUrl;
     } catch {
-      setError("Could not reach the payment page. Check your connection and try again.");
+      toast.error(
+        "Could not reach the payment page. Check your connection and try again.",
+        "Connection error"
+      );
     } finally {
       setBusyPackId(null);
     }
@@ -101,12 +103,6 @@ export function CreditsPanel({
             </button>
           </div>
         </div>
-
-        {error ? (
-          <div className="px-6 pt-5">
-            <FormAlert tone="error">{error}</FormAlert>
-          </div>
-        ) : null}
 
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[var(--neutral-200)]">
           {CREDIT_PACKS.map((pack, index) => {

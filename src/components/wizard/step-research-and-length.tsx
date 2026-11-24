@@ -4,6 +4,11 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import {
+  InsufficientCreditsModal,
+  type InsufficientCreditsDetails,
+} from "@/components/ui/modal-card";
+import { useToast } from "@/components/ui/toast";
 import type { FeasibilityVerdict, ResearchRunStatus } from "@/db/schema";
 import type { SerializedWizardState } from "@/lib/wizard/http-handlers";
 
@@ -75,11 +80,13 @@ export function StepResearchSweep({
   onBackToTopic: () => void;
   onContinueToLength: () => void;
 }) {
+  const toast = useToast();
   const [simulateVerdict, setSimulateVerdict] = useState<FeasibilityVerdict>("feasible");
   const [liveSummary, setLiveSummary] = useState<LiveResearchSummary | null>(null);
   const [startingLive, setStartingLive] = useState(false);
-  const [liveError, setLiveError] = useState<string | null>(null);
+  const [creditsModal, setCreditsModal] = useState<InsufficientCreditsDetails | null>(null);
   const lastCompletedRunIdRef = useRef<string | null>(null);
+  const lastFailedRunKeyRef = useRef<string | null>(null);
 
   const reports = wizard.feasibilityReports;
   const primaryReport = reports[0];
@@ -105,6 +112,13 @@ export function StepResearchSweep({
               await onRefreshWizard();
             }
           }
+          if (data.run?.status === "failed" && data.run.error) {
+            const failKey = `${data.run.id}:${data.run.error}`;
+            if (failKey !== lastFailedRunKeyRef.current) {
+              lastFailedRunKeyRef.current = failKey;
+              toast.error(data.run.error, "Source sweep paused");
+            }
+          }
         }
       } catch {
         // Keep current state on transient poll error
@@ -126,10 +140,9 @@ export function StepResearchSweep({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [wizard.project.id, isRunning, onRefreshWizard]);
+  }, [wizard.project.id, isRunning, onRefreshWizard, toast]);
 
   async function startLiveSweep(resumeRunId?: string) {
-    setLiveError(null);
     setStartingLive(true);
     try {
       const res = await fetch(`/api/projects/${wizard.project.id}/research`, {
@@ -137,9 +150,30 @@ export function StepResearchSweep({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(resumeRunId ? { resumeRunId } : {}),
       });
-      const data = (await res.json()) as { ok: boolean; error?: string };
+      const data = (await res.json()) as {
+        ok: boolean;
+        code?: string;
+        creditsRequired?: number;
+        creditsAvailable?: number;
+        error?: string;
+      };
       if (!res.ok || !data.ok) {
-        setLiveError(data.error ?? "Could not start the source sweep. Try again.");
+        if (
+          (res.status === 402 || data.code === "INSUFFICIENT_CREDITS") &&
+          typeof data.creditsRequired === "number"
+        ) {
+          setCreditsModal({
+            actionLabel: "Running an extra topic source sweep",
+            creditsRequired: data.creditsRequired,
+            creditsAvailable: data.creditsAvailable,
+            message: data.error,
+          });
+          return;
+        }
+        toast.error(
+          data.error ?? "Could not start the source sweep. Try again.",
+          "Could not start sweep"
+        );
         return;
       }
 
@@ -151,7 +185,7 @@ export function StepResearchSweep({
         }
       }
     } catch {
-      setLiveError("Network error while starting the source sweep.");
+      toast.error("Network error while starting the source sweep.", "Connection error");
     } finally {
       setStartingLive(false);
     }
@@ -175,8 +209,6 @@ export function StepResearchSweep({
           has enough real evidence before any writing starts.
         </p>
       </div>
-
-      {liveError ? <FormAlert tone="error">{liveError}</FormAlert> : null}
 
       <div className="p-5 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -227,8 +259,6 @@ export function StepResearchSweep({
             </div>
           </div>
         ) : null}
-
-        {activeRun?.error ? <FormAlert tone="warning">{activeRun.error}</FormAlert> : null}
       </div>
 
       {primaryReport ? (
@@ -394,6 +424,8 @@ export function StepResearchSweep({
           </p>
         )}
       </div>
+
+      <InsufficientCreditsModal details={creditsModal} onClose={() => setCreditsModal(null)} />
     </div>
   );
 }
@@ -414,15 +446,14 @@ export function StepLengthForm({
     wizard.feasibilityReports[0]?.coverage.idealPagesReason ||
     "Recommended based on your selected work type and scope.";
 
+  const toast = useToast();
   const [pagesInput, setPagesInput] = useState(String(wizard.project.targetPages ?? recommended));
-  const [localError, setLocalError] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLocalError(null);
     const parsed = Number(pagesInput);
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > 300) {
-      setLocalError("Enter a whole page count between 1 and 300.");
+      toast.error("Enter a whole page count between 1 and 300.", "Invalid page count");
       return;
     }
     await onSave({ step: 4, targetPages: parsed });
@@ -437,8 +468,6 @@ export function StepLengthForm({
           pages are measured from real rendered PDFs.
         </p>
       </div>
-
-      {localError ? <FormAlert tone="error">{localError}</FormAlert> : null}
 
       <div className="p-5 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--accent-100)] space-y-2">
         <p className="text-xs font-semibold text-[var(--accent-600)] m-0">Ideal recommendation</p>

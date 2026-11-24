@@ -48,6 +48,8 @@ export const BILLING_POLICY = {
     perUserDailyUsd: 25.0,
     globalDailyUsd: 250.0,
     maxConsecutiveFailedJobsBeforeTrip: 12,
+    failureTripWindowMinutes: 60,
+    failureTripCooldownMinutes: 10,
   },
   webhookReplayWindowSeconds: 300,
 } as const;

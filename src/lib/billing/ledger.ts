@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, ne, sql } from "drizzle-orm";
 import { BILLING_POLICY } from "@/config/pricing";
 import type { AppDb } from "@/db/client";
 import {
@@ -18,17 +18,20 @@ export class BillingError extends Error {
   public readonly code:
     "INSUFFICIENT_CREDITS" | "USER_NOT_FOUND" | "RESERVATION_NOT_FOUND" | "CIRCUIT_BREAKER_OPEN";
   public readonly status: number;
+  public readonly availableCredits?: number;
 
   constructor(
     code:
       "INSUFFICIENT_CREDITS" | "USER_NOT_FOUND" | "RESERVATION_NOT_FOUND" | "CIRCUIT_BREAKER_OPEN",
     message: string,
-    status: number
+    status: number,
+    availableCredits?: number
   ) {
     super(message);
     this.name = "BillingError";
     this.code = code;
     this.status = status;
+    this.availableCredits = availableCredits;
   }
 }
 
@@ -193,7 +196,8 @@ export async function reserveChapterCredits(
     throw new BillingError(
       "INSUFFICIENT_CREDITS",
       `Insufficient credits: need ${params.credits}, available ${user.creditsBalance}.`,
-      402
+      402,
+      user.creditsBalance
     );
   }
 
@@ -393,6 +397,12 @@ export async function issueAdminManualRefund(
   return { alreadyProcessed: false, balanceAfter: newBalance };
 }
 
+export const PUBLIC_WRITING_PAUSED_MESSAGE =
+  "Writing is temporarily unavailable while we resolve a brief service interruption. Please try again in a few minutes.";
+
+export const PUBLIC_RESEARCH_PAUSED_MESSAGE =
+  "Research is temporarily unavailable while we resolve a brief service interruption. Please try again in a few minutes.";
+
 export interface CircuitBreakerStatus {
   allowed: boolean;
   reason?: string;
@@ -432,6 +442,7 @@ export async function checkSpendCircuitBreaker(
     .where(eq(systemControls.key, "global_circuit_breaker"))
     .limit(1);
 
+  let lastAdminResumeAt: Date | null = null;
   if (control) {
     try {
       const parsed = JSON.parse(control.valueJson) as { paused?: boolean; reason?: string };
@@ -443,6 +454,7 @@ export async function checkSpendCircuitBreaker(
           globalKillSwitchActive: true,
         };
       }
+      lastAdminResumeAt = control.updatedAt;
     } catch {
       // Ignore corrupt control JSON
     }
@@ -466,15 +478,33 @@ export async function checkSpendCircuitBreaker(
     };
   }
 
+  // Only inspect recent jobs inside the rolling failure window (and strictly after any manual
+  // admin Resume), and automatically transition to half-open once the cooldown expires so a
+  // prior failure burst can never permanently deadlock the app.
+  const failureWindowStart = new Date(
+    now.getTime() - BILLING_POLICY.spendCaps.failureTripWindowMinutes * 60 * 1000
+  );
+  const cooldownCutoff = new Date(
+    now.getTime() - BILLING_POLICY.spendCaps.failureTripCooldownMinutes * 60 * 1000
+  );
+  const recentFilter =
+    lastAdminResumeAt && lastAdminResumeAt.getTime() >= failureWindowStart.getTime()
+      ? gt(jobsLog.createdAt, lastAdminResumeAt)
+      : gte(jobsLog.createdAt, failureWindowStart);
+
   const recentJobs = await db
-    .select({ status: jobsLog.status })
+    .select({ status: jobsLog.status, createdAt: jobsLog.createdAt })
     .from(jobsLog)
+    .where(recentFilter)
     .orderBy(desc(jobsLog.createdAt))
     .limit(BILLING_POLICY.spendCaps.maxConsecutiveFailedJobsBeforeTrip);
 
+  const latestJobAt = recentJobs[0]?.createdAt;
   if (
     recentJobs.length >= BILLING_POLICY.spendCaps.maxConsecutiveFailedJobsBeforeTrip &&
-    recentJobs.every((j) => j.status === "failed")
+    recentJobs.every((j) => j.status === "failed") &&
+    latestJobAt &&
+    latestJobAt.getTime() >= cooldownCutoff.getTime()
   ) {
     return {
       allowed: false,

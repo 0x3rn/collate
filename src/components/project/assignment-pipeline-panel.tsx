@@ -1,10 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { FormAlert } from "@/components/ui/alert";
+import { useEffect, useState } from "react";
 import { Button, LinkButton } from "@/components/ui/button";
-import { Toast, type ToastMessage } from "@/components/ui/toast";
+import {
+  InsufficientCreditsModal,
+  type InsufficientCreditsDetails,
+} from "@/components/ui/modal-card";
+import { useToast } from "@/components/ui/toast";
 import type { ChapterStatus } from "@/db/schema";
 
 export interface AssignmentQuestionPlanItem {
@@ -64,21 +67,15 @@ export function AssignmentPipelinePanel({
   assignmentChapter: AssignmentRunChapterState | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [revising, setRevising] = useState(false);
   const [revisionNote, setRevisionNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [creditsModal, setCreditsModal] = useState<InsufficientCreditsDetails | null>(null);
 
   const status: ChapterStatus = assignmentChapter?.status ?? "not_started";
   const badge = STATUS_BADGE[status];
   const isInFlight = status === "queued" || status === "writing";
-
-  const dismissToast = useCallback(() => setToast(null), []);
-
-  function showToast(title: string, message: string, tone: ToastMessage["tone"] = "success") {
-    setToast({ id: `${Date.now()}-${Math.random()}`, tone, title, message });
-  }
 
   useEffect(() => {
     if (!isInFlight) return;
@@ -100,24 +97,44 @@ export function AssignmentPipelinePanel({
   }, [isInFlight, router]);
 
   async function triggerStartAssignment() {
-    setError(null);
     setBusy(true);
     try {
       const res = await fetch(`/api/projects/${projectId}/assignment/start`, {
         method: "POST",
       });
-      const data = (await res.json()) as { ok: boolean; error?: string };
+      const data = (await res.json()) as {
+        ok: boolean;
+        code?: string;
+        creditsRequired?: number;
+        creditsAvailable?: number;
+        error?: string;
+      };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not start assignment drafting.");
+        if (
+          (res.status === 402 || data.code === "INSUFFICIENT_CREDITS") &&
+          typeof data.creditsRequired === "number"
+        ) {
+          setCreditsModal({
+            actionLabel: "Drafting this assignment",
+            creditsRequired: data.creditsRequired,
+            creditsAvailable: data.creditsAvailable,
+            message: data.error,
+          });
+          return;
+        }
+        toast.error(
+          data.error ?? "Could not start assignment drafting.",
+          "Could not start assignment"
+        );
         return;
       }
-      showToast(
-        "Assignment queued",
-        "Your assignment is queued for drafting. You will receive an email as soon as it is ready to review."
+      toast.success(
+        "Your assignment is queued for drafting. You will receive an email as soon as it is ready to review.",
+        "Assignment queued"
       );
       router.refresh();
     } catch {
-      setError("Network error while starting assignment drafting.");
+      toast.error("Network error while starting assignment drafting.", "Connection error");
     } finally {
       setBusy(false);
     }
@@ -125,7 +142,6 @@ export function AssignmentPipelinePanel({
 
   async function triggerApprove() {
     if (!assignmentChapter) return;
-    setError(null);
     setBusy(true);
     try {
       const res = await fetch(
@@ -134,13 +150,16 @@ export function AssignmentPipelinePanel({
       );
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not approve assignment answers.");
+        toast.error(
+          data.error ?? "Could not approve assignment answers.",
+          "Could not approve assignment"
+        );
         return;
       }
-      showToast("Assignment approved", "Download your formatted PDF or Word file below.");
+      toast.success("Download your formatted PDF or Word file below.", "Assignment approved");
       router.refresh();
     } catch {
-      setError("Network error while approving assignment.");
+      toast.error("Network error while approving assignment.", "Connection error");
     } finally {
       setBusy(false);
     }
@@ -148,9 +167,11 @@ export function AssignmentPipelinePanel({
 
   async function submitRevision() {
     if (!assignmentChapter) return;
-    setError(null);
     if (revisionNote.trim().length < 10) {
-      setError("Describe the requested changes in at least 10 characters.");
+      toast.error(
+        "Describe the requested changes in at least 10 characters.",
+        "More detail needed"
+      );
       return;
     }
     setBusy(true);
@@ -163,17 +184,38 @@ export function AssignmentPipelinePanel({
           body: JSON.stringify({ instructions: revisionNote.trim() }),
         }
       );
-      const data = (await res.json()) as { ok: boolean; error?: string };
+      const data = (await res.json()) as {
+        ok: boolean;
+        code?: string;
+        creditsRequired?: number;
+        creditsAvailable?: number;
+        error?: string;
+      };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not queue assignment revision.");
+        if (
+          (res.status === 402 || data.code === "INSUFFICIENT_CREDITS") &&
+          typeof data.creditsRequired === "number"
+        ) {
+          setCreditsModal({
+            actionLabel: "Revising this assignment",
+            creditsRequired: data.creditsRequired,
+            creditsAvailable: data.creditsAvailable,
+            message: data.error,
+          });
+          return;
+        }
+        toast.error(
+          data.error ?? "Could not queue assignment revision.",
+          "Could not request changes"
+        );
         return;
       }
       setRevisionNote("");
       setRevising(false);
-      showToast("Revision queued", "A new assignment version will be saved when ready.");
+      toast.success("A new assignment version will be saved when ready.", "Revision queued");
       router.refresh();
     } catch {
-      setError("Network error while requesting assignment changes.");
+      toast.error("Network error while requesting assignment changes.", "Connection error");
     } finally {
       setBusy(false);
     }
@@ -258,8 +300,6 @@ export function AssignmentPipelinePanel({
         </div>
       </div>
 
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-
       {revising && assignmentChapter ? (
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-3">
           <label
@@ -321,7 +361,7 @@ export function AssignmentPipelinePanel({
         ))}
       </ol>
 
-      <Toast toast={toast} onDismiss={dismissToast} />
+      <InsufficientCreditsModal details={creditsModal} onClose={() => setCreditsModal(null)} />
     </section>
   );
 }

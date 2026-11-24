@@ -17,10 +17,12 @@ import {
   BillingError,
   checkSpendCircuitBreaker,
   countUserNonFailedSweeps,
+  PUBLIC_RESEARCH_PAUSED_MESSAGE,
   refundChapterReservation,
   reserveChapterCredits,
 } from "@/lib/billing/ledger";
 import { screenTopic } from "@/lib/feasibility/topic-screen";
+import { logEvent } from "@/lib/observability/logger";
 import { getLatestResearchRunSummary, type ResearchSweepPayload } from "./sweep-orchestrator";
 
 export interface ResearchWorkflowLauncher {
@@ -73,10 +75,15 @@ export async function handleStartResearchSweep(
 
   const breaker = await checkSpendCircuitBreaker(deps.db, nowCheck);
   if (!breaker.allowed) {
-    return jsonNoStore(
-      { ok: false, error: breaker.reason ?? "Research sweeps are temporarily paused." },
-      503
-    );
+    logEvent("warn", "circuit_breaker_blocked", {
+      projectId: project.id,
+      data: {
+        action: "start_research",
+        reason: breaker.reason ?? "unknown",
+        globalDailySpendUsd: breaker.globalDailySpendUsd,
+      },
+    });
+    return jsonNoStore({ ok: false, error: PUBLIC_RESEARCH_PAUSED_MESSAGE }, 503);
   }
 
   const rl = await consumeAuthRateLimit(
@@ -176,7 +183,8 @@ export async function handleStartResearchSweep(
             ok: false,
             code: err.code,
             creditsRequired: sweepCost,
-            error: `You have used your ${BILLING_POLICY.freeFeasibilitySweepsPerUser} free topic sweeps. Additional sweeps require ${sweepCost} credits — top up on your Account page.`,
+            creditsAvailable: err.availableCredits ?? session.user.creditsBalance,
+            error: `You have used your ${BILLING_POLICY.freeFeasibilitySweepsPerUser} free topic sweeps. Additional sweeps require ${sweepCost} credits — top up on Credits & Billing.`,
           },
           err.status
         );

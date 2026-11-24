@@ -5,16 +5,16 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button, LinkButton } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
 
 export function VerifyEmailClient({ token }: { token: string | null }) {
+  const toast = useToast();
   const [status, setStatus] = useState<"idle" | "verifying" | "verified" | "error">(
     token ? "verifying" : "idle"
   );
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [email, setEmail] = useState("");
   const [resending, setResending] = useState(false);
-  const [resendMessage, setResendMessage] = useState<string | null>(null);
-  const [resendError, setResendError] = useState<string | null>(null);
   const didSubmitRef = useRef(false);
 
   useEffect(() => {
@@ -33,25 +33,27 @@ export function VerifyEmailClient({ token }: { token: string | null }) {
           setStatus("verified");
           setStatusMessage(data.message ?? "Your email address is verified.");
         } else {
+          const message = data.error ?? "This verification link is invalid or has expired.";
           setStatus("error");
-          setStatusMessage(data.error ?? "This verification link is invalid or has expired.");
+          setStatusMessage(message);
+          toast.error(message, "Verification failed");
         }
       } catch {
+        const message = "Could not verify your email right now. Try again shortly.";
         setStatus("error");
-        setStatusMessage("Could not verify your email right now. Try again shortly.");
+        setStatusMessage(message);
+        toast.error(message, "Connection error");
       }
     }
 
     void verify();
-  }, [token]);
+  }, [token, toast]);
 
   async function handleResend(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setResendError(null);
-    setResendMessage(null);
 
     if (!email.includes("@")) {
-      setResendError("Enter a valid email address.");
+      toast.error("Enter a valid email address.", "Invalid email");
       return;
     }
 
@@ -64,14 +66,18 @@ export function VerifyEmailClient({ token }: { token: string | null }) {
       });
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
       if (!res.ok || !data.ok) {
-        setResendError(data.error ?? "Could not send a verification link. Try again.");
+        toast.error(
+          data.error ?? "Could not send a verification link. Try again.",
+          "Could not send link"
+        );
         return;
       }
-      setResendMessage(
-        data.message ?? "If that email belongs to an unverified account, we sent a new link."
+      toast.success(
+        data.message ?? "If that email belongs to an unverified account, we sent a new link.",
+        "Verification link sent"
       );
     } catch {
-      setResendError("Network error. Check your connection and try again.");
+      toast.error("Network error. Check your connection and try again.", "Connection error");
     } finally {
       setResending(false);
     }
@@ -94,14 +100,10 @@ export function VerifyEmailClient({ token }: { token: string | null }) {
 
   return (
     <div className="space-y-6">
-      {status === "error" ? <FormAlert tone="error">{statusMessage}</FormAlert> : null}
-
       <form onSubmit={handleResend} noValidate className="space-y-4">
         <p className="text-sm text-[var(--neutral-600)]">
           Need a fresh link? Enter the email you used when creating your account.
         </p>
-        {resendError ? <FormAlert tone="error">{resendError}</FormAlert> : null}
-        {resendMessage ? <FormAlert tone="success">{resendMessage}</FormAlert> : null}
 
         <FormField
           id="resend-email"

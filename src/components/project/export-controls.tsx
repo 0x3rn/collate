@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 
 export function ExportControls({
   projectId,
@@ -13,12 +13,11 @@ export function ExportControls({
   hasCompletedChapters: boolean;
   allChaptersReady: boolean;
 }) {
+  const toast = useToast();
   const [workingKey, setWorkingKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   async function triggerExport(scope: "combined" | "full", format: "pdf" | "docx") {
     const key = `${scope}-${format}`;
-    setError(null);
     setWorkingKey(key);
     try {
       const res = await fetch(`/api/projects/${projectId}/exports`, {
@@ -32,12 +31,12 @@ export function ExportControls({
         error?: string;
       };
       if (!res.ok || !data.ok || !data.export?.downloadUrl) {
-        setError(data.error ?? "Could not generate export. Try again.");
+        toast.error(data.error ?? "Could not generate export. Try again.", "Download unavailable");
         return;
       }
       window.location.href = data.export.downloadUrl;
     } catch {
-      setError("Network error while preparing your download.");
+      toast.error("Network error while preparing your download.", "Download unavailable");
     } finally {
       setWorkingKey(null);
     }
@@ -52,8 +51,6 @@ export function ExportControls({
           of Contents. Word (.docx) matches the same structure for school template edits.
         </p>
       </div>
-
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
 
       <div className="flex flex-wrap gap-3">
         <Button

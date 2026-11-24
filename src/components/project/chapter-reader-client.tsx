@@ -1,11 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { FormAlert } from "@/components/ui/alert";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button, LinkButton } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
-import { Toast, type ToastMessage } from "@/components/ui/toast";
+import {
+  InsufficientCreditsModal,
+  type InsufficientCreditsDetails,
+} from "@/components/ui/modal-card";
+import { useToast } from "@/components/ui/toast";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 
 export interface ReaderCitationCard {
@@ -83,6 +86,7 @@ function renderParagraphWithCitations(
 
 export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitialData }) {
   const router = useRouter();
+  const toast = useToast();
   const [mode, setMode] = useState<"read" | "edit">("read");
   const [markdown, setMarkdown] = useState(initial.markdown);
   const [editSummary, setEditSummary] = useState("");
@@ -92,19 +96,12 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [resuming, setResuming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [creditsModal, setCreditsModal] = useState<InsufficientCreditsDetails | null>(null);
 
   const citationByKey = new Map(initial.citations.map((c) => [c.citeKey, c]));
   const hasDraft = markdown.trim().length > 0;
   const isPausedWithoutDraft = initial.chapter.status === "needs_attention" && !hasDraft;
   const isInFlight = initial.chapter.status === "queued" || initial.chapter.status === "writing";
-
-  const dismissToast = useCallback(() => setToast(null), []);
-
-  function showToast(title: string, message: string, tone: ToastMessage["tone"] = "success") {
-    setToast({ id: `${Date.now()}-${Math.random()}`, tone, title, message });
-  }
 
   useEffect(() => {
     if (!isInFlight) return;
@@ -126,34 +123,53 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
   }, [isInFlight, router]);
 
   async function handleResumeChapter() {
-    setError(null);
     setResuming(true);
     try {
       const res = await fetch(
         `/api/projects/${initial.projectId}/chapters/${initial.chapter.id}/start`,
         { method: "POST" }
       );
-      const data = (await res.json()) as { ok: boolean; error?: string };
+      const data = (await res.json()) as {
+        ok: boolean;
+        code?: string;
+        creditsRequired?: number;
+        creditsAvailable?: number;
+        error?: string;
+      };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not resume this chapter. Please try again.");
+        if (
+          (res.status === 402 || data.code === "INSUFFICIENT_CREDITS") &&
+          typeof data.creditsRequired === "number"
+        ) {
+          setCreditsModal({
+            actionLabel: `Chapter ${initial.chapter.number}: ${initial.chapter.title}`,
+            creditsRequired: data.creditsRequired,
+            creditsAvailable: data.creditsAvailable,
+            message: data.error,
+          });
+          return;
+        }
+        toast.error(
+          data.error ?? "Could not resume this chapter. Please try again.",
+          "Could not resume chapter"
+        );
         return;
       }
-      showToast(
-        "Chapter queued",
-        "Chapter queued for drafting. You will receive an email as soon as it is ready to review."
+      toast.success(
+        "Chapter queued for drafting. You will receive an email as soon as it is ready to review.",
+        "Chapter queued"
       );
       router.refresh();
     } catch {
-      setError("Network error while resuming chapter.");
+      toast.error("Network error while resuming chapter.", "Connection error");
     } finally {
       setResuming(false);
     }
   }
 
   async function handleSaveEdit() {
-    setError(null);
     if (markdown.trim().length < 20) {
-      setError("Chapter text is too short to save.");
+      toast.error("Chapter text is too short to save.", "More text required");
       return;
     }
 
@@ -173,25 +189,24 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
         error?: string;
       };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not save your chapter edits.");
+        toast.error(data.error ?? "Could not save your chapter edits.", "Could not save changes");
         return;
       }
       setEditSummary("");
       setMode("read");
-      showToast(
-        "Changes saved",
-        `Saved version ${data.version?.version ?? ""} and updated your project notes for later chapters.`
+      toast.success(
+        `Saved version ${data.version?.version ?? ""} and updated your project notes for later chapters.`,
+        "Changes saved"
       );
       router.refresh();
     } catch {
-      setError("Network error while saving edits.");
+      toast.error("Network error while saving edits.", "Connection error");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDownloadPdf() {
-    setError(null);
     setExporting(true);
     try {
       const res = await fetch(`/api/projects/${initial.projectId}/exports`, {
@@ -209,12 +224,12 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
         error?: string;
       };
       if (!res.ok || !data.ok || !data.export?.downloadUrl) {
-        setError(data.error ?? "Could not generate chapter PDF.");
+        toast.error(data.error ?? "Could not generate chapter PDF.", "Download unavailable");
         return;
       }
       window.location.href = data.export.downloadUrl;
     } catch {
-      setError("Network error while building chapter PDF.");
+      toast.error("Network error while building chapter PDF.", "Download unavailable");
     } finally {
       setExporting(false);
     }
@@ -258,8 +273,6 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
           </Button>
         </div>
       ) : null}
-
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
 
       {initial.chapter.status === "needs_attention" && hasDraft && initial.attention ? (
         <div className="rounded-[var(--radius-md)] border border-[var(--warning-border)] bg-[var(--warning-bg)] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -522,7 +535,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
         </aside>
       </div>
 
-      <Toast toast={toast} onDismiss={dismissToast} />
+      <InsufficientCreditsModal details={creditsModal} onClose={() => setCreditsModal(null)} />
     </div>
   );
 }

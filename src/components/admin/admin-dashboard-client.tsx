@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
 
 export interface AdminOverviewProps {
   circuitBreaker: {
@@ -38,17 +38,14 @@ export interface AdminOverviewProps {
 
 export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps }) {
   const router = useRouter();
+  const toast = useToast();
   const [targetUserId, setTargetUserId] = useState(initial.users[0]?.id ?? "");
   const [refundCredits, setRefundCredits] = useState("10");
   const [refundReason, setRefundReason] = useState("");
   const [breakerReason, setBreakerReason] = useState("Manual operational pause");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   async function toggleCircuitBreaker(paused: boolean) {
-    setError(null);
-    setNotice(null);
     setBusy(true);
     try {
       const res = await fetch("/api/admin/circuit-breaker", {
@@ -58,15 +55,16 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
       });
       const json = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !json.ok) {
-        setError(json.error ?? "Could not update circuit breaker.");
+        toast.error(json.error ?? "Could not update circuit breaker.", "Circuit breaker error");
         return;
       }
-      setNotice(
-        paused ? "Global AI circuit breaker paused." : "Global AI circuit breaker resumed."
+      toast.success(
+        paused ? "Global AI circuit breaker paused." : "Global AI circuit breaker resumed.",
+        paused ? "AI jobs paused" : "AI jobs resumed"
       );
       router.refresh();
     } catch {
-      setError("Network error updating circuit breaker.");
+      toast.error("Network error updating circuit breaker.", "Connection error");
     } finally {
       setBusy(false);
     }
@@ -74,15 +72,16 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
 
   async function handleManualRefund(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    setNotice(null);
     const creditsNum = Number(refundCredits);
     if (!targetUserId || !Number.isInteger(creditsNum) || creditsNum < 1) {
-      setError("Choose a user and enter a valid positive credit amount.");
+      toast.error("Choose a user and enter a valid positive credit amount.", "Invalid amount");
       return;
     }
     if (refundReason.trim().length < 5) {
-      setError("Provide a short reason (at least 5 characters) for the audit log.");
+      toast.error(
+        "Provide a short reason (at least 5 characters) for the audit log.",
+        "Reason required"
+      );
       return;
     }
 
@@ -99,18 +98,19 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
       });
       const json = (await res.json()) as { ok: boolean; balanceAfter?: number; error?: string };
       if (!res.ok || !json.ok) {
-        setError(json.error ?? "Manual refund failed.");
+        toast.error(json.error ?? "Manual refund failed.", "Refund failed");
         return;
       }
       setRefundReason("");
-      setNotice(
+      toast.success(
         `Granted ${creditsNum.toLocaleString("en-US")} credits. Updated balance: ${
           typeof json.balanceAfter === "number" ? json.balanceAfter.toLocaleString("en-US") : "—"
-        }.`
+        }.`,
+        "Credits granted"
       );
       router.refresh();
     } catch {
-      setError("Network error while issuing manual refund.");
+      toast.error("Network error while issuing manual refund.", "Connection error");
     } finally {
       setBusy(false);
     }
@@ -118,9 +118,6 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
 
   return (
     <div className="space-y-8">
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-      {notice ? <FormAlert tone="success">{notice}</FormAlert> : null}
-
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="p-5 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]">
           <p className="text-xs text-[var(--neutral-600)]">24h global AI spend</p>

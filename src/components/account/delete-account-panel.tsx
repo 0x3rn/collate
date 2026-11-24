@@ -2,23 +2,22 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
 
 export function DeleteAccountPanel() {
   const router = useRouter();
+  const toast = useToast();
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
 
     if (confirmation.trim() !== "DELETE MY ACCOUNT") {
-      setError('Type "DELETE MY ACCOUNT" exactly to confirm.');
+      toast.error('Type "DELETE MY ACCOUNT" exactly to confirm.', "Confirmation required");
       return;
     }
 
@@ -31,13 +30,19 @@ export function DeleteAccountPanel() {
       });
       const json = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !json.ok) {
-        setError(json.error ?? "Could not delete your account. Check your password and try again.");
+        toast.error(
+          json.error ?? "Could not delete your account. Check your password and try again.",
+          "Could not delete account"
+        );
         return;
       }
       router.push("/");
       router.refresh();
     } catch {
-      setError("Could not delete your account right now. Check your connection and try again.");
+      toast.error(
+        "Could not delete your account right now. Check your connection and try again.",
+        "Connection error"
+      );
     } finally {
       setSubmitting(false);
     }
@@ -48,8 +53,6 @@ export function DeleteAccountPanel() {
       <p className="text-sm text-[var(--neutral-700)] leading-relaxed">
         This permanently deletes your account and all saved work. This action cannot be undone.
       </p>
-
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
 
       <form onSubmit={handleSubmit} noValidate className="space-y-4 max-w-[440px]">
         <FormField

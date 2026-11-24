@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
 import type { CitationInlineMode, CitationStyle, LineSpacing, SpellingVariant } from "@/db/schema";
 import type { SerializedWizardState } from "@/lib/wizard/http-handlers";
 import { ALLOWED_FONTS, type FrontMatterToggles } from "@/lib/wizard/schema";
@@ -46,8 +46,8 @@ export function StepChaptersForm({
           { number: 5, title: "Conclusion and Recommendations" },
         ]
   );
+  const toast = useToast();
   const [frontMatter, setFrontMatter] = useState<FrontMatterToggles>(wizard.settings.frontMatter);
-  const [localError, setLocalError] = useState<string | null>(null);
 
   function handleChapterCountChange(nextCount: number) {
     const clamped = Math.max(1, Math.min(20, nextCount));
@@ -68,18 +68,18 @@ export function StepChaptersForm({
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLocalError(null);
 
     const seen = new Set<number>();
     for (const row of chapterRows) {
       if (seen.has(row.number)) {
-        setLocalError(
-          `Duplicate chapter number found: Chapter ${row.number}. Make every number unique.`
+        toast.error(
+          `Duplicate chapter number found: Chapter ${row.number}. Make every number unique.`,
+          "Check chapter numbers"
         );
         return;
       }
       if (row.title.trim().length < 2) {
-        setLocalError(`Chapter ${row.number} needs a title.`);
+        toast.error(`Chapter ${row.number} needs a title.`, "Missing chapter title");
         return;
       }
       seen.add(row.number);
@@ -101,8 +101,6 @@ export function StepChaptersForm({
           References chapter is always added automatically.
         </p>
       </div>
-
-      {localError ? <FormAlert tone="error">{localError}</FormAlert> : null}
 
       <div className="max-w-[240px]">
         <FormField

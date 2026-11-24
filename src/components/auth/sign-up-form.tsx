@@ -5,9 +5,11 @@ import { useState, type FormEvent } from "react";
 import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
+import { useToast } from "@/components/ui/toast";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
 
 export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
+  const toast = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,7 +18,6 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
     {}
   );
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const nameError =
@@ -35,7 +36,6 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setTouched({ name: true, email: true, password: true });
-    setError(null);
 
     if (name.trim().length < 2 || !email.includes("@") || password.length < 12) {
       return;
@@ -55,8 +55,9 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
       });
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
       if (!res.ok || !data.ok) {
-        setError(
-          data.error ?? "We could not create your account. Check your details and try again."
+        toast.error(
+          data.error ?? "We could not create your account. Check your details and try again.",
+          "Could not create account"
         );
         return;
       }
@@ -65,7 +66,10 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
       );
       setPassword("");
     } catch {
-      setError("Network error while reaching the server. Check your connection and try again.");
+      toast.error(
+        "Network error while reaching the server. Check your connection and try again.",
+        "Connection error"
+      );
     } finally {
       setSubmitting(false);
     }
@@ -98,8 +102,6 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-
       <FormField
         id="signup-name"
         label="Full name"

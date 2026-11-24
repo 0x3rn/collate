@@ -147,6 +147,9 @@ describe("Phase 12 — Security Hardening, Abuse Controls, Prompt-Injection & Ac
       authDeps
     );
     expect(pausedCh.status).toBe(503);
+    const pausedChJson = (await pausedCh.json()) as { error?: string };
+    expect(pausedChJson.error).not.toMatch(/circuit breaker|Emergency spend freeze|spend cap/i);
+    expect(pausedChJson.error).toContain("temporarily unavailable");
 
     await db.update(chapters).set({ status: "ready" }).where(eq(chapters.id, ch1.id));
     const pausedRevise = await handleRequestChapterChanges(
@@ -169,6 +172,8 @@ describe("Phase 12 — Security Hardening, Abuse Controls, Prompt-Injection & Ac
       authDeps
     );
     expect(pausedRevise.status).toBe(503);
+    const pausedReviseJson = (await pausedRevise.json()) as { error?: string };
+    expect(pausedReviseJson.error).not.toMatch(/circuit breaker|Emergency spend freeze|spend cap/i);
 
     // Unpause circuit breaker and verify rate limits on both revision and export generation
     await setGlobalCircuitBreaker(db, false, "Resumed", now);

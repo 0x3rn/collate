@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AutoHideScrollbar } from "@/components/layout/auto-hide-scrollbar";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,8 +28,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body className="min-h-screen flex flex-col bg-[var(--neutral-50)] text-[var(--neutral-900)]">
-        {children}
-        <AutoHideScrollbar />
+        <ToastProvider>
+          {children}
+          <AutoHideScrollbar />
+        </ToastProvider>
       </body>
     </html>
   );

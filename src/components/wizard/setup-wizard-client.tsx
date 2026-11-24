@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { FormAlert } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/toast";
 import type { SerializedWizardState } from "@/lib/wizard/http-handlers";
 import { StepChaptersForm, StepCitationsForm, StepFormattingForm } from "./step-chapters-and-style";
 import { StepOutlineConfirm } from "./step-outline-confirm";
@@ -18,12 +18,12 @@ export function SetupWizardClient({
   allowDevPreview?: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [wizard, setWizard] = useState<SerializedWizardState>(initialWizard);
   const [currentStep, setCurrentStep] = useState<number>(
     Math.max(2, Math.min(8, initialWizard.project.wizardStep))
   );
   const [saving, setSaving] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
 
   async function refreshWizardState() {
     try {
@@ -39,7 +39,6 @@ export function SetupWizardClient({
   }
 
   async function saveStep(payload: Record<string, unknown>, advanceTo?: number) {
-    setApiError(null);
     setSaving(true);
     try {
       const res = await fetch(`/api/projects/${wizard.project.id}/wizard`, {
@@ -53,7 +52,10 @@ export function SetupWizardClient({
         error?: string;
       };
       if (!res.ok || !data.ok || !data.wizard) {
-        setApiError(data.error ?? "Could not save this step. Please check your entries.");
+        toast.error(
+          data.error ?? "Could not save this step. Please check your entries.",
+          "Could not save step"
+        );
         return;
       }
 
@@ -62,8 +64,9 @@ export function SetupWizardClient({
         setCurrentStep(advanceTo);
       }
     } catch {
-      setApiError(
-        "Network error while saving your progress. Your inputs are still here—try again."
+      toast.error(
+        "Network error while saving your progress. Your inputs are still here—try again.",
+        "Connection error"
       );
     } finally {
       setSaving(false);
@@ -71,7 +74,6 @@ export function SetupWizardClient({
   }
 
   async function handleConfirmOutline() {
-    setApiError(null);
     setSaving(true);
     try {
       const res = await fetch(`/api/projects/${wizard.project.id}/wizard`, {
@@ -81,13 +83,16 @@ export function SetupWizardClient({
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setApiError(data.error ?? "Could not confirm outline. Please try again.");
+        toast.error(
+          data.error ?? "Could not confirm outline. Please try again.",
+          "Could not confirm outline"
+        );
         return;
       }
       router.push(`/projects/${wizard.project.id}`);
       router.refresh();
     } catch {
-      setApiError("Network error while confirming outline. Try again.");
+      toast.error("Network error while confirming outline. Try again.", "Connection error");
     } finally {
       setSaving(false);
     }
@@ -100,14 +105,9 @@ export function SetupWizardClient({
           projectType={wizard.project.type}
           currentStep={currentStep}
           maxReachedStep={Math.max(wizard.project.wizardStep, currentStep)}
-          onSelectStep={(stepNum) => {
-            setApiError(null);
-            setCurrentStep(stepNum);
-          }}
+          onSelectStep={(stepNum) => setCurrentStep(stepNum)}
         />
       </div>
-
-      {apiError ? <FormAlert tone="error">{apiError}</FormAlert> : null}
 
       <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-8 shadow-[var(--shadow-subtle)]">
         {currentStep === 2 ? (

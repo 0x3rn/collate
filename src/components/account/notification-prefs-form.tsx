@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FormAlert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import type { NotificationPrefs } from "@/lib/email/notifications";
 
 const PREF_ROWS: Array<{ key: keyof NotificationPrefs; label: string; description: string }> = [
@@ -29,19 +29,15 @@ const PREF_ROWS: Array<{ key: keyof NotificationPrefs; label: string; descriptio
 ];
 
 export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: NotificationPrefs }) {
+  const toast = useToast();
   const [prefs, setPrefs] = useState<NotificationPrefs>(initialPrefs);
   const [saving, setSaving] = useState(false);
-  const [savedNotice, setSavedNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   function toggle(key: keyof NotificationPrefs) {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
-    setSavedNotice(null);
   }
 
   async function handleSave() {
-    setError(null);
-    setSavedNotice(null);
     setSaving(true);
     try {
       const res = await fetch("/api/account/notifications", {
@@ -51,12 +47,18 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not save your email settings. Please try again.");
+        toast.error(
+          data.error ?? "Could not save your email settings. Please try again.",
+          "Could not save settings"
+        );
         return;
       }
-      setSavedNotice("Email settings saved.");
+      toast.success("Your email preferences have been updated.", "Email settings saved");
     } catch {
-      setError("Could not save right now. Check your connection and try again.");
+      toast.error(
+        "Could not save right now. Check your connection and try again.",
+        "Connection error"
+      );
     } finally {
       setSaving(false);
     }
@@ -64,13 +66,6 @@ export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: Notifica
 
   return (
     <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] overflow-hidden">
-      {error || savedNotice ? (
-        <div className="px-5 pt-4">
-          {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-          {savedNotice ? <FormAlert tone="success">{savedNotice}</FormAlert> : null}
-        </div>
-      ) : null}
-
       <div className="divide-y divide-[var(--neutral-200)]">
         {PREF_ROWS.map((row) => (
           <label

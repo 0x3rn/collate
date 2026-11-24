@@ -1,11 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type ChangeEvent } from "react";
-import { createPortal } from "react-dom";
-import { FormAlert } from "@/components/ui/alert";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { Button, LinkButton } from "@/components/ui/button";
-import { Toast, type ToastMessage } from "@/components/ui/toast";
+import {
+  InsufficientCreditsModal,
+  ModalCard,
+  type InsufficientCreditsDetails,
+} from "@/components/ui/modal-card";
+import { useToast } from "@/components/ui/toast";
 import type { ChapterStatus } from "@/db/schema";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
 import { canStartChapter } from "@/lib/writing/state-machine";
@@ -73,26 +76,19 @@ export function ChapterPipelinePanel({
   datasets: DatasetPanelItem[];
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [busyChapterId, setBusyChapterId] = useState<string | null>(null);
   const [revisingChapterId, setRevisingChapterId] = useState<string | null>(null);
   const [revisionNote, setRevisionNote] = useState("");
   const [detailsChapter, setDetailsChapter] = useState<ChapterPanelItem | null>(null);
   const [detailsText, setDetailsText] = useState("");
-  const [detailsError, setDetailsError] = useState<string | null>(null);
   const [uploadingCsv, setUploadingCsv] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const [creditsModal, setCreditsModal] = useState<InsufficientCreditsDetails | null>(null);
 
   const hasResultsChapter = chapters.some((c) => c.chapterType === "results");
   const hasInFlightChapter = chapters.some(
     (c) => !c.isAutoReferences && (c.status === "queued" || c.status === "writing")
   );
-
-  const dismissToast = useCallback(() => setToast(null), []);
-
-  function showToast(title: string, message: string, tone: ToastMessage["tone"] = "success") {
-    setToast({ id: `${Date.now()}-${Math.random()}`, tone, title, message });
-  }
 
   // Lightweight live refresh ONLY while a chapter is queued or actively drafting.
   // Pauses when the browser tab is hidden and stops automatically once drafting finishes or pauses.
@@ -118,23 +114,10 @@ export function ChapterPipelinePanel({
     };
   }, [hasInFlightChapter, router]);
 
-  useEffect(() => {
-    if (!detailsChapter) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setDetailsChapter(null);
-        setDetailsError(null);
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [detailsChapter]);
-
   async function triggerStart(chapterId: string, providedDetails?: string) {
-    setError(null);
-    setDetailsError(null);
     setBusyChapterId(chapterId);
     try {
+      const targetChapter = chapters.find((c) => c.id === chapterId);
       const trimmedDetails = providedDetails?.trim();
       const res = await fetch(`/api/projects/${projectId}/chapters/${chapterId}/start`, {
         method: "POST",
@@ -145,37 +128,47 @@ export function ChapterPipelinePanel({
             }
           : {}),
       });
-      const data = (await res.json()) as { ok: boolean; error?: string };
+      const data = (await res.json()) as {
+        ok: boolean;
+        code?: string;
+        creditsRequired?: number;
+        creditsAvailable?: number;
+        error?: string;
+      };
       if (!res.ok || !data.ok) {
-        const message = data.error ?? "Could not start this chapter.";
-        if (detailsChapter?.id === chapterId) {
-          setDetailsError(message);
-        } else {
-          setError(message);
+        if (
+          (res.status === 402 || data.code === "INSUFFICIENT_CREDITS") &&
+          typeof data.creditsRequired === "number"
+        ) {
+          setDetailsChapter(null);
+          setCreditsModal({
+            actionLabel: targetChapter
+              ? `Chapter ${targetChapter.number}: ${targetChapter.title}`
+              : "This chapter",
+            creditsRequired: data.creditsRequired,
+            creditsAvailable: data.creditsAvailable,
+            message: data.error,
+          });
+          return;
         }
+        toast.error(data.error ?? "Could not start this chapter.", "Could not start chapter");
         return;
       }
       setDetailsChapter(null);
       setDetailsText("");
-      showToast(
-        "Chapter queued",
-        "Chapter queued for drafting. You will receive an email as soon as it is ready to review."
+      toast.success(
+        "Chapter queued for drafting. You will receive an email as soon as it is ready to review.",
+        "Chapter queued"
       );
       router.refresh();
     } catch {
-      const message = "Network error while starting chapter.";
-      if (detailsChapter?.id === chapterId) {
-        setDetailsError(message);
-      } else {
-        setError(message);
-      }
+      toast.error("Network error while starting chapter.", "Connection error");
     } finally {
       setBusyChapterId(null);
     }
   }
 
   async function triggerChapterPdfDownload(chapterId: string) {
-    setError(null);
     setBusyChapterId(chapterId);
     try {
       const res = await fetch(`/api/projects/${projectId}/exports`, {
@@ -189,19 +182,18 @@ export function ChapterPipelinePanel({
         error?: string;
       };
       if (!res.ok || !data.ok || !data.export?.downloadUrl) {
-        setError(data.error ?? "Could not build chapter PDF.");
+        toast.error(data.error ?? "Could not build chapter PDF.", "Download unavailable");
         return;
       }
       window.location.href = data.export.downloadUrl;
     } catch {
-      setError("Network error while building chapter PDF.");
+      toast.error("Network error while building chapter PDF.", "Download unavailable");
     } finally {
       setBusyChapterId(null);
     }
   }
 
   async function triggerApprove(chapterId: string) {
-    setError(null);
     setBusyChapterId(chapterId);
     try {
       const res = await fetch(`/api/projects/${projectId}/chapters/${chapterId}/approve`, {
@@ -209,42 +201,71 @@ export function ChapterPipelinePanel({
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not approve chapter.");
+        toast.error(data.error ?? "Could not approve chapter.", "Could not approve chapter");
         return;
       }
-      showToast("Chapter approved", "You can now start the next chapter whenever you are ready.");
+      toast.success(
+        "You can now start the next chapter whenever you are ready.",
+        "Chapter approved"
+      );
       router.refresh();
     } catch {
-      setError("Network error while approving chapter.");
+      toast.error("Network error while approving chapter.", "Connection error");
     } finally {
       setBusyChapterId(null);
     }
   }
 
   async function submitRevision(chapterId: string) {
-    setError(null);
     if (revisionNote.trim().length < 10) {
-      setError("Describe the requested changes in at least 10 characters.");
+      toast.error(
+        "Describe the requested changes in at least 10 characters.",
+        "More detail needed"
+      );
       return;
     }
     setBusyChapterId(chapterId);
     try {
+      const targetChapter = chapters.find((c) => c.id === chapterId);
       const res = await fetch(`/api/projects/${projectId}/chapters/${chapterId}/revise`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ instructions: revisionNote.trim() }),
       });
-      const data = (await res.json()) as { ok: boolean; error?: string };
+      const data = (await res.json()) as {
+        ok: boolean;
+        code?: string;
+        creditsRequired?: number;
+        creditsAvailable?: number;
+        error?: string;
+      };
       if (!res.ok || !data.ok) {
-        setError(data.error ?? "Could not queue chapter revision.");
+        if (
+          (res.status === 402 || data.code === "INSUFFICIENT_CREDITS") &&
+          typeof data.creditsRequired === "number"
+        ) {
+          setCreditsModal({
+            actionLabel: targetChapter
+              ? `Revising Chapter ${targetChapter.number}: ${targetChapter.title}`
+              : "Revising this chapter",
+            creditsRequired: data.creditsRequired,
+            creditsAvailable: data.creditsAvailable,
+            message: data.error,
+          });
+          return;
+        }
+        toast.error(data.error ?? "Could not queue chapter revision.", "Could not request changes");
         return;
       }
       setRevisionNote("");
       setRevisingChapterId(null);
-      showToast("Revision queued", "A new chapter version will be saved as soon as it is ready.");
+      toast.success(
+        "A new chapter version will be saved as soon as it is ready.",
+        "Revision queued"
+      );
       router.refresh();
     } catch {
-      setError("Network error while requesting changes.");
+      toast.error("Network error while requesting changes.", "Connection error");
     } finally {
       setBusyChapterId(null);
     }
@@ -253,7 +274,6 @@ export function ChapterPipelinePanel({
   async function handleCsvUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setError(null);
     setUploadingCsv(true);
     try {
       const csvContent = await file.text();
@@ -268,16 +288,16 @@ export function ChapterPipelinePanel({
         error?: string;
       };
       if (!res.ok || !data.ok || !data.dataset) {
-        setError(data.error ?? "Could not upload CSV dataset.");
+        toast.error(data.error ?? "Could not upload CSV dataset.", "Upload failed");
         return;
       }
-      showToast(
-        "CSV uploaded",
-        `${data.dataset.filename} (${data.dataset.rowCount} rows, ${data.dataset.columnCount} columns) will be used in your Results chapter.`
+      toast.success(
+        `${data.dataset.filename} (${data.dataset.rowCount} rows, ${data.dataset.columnCount} columns) will be used in your Results chapter.`,
+        "CSV uploaded"
       );
       router.refresh();
     } catch {
-      setError("Failed to read or upload the CSV file.");
+      toast.error("Failed to read or upload the CSV file.", "Upload failed");
     } finally {
       setUploadingCsv(false);
       e.target.value = "";
@@ -286,8 +306,6 @@ export function ChapterPipelinePanel({
 
   return (
     <div className="space-y-6">
-      {error ? <FormAlert tone="error">{error}</FormAlert> : null}
-
       {hasResultsChapter ? (
         <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -468,7 +486,6 @@ export function ChapterPipelinePanel({
                               disabled={!gate.allowed || isBusy}
                               title={gate.allowed ? undefined : gate.reason}
                               onClick={() => {
-                                setDetailsError(null);
                                 setDetailsText("");
                                 setDetailsChapter(ch);
                               }}
@@ -592,145 +609,105 @@ export function ChapterPipelinePanel({
         </ul>
       </section>
 
-      {detailsChapter && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]"
-              role="presentation"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) {
-                  setDetailsChapter(null);
-                  setDetailsError(null);
-                }
-              }}
-            >
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="provide-details-title"
-                className="w-full max-w-[540px] max-h-[calc(100vh-2rem)] flex flex-col bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] shadow-xl overflow-hidden"
+      <ModalCard
+        open={Boolean(detailsChapter)}
+        onClose={() => setDetailsChapter(null)}
+        eyebrow={
+          detailsChapter ? `Chapter ${detailsChapter.number}: ${detailsChapter.title}` : undefined
+        }
+        title={detailsChapter?.attention?.title ?? "Provide details to continue"}
+        maxWidthClassName="max-w-[540px]"
+        footer={
+          detailsChapter ? (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busyChapterId === detailsChapter.id}
+                onClick={() => setDetailsChapter(null)}
               >
-                <div className="px-6 py-4 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] flex items-start justify-between gap-4 shrink-0">
-                  <div className="space-y-0.5 min-w-0">
-                    <p className="text-xs font-medium text-[var(--accent-600)] m-0">
-                      Chapter {detailsChapter.number}: {detailsChapter.title}
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                loading={busyChapterId === detailsChapter.id}
+                loadingLabel="Resuming..."
+                onClick={() => triggerStart(detailsChapter.id, detailsText)}
+              >
+                Resume Chapter {detailsChapter.number}
+              </Button>
+            </>
+          ) : null
+        }
+      >
+        {detailsChapter ? (
+          <>
+            <div className="rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-text)] leading-relaxed">
+              {detailsChapter.attention?.userMessage}
+            </div>
+
+            {detailsChapter.attention?.allowCsvUpload ||
+            detailsChapter.chapterType === "results" ? (
+              <div className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] p-4 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                      Upload CSV data (optional)
                     </p>
-                    <h3
-                      id="provide-details-title"
-                      className="text-lg font-medium text-[var(--neutral-900)] m-0"
-                    >
-                      {detailsChapter.attention?.title ?? "Provide details to continue"}
-                    </h3>
+                    <p className="text-xs text-[var(--neutral-600)] m-0">
+                      Attach survey or lab measurements to include real calculated tables.
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close modal"
-                    onClick={() => {
-                      setDetailsChapter(null);
-                      setDetailsError(null);
-                    }}
-                    className="w-8 h-8 rounded-[var(--radius-sm)] grid place-items-center text-[var(--neutral-500)] hover:text-[var(--neutral-900)] hover:bg-[var(--neutral-100)] transition-colors cursor-pointer shrink-0"
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div className="p-6 space-y-5 overflow-y-auto">
-                  <div className="rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-text)] leading-relaxed">
-                    {detailsChapter.attention?.userMessage}
-                  </div>
-
-                  {detailsError ? <FormAlert tone="error">{detailsError}</FormAlert> : null}
-
-                  {detailsChapter.attention?.allowCsvUpload ||
-                  detailsChapter.chapterType === "results" ? (
-                    <div className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] p-4 space-y-2.5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="space-y-0.5">
-                          <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
-                            Upload CSV data (optional)
-                          </p>
-                          <p className="text-xs text-[var(--neutral-600)] m-0">
-                            Attach survey or lab measurements to include real calculated tables.
-                          </p>
-                        </div>
-                        <label className="inline-flex items-center justify-center min-h-[38px] px-3.5 py-1.5 text-xs font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] cursor-pointer shrink-0 whitespace-nowrap transition-colors">
-                          {uploadingCsv ? "Analyzing file..." : "Choose CSV file"}
-                          <input
-                            type="file"
-                            accept=".csv,text/csv"
-                            disabled={uploadingCsv}
-                            onChange={handleCsvUpload}
-                            className="sr-only"
-                          />
-                        </label>
-                      </div>
-                      {datasets.length > 0 ? (
-                        <p className="text-xs text-[var(--neutral-700)] tabular-nums m-0 pt-2 border-t border-[var(--neutral-200)]">
-                          Attached:{" "}
-                          {datasets
-                            .map(
-                              (d) => `${d.filename} (${d.rowCount.toLocaleString("en-US")} rows)`
-                            )
-                            .join(", ")}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="provide-details-notes"
-                      className="block text-sm font-medium text-[var(--neutral-800)]"
-                    >
-                      {detailsChapter.attention?.promptLabel ??
-                        "Additional notes or guidance for this chapter"}
-                    </label>
-                    <textarea
-                      id="provide-details-notes"
-                      rows={4}
-                      maxLength={2000}
-                      value={detailsText}
-                      onChange={(e) => setDetailsText(e.target.value)}
-                      placeholder="e.g. Emphasize the physiological mechanism in Wistar rats and compare against Nigerian regional studies."
-                      className="block w-full px-3.5 py-2.5 text-sm bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] leading-relaxed"
+                  <label className="inline-flex items-center justify-center min-h-[38px] px-3.5 py-1.5 text-xs font-medium bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] cursor-pointer shrink-0 whitespace-nowrap transition-colors">
+                    {uploadingCsv ? "Analyzing file..." : "Choose CSV file"}
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      disabled={uploadingCsv}
+                      onChange={handleCsvUpload}
+                      className="sr-only"
                     />
-                    <p className="text-xs text-[var(--neutral-500)] m-0">
-                      Your notes will guide the resumed draft while staying grounded in your
-                      verified sources.
-                    </p>
-                  </div>
+                  </label>
                 </div>
-
-                <div className="px-6 py-4 bg-[var(--neutral-50)] border-t border-[var(--neutral-200)] flex items-center justify-end gap-2.5 shrink-0">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={busyChapterId === detailsChapter.id}
-                    onClick={() => {
-                      setDetailsChapter(null);
-                      setDetailsError(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    loading={busyChapterId === detailsChapter.id}
-                    loadingLabel="Resuming..."
-                    onClick={() => triggerStart(detailsChapter.id, detailsText)}
-                  >
-                    Resume Chapter {detailsChapter.number}
-                  </Button>
-                </div>
+                {datasets.length > 0 ? (
+                  <p className="text-xs text-[var(--neutral-700)] tabular-nums m-0 pt-2 border-t border-[var(--neutral-200)]">
+                    Attached:{" "}
+                    {datasets
+                      .map((d) => `${d.filename} (${d.rowCount.toLocaleString("en-US")} rows)`)
+                      .join(", ")}
+                  </p>
+                ) : null}
               </div>
-            </div>,
-            document.body
-          )
-        : null}
+            ) : null}
 
-      <Toast toast={toast} onDismiss={dismissToast} />
+            <div className="space-y-1.5">
+              <label
+                htmlFor="provide-details-notes"
+                className="block text-sm font-medium text-[var(--neutral-800)]"
+              >
+                {detailsChapter.attention?.promptLabel ??
+                  "Additional notes or guidance for this chapter"}
+              </label>
+              <textarea
+                id="provide-details-notes"
+                rows={4}
+                maxLength={2000}
+                value={detailsText}
+                onChange={(e) => setDetailsText(e.target.value)}
+                placeholder="e.g. Emphasize the physiological mechanism in Wistar rats and compare against Nigerian regional studies."
+                className="block w-full px-3.5 py-2.5 text-sm bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] leading-relaxed"
+              />
+              <p className="text-xs text-[var(--neutral-500)] m-0">
+                Your notes will guide the resumed draft while staying grounded in your verified
+                sources.
+              </p>
+            </div>
+          </>
+        ) : null}
+      </ModalCard>
+
+      <InsufficientCreditsModal details={creditsModal} onClose={() => setCreditsModal(null)} />
     </div>
   );
 }

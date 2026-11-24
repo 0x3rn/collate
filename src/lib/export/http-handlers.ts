@@ -92,7 +92,13 @@ export async function handleCreateExport(
 
   const signingSecret = resolveSigningSecret(deps);
   if (!signingSecret) {
-    return jsonNoStore({ ok: false, error: "Export signing secret is not configured." }, 503);
+    return jsonNoStore(
+      {
+        ok: false,
+        error: "Document downloads are temporarily unavailable. Please try again shortly.",
+      },
+      503
+    );
   }
 
   const now = (deps.nowFn ?? (() => new Date()))();
@@ -136,7 +142,10 @@ export async function handleCreateExport(
     );
   }
   if (format === "pdf" && !deps.browser) {
-    return jsonNoStore({ ok: false, error: "PDF renderer binding is unavailable." }, 503);
+    return jsonNoStore(
+      { ok: false, error: "PDF export is temporarily unavailable. Please try again shortly." },
+      503
+    );
   }
 
   const wizard = await getWizardStateForUser(deps.db, session.user.id, projectId);
@@ -336,7 +345,13 @@ export async function handleDownloadExport(
 
   const signingSecret = resolveSigningSecret(deps);
   if (!signingSecret) {
-    return jsonNoStore({ ok: false, error: "Export signing secret is not configured." }, 503);
+    return jsonNoStore(
+      {
+        ok: false,
+        error: "Document downloads are temporarily unavailable. Please try again shortly.",
+      },
+      503
+    );
   }
 
   const url = new URL(request.url);
