@@ -53,7 +53,7 @@ export async function verifyTurnstileToken(
     }
     return {
       passed: false,
-      reason: "Bot verification is not configured for this environment.",
+      reason: "Security check is temporarily unavailable. Please try again shortly.",
     };
   }
 

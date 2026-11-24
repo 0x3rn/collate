@@ -18,13 +18,23 @@ import type { NormalizedPaymentWebhook } from "./webhooks";
 
 export class BillingError extends Error {
   public readonly code:
-    "INSUFFICIENT_CREDITS" | "USER_NOT_FOUND" | "RESERVATION_NOT_FOUND" | "CIRCUIT_BREAKER_OPEN";
+    | "INSUFFICIENT_CREDITS"
+    | "USER_NOT_FOUND"
+    | "RESERVATION_NOT_FOUND"
+    | "CIRCUIT_BREAKER_OPEN"
+    | "PAYMENT_MISMATCH"
+    | "INVALID_AMOUNT";
   public readonly status: number;
   public readonly availableCredits?: number;
 
   constructor(
     code:
-      "INSUFFICIENT_CREDITS" | "USER_NOT_FOUND" | "RESERVATION_NOT_FOUND" | "CIRCUIT_BREAKER_OPEN",
+      | "INSUFFICIENT_CREDITS"
+      | "USER_NOT_FOUND"
+      | "RESERVATION_NOT_FOUND"
+      | "CIRCUIT_BREAKER_OPEN"
+      | "PAYMENT_MISMATCH"
+      | "INVALID_AMOUNT",
     message: string,
     status: number,
     availableCredits?: number
@@ -38,8 +48,10 @@ export class BillingError extends Error {
 }
 
 /**
- * Grants credits for a verified Paystack or Stripe payment EXACTLY ONCE.
- * Replayed webhooks return alreadyProcessed=true without touching the user's balance again.
+ * Grants credits for a verified Paystack, Polar, or Stripe payment EXACTLY ONCE.
+ * Enforces server-side amount/currency/ownership parity against pending checkouts and
+ * uses atomic claim updates (WHERE status='pending' / ON CONFLICT DO NOTHING) + SQL
+ * balance increments so concurrent webhook deliveries can never double-credit.
  */
 export async function grantPaymentCreditsIdempotent(
   db: AppDb,
@@ -47,6 +59,13 @@ export async function grantPaymentCreditsIdempotent(
   rawEventJson: string,
   now: Date = new Date()
 ): Promise<{ alreadyProcessed: boolean; paymentId: string; newBalance: number }> {
+  if (!Number.isInteger(payment.creditsGranted) || payment.creditsGranted <= 0) {
+    throw new BillingError("INVALID_AMOUNT", "Invalid credit grant amount.", 400);
+  }
+  if (!Number.isInteger(payment.amountMinor) || payment.amountMinor <= 0) {
+    throw new BillingError("INVALID_AMOUNT", "Invalid payment amount.", 400);
+  }
+
   const [existing] = await db
     .select()
     .from(payments)
@@ -71,65 +90,149 @@ export async function grantPaymentCreditsIdempotent(
     };
   }
 
+  // Server-side parity validation against our initiated pending checkout record
+  if (existing) {
+    if (existing.userId !== payment.userId) {
+      throw new BillingError(
+        "PAYMENT_MISMATCH",
+        "Webhook user does not match the initiated checkout owner.",
+        400
+      );
+    }
+    if (existing.currency.toUpperCase() !== payment.currency.toUpperCase()) {
+      throw new BillingError(
+        "PAYMENT_MISMATCH",
+        "Webhook currency does not match the initiated checkout currency.",
+        400
+      );
+    }
+    if (existing.creditsGranted !== payment.creditsGranted) {
+      throw new BillingError(
+        "PAYMENT_MISMATCH",
+        "Webhook credit count does not match the initiated credit pack.",
+        400
+      );
+    }
+    const effectiveOrderSubtotal =
+      payment.provider === "polar"
+        ? (payment.subtotalAmountMinor ?? payment.amountMinor)
+        : payment.amountMinor;
+    if (effectiveOrderSubtotal < existing.amountMinor) {
+      throw new BillingError(
+        "PAYMENT_MISMATCH",
+        "Webhook payment amount is less than the initiated checkout price.",
+        400
+      );
+    }
+  }
+
+  const creditsToGrant = existing ? existing.creditsGranted : payment.creditsGranted;
   const paymentId = existing?.id ?? `pay_${crypto.randomUUID()}`;
   const idempotencyKey = `payment:${payment.provider}:${payment.providerReference}`;
 
+  // Atomically claim the payment before mutating creditsBalance (prevents TOCTOU double-credit)
   if (existing) {
-    await db
+    const claimed = await db
       .update(payments)
       .set({
         status: "succeeded",
         rawEventJson: rawEventJson.slice(0, 8000),
         updatedAt: now,
       })
-      .where(eq(payments.id, paymentId));
+      .where(and(eq(payments.id, paymentId), eq(payments.status, "pending")))
+      .returning({ id: payments.id });
+
+    if (claimed.length === 0) {
+      const [latestUser] = await db
+        .select({ creditsBalance: users.creditsBalance })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+      return {
+        alreadyProcessed: true,
+        paymentId,
+        newBalance: latestUser?.creditsBalance ?? user.creditsBalance,
+      };
+    }
   } else {
-    await db.insert(payments).values({
-      id: paymentId,
-      userId: payment.userId,
-      provider: payment.provider,
-      providerReference: payment.providerReference,
-      currency: payment.currency,
-      amountMinor: payment.amountMinor,
-      creditsGranted: payment.creditsGranted,
-      status: "succeeded",
-      rawEventJson: rawEventJson.slice(0, 8000),
-      createdAt: now,
-      updatedAt: now,
-    });
+    const inserted = await db
+      .insert(payments)
+      .values({
+        id: paymentId,
+        userId: payment.userId,
+        provider: payment.provider,
+        providerReference: payment.providerReference,
+        currency: payment.currency,
+        amountMinor: payment.amountMinor,
+        creditsGranted: creditsToGrant,
+        status: "succeeded",
+        rawEventJson: rawEventJson.slice(0, 8000),
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
+      .returning({ id: payments.id });
+
+    if (inserted.length === 0) {
+      const [latestUser] = await db
+        .select({ creditsBalance: users.creditsBalance })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+      return {
+        alreadyProcessed: true,
+        paymentId,
+        newBalance: latestUser?.creditsBalance ?? user.creditsBalance,
+      };
+    }
   }
 
+  // Secondary ledger uniqueness guard (in case an identical idempotency key already settled)
   const [existingLedger] = await db
-    .select()
+    .select({ id: creditLedger.id })
     .from(creditLedger)
     .where(eq(creditLedger.idempotencyKey, idempotencyKey))
     .limit(1);
 
   if (existingLedger) {
+    const [latestUser] = await db
+      .select({ creditsBalance: users.creditsBalance })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
     return {
       alreadyProcessed: true,
       paymentId,
-      newBalance: user.creditsBalance,
+      newBalance: latestUser?.creditsBalance ?? user.creditsBalance,
     };
   }
 
-  const newBalance = user.creditsBalance + payment.creditsGranted;
-  await db
+  // Atomic SQL increment preserves concurrent debits/credits without stale overwrite
+  const updatedRows = await db
     .update(users)
-    .set({ creditsBalance: newBalance, updatedAt: now })
-    .where(eq(users.id, user.id));
+    .set({
+      creditsBalance: sql`${users.creditsBalance} + ${creditsToGrant}`,
+      updatedAt: now,
+    })
+    .where(eq(users.id, user.id))
+    .returning({ creditsBalance: users.creditsBalance });
 
-  await db.insert(creditLedger).values({
-    id: `led_${crypto.randomUUID()}`,
-    userId: user.id,
-    paymentId,
-    idempotencyKey,
-    entryType: "purchase",
-    creditsDelta: payment.creditsGranted,
-    balanceAfter: newBalance,
-    note: `${payment.provider.toUpperCase()} payment ${payment.providerReference}`,
-    createdAt: now,
-  });
+  const newBalance = updatedRows[0]?.creditsBalance ?? user.creditsBalance + creditsToGrant;
+
+  await db
+    .insert(creditLedger)
+    .values({
+      id: `led_${crypto.randomUUID()}`,
+      userId: user.id,
+      paymentId,
+      idempotencyKey,
+      entryType: "purchase",
+      creditsDelta: creditsToGrant,
+      balanceAfter: newBalance,
+      note: `Credit pack purchase (${creditsToGrant} credits)`,
+      createdAt: now,
+    })
+    .onConflictDoNothing();
 
   await db.insert(auditLog).values({
     id: `aud_${crypto.randomUUID()}`,
@@ -139,7 +242,7 @@ export async function grantPaymentCreditsIdempotent(
     entityId: paymentId,
     metadataJson: JSON.stringify({
       provider: payment.provider,
-      creditsGranted: payment.creditsGranted,
+      creditsGranted: creditsToGrant,
       amountMinor: payment.amountMinor,
       currency: payment.currency,
     }),
@@ -164,6 +267,9 @@ export async function reserveChapterCredits(
     now?: Date;
   }
 ): Promise<{ reservationId: string; alreadyReserved: boolean; balanceAfter: number }> {
+  if (!Number.isInteger(params.credits) || params.credits <= 0) {
+    throw new BillingError("INVALID_AMOUNT", "Credit reservation must be a positive integer.", 400);
+  }
   const now = params.now ?? new Date();
   const [user] = await db.select().from(users).where(eq(users.id, params.userId)).limit(1);
   if (!user) {
@@ -491,13 +597,13 @@ export async function refundChapterReservation(
     throw new BillingError("USER_NOT_FOUND", "Account not found.", 404);
   }
 
-  if (res.status === "refunded") {
+  if (res.status !== "held") {
     return { refunded: false, balanceAfter: user.creditsBalance };
   }
 
   const refundKey = `refund:${res.id}`;
   const [existingRefund] = await db
-    .select()
+    .select({ id: creditLedger.id })
     .from(creditLedger)
     .where(eq(creditLedger.idempotencyKey, refundKey))
     .limit(1);
@@ -506,29 +612,48 @@ export async function refundChapterReservation(
     return { refunded: false, balanceAfter: user.creditsBalance };
   }
 
-  const newBalance = user.creditsBalance + res.creditsReserved;
-  await db
-    .update(users)
-    .set({ creditsBalance: newBalance, updatedAt: now })
-    .where(eq(users.id, user.id));
-
-  await db
+  // Atomically claim the held -> refunded transition before incrementing user credits
+  const claimed = await db
     .update(creditReservations)
     .set({ status: "refunded", settledAt: now })
-    .where(eq(creditReservations.id, res.id));
+    .where(and(eq(creditReservations.id, res.id), eq(creditReservations.status, "held")))
+    .returning({ id: creditReservations.id });
 
-  await db.insert(creditLedger).values({
-    id: `led_${crypto.randomUUID()}`,
-    userId: user.id,
-    projectId: res.projectId,
-    chapterId: res.chapterId,
-    idempotencyKey: refundKey,
-    entryType: "refund",
-    creditsDelta: res.creditsReserved,
-    balanceAfter: newBalance,
-    note: `Automatic refund: ${reason}`,
-    createdAt: now,
-  });
+  if (claimed.length === 0) {
+    const [latestUser] = await db
+      .select({ creditsBalance: users.creditsBalance })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+    return { refunded: false, balanceAfter: latestUser?.creditsBalance ?? user.creditsBalance };
+  }
+
+  const updatedRows = await db
+    .update(users)
+    .set({
+      creditsBalance: sql`${users.creditsBalance} + ${res.creditsReserved}`,
+      updatedAt: now,
+    })
+    .where(eq(users.id, user.id))
+    .returning({ creditsBalance: users.creditsBalance });
+
+  const newBalance = updatedRows[0]?.creditsBalance ?? user.creditsBalance + res.creditsReserved;
+
+  await db
+    .insert(creditLedger)
+    .values({
+      id: `led_${crypto.randomUUID()}`,
+      userId: user.id,
+      projectId: res.projectId,
+      chapterId: res.chapterId,
+      idempotencyKey: refundKey,
+      entryType: "refund",
+      creditsDelta: res.creditsReserved,
+      balanceAfter: newBalance,
+      note: `Automatic refund: ${reason}`,
+      createdAt: now,
+    })
+    .onConflictDoNothing();
 
   return { refunded: true, balanceAfter: newBalance };
 }
@@ -558,37 +683,53 @@ export async function issueAdminManualRefund(
     now?: Date;
   }
 ): Promise<{ alreadyProcessed: boolean; balanceAfter: number }> {
+  if (!Number.isInteger(params.credits) || params.credits <= 0) {
+    throw new BillingError(
+      "INVALID_AMOUNT",
+      "Manual refund credits must be a positive integer.",
+      400
+    );
+  }
   const now = params.now ?? new Date();
   const [target] = await db.select().from(users).where(eq(users.id, params.targetUserId)).limit(1);
   if (!target) {
     throw new BillingError("USER_NOT_FOUND", "Target user not found.", 404);
   }
 
-  const [existing] = await db
-    .select()
-    .from(creditLedger)
-    .where(eq(creditLedger.idempotencyKey, params.idempotencyKey))
-    .limit(1);
-  if (existing) {
+  const claimed = await db
+    .insert(creditLedger)
+    .values({
+      id: `led_${crypto.randomUUID()}`,
+      userId: target.id,
+      idempotencyKey: params.idempotencyKey,
+      entryType: "manual_adjustment",
+      creditsDelta: params.credits,
+      balanceAfter: target.creditsBalance + params.credits,
+      note: `Admin refund/adjustment: ${params.reason}`,
+      createdAt: now,
+    })
+    .onConflictDoNothing()
+    .returning({ id: creditLedger.id });
+
+  if (claimed.length === 0) {
     return { alreadyProcessed: true, balanceAfter: target.creditsBalance };
   }
 
-  const newBalance = Math.max(0, target.creditsBalance + params.credits);
-  await db
+  const updatedRows = await db
     .update(users)
-    .set({ creditsBalance: newBalance, updatedAt: now })
-    .where(eq(users.id, target.id));
+    .set({
+      creditsBalance: sql`${users.creditsBalance} + ${params.credits}`,
+      updatedAt: now,
+    })
+    .where(eq(users.id, target.id))
+    .returning({ creditsBalance: users.creditsBalance });
 
-  await db.insert(creditLedger).values({
-    id: `led_${crypto.randomUUID()}`,
-    userId: target.id,
-    idempotencyKey: params.idempotencyKey,
-    entryType: "manual_adjustment",
-    creditsDelta: params.credits,
-    balanceAfter: newBalance,
-    note: `Admin refund/adjustment: ${params.reason}`,
-    createdAt: now,
-  });
+  const newBalance = updatedRows[0]?.creditsBalance ?? target.creditsBalance + params.credits;
+
+  await db
+    .update(creditLedger)
+    .set({ balanceAfter: newBalance })
+    .where(eq(creditLedger.id, claimed[0]!.id));
 
   await db.insert(auditLog).values({
     id: `aud_${crypto.randomUUID()}`,

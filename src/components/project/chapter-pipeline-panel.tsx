@@ -684,7 +684,9 @@ export function ChapterPipelinePanel({
                       className={
                         isMultiActionChapter
                           ? "pt-3 border-t border-[var(--neutral-100)] grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end gap-2"
-                          : "flex flex-wrap items-center justify-end gap-2 shrink-0"
+                          : ch.status === "not_started" && !ch.hasDraftVersion
+                            ? "grid grid-cols-2 sm:flex sm:flex-nowrap sm:items-center sm:justify-end gap-2 sm:shrink-0"
+                            : "flex flex-wrap items-center justify-end gap-2 shrink-0"
                       }
                     >
                       {ch.status === "not_started" ? (
@@ -695,6 +697,7 @@ export function ChapterPipelinePanel({
                               variant="secondary"
                               disabled={isBusy}
                               onClick={() => openInstructionsModal(ch)}
+                              className="w-full sm:w-auto whitespace-nowrap"
                             >
                               {ch.userInstructions ||
                               ch.userAttachmentName ||
@@ -707,7 +710,12 @@ export function ChapterPipelinePanel({
                                   <span>Edit instructions</span>
                                 </span>
                               ) : (
-                                "Add instructions (optional)"
+                                <>
+                                  <span className="sm:hidden">Add instructions</span>
+                                  <span className="hidden sm:inline">
+                                    Add instructions (optional)
+                                  </span>
+                                </>
                               )}
                             </Button>
                           ) : null}
@@ -719,6 +727,7 @@ export function ChapterPipelinePanel({
                             loadingLabel="Starting..."
                             title={gate.allowed ? undefined : gate.reason}
                             onClick={() => triggerStart(ch.id)}
+                            className="w-full sm:w-auto whitespace-nowrap"
                           >
                             Start Chapter {ch.number}
                           </Button>

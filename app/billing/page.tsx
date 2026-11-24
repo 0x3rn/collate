@@ -56,19 +56,21 @@ export default async function BillingPage({
           </p>
         </header>
 
-        {payment === "stripe_success" ? (
+        {payment === "success" || payment === "polar_success" || payment === "stripe_success" ? (
           <FormAlert tone="success">
             Payment received. Your new credits will appear in your balance within a few seconds.
             Refresh if they have not updated yet.
           </FormAlert>
-        ) : payment === "paystack_pending" ? (
+        ) : payment === "pending" || payment === "paystack_pending" ? (
           <FormAlert tone="info">
-            Payment submitted. Your credits are added automatically as soon as Paystack confirms the
-            charge.
+            Payment submitted. Your credits are added automatically as soon as your payment is
+            confirmed.
           </FormAlert>
-        ) : payment === "stripe_cancelled" ? (
+        ) : payment === "cancelled" ||
+          payment === "polar_cancelled" ||
+          payment === "stripe_cancelled" ? (
           <FormAlert tone="warning">
-            Checkout was cancelled. No charge was made to your card.
+            Checkout was cancelled. No charge was made to your payment method.
           </FormAlert>
         ) : null}
 

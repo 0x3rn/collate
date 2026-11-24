@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -32,7 +33,7 @@ export function CreditsPanel({
   const [busyPackId, setBusyPackId] = useState<string | null>(null);
 
   async function startCheckout(packId: string) {
-    const provider = currency === "ngn" ? "paystack" : "stripe";
+    const provider = currency === "ngn" ? "paystack" : "polar";
     setBusyPackId(packId);
     try {
       const res = await fetch("/api/billing/checkout", {
@@ -46,7 +47,10 @@ export function CreditsPanel({
         error?: string;
       };
       if (!res.ok || !json.ok || !json.checkoutUrl) {
-        toast.error(json.error ?? "Could not open checkout. Please try again.", "Checkout failed");
+        toast.error(
+          json.error ?? "We couldn't open checkout right now. Please try again shortly.",
+          "Checkout unavailable"
+        );
         return;
       }
       window.location.href = json.checkoutUrl;
@@ -111,7 +115,7 @@ export function CreditsPanel({
               currency === "ngn"
                 ? `₦${(pack.amountNgnKobo / 100).toLocaleString("en-NG")}`
                 : `$${(pack.amountUsdCents / 100).toFixed(0)}`;
-            const providerLabel = currency === "ngn" ? "Pay with Paystack" : "Pay with Stripe";
+            const buttonLabel = `Buy ${pack.credits} credits`;
 
             return (
               <div
@@ -160,7 +164,7 @@ export function CreditsPanel({
                   loadingLabel="Opening checkout..."
                   onClick={() => startCheckout(pack.id)}
                 >
-                  {providerLabel}
+                  {buttonLabel}
                 </Button>
               </div>
             );
@@ -169,8 +173,17 @@ export function CreditsPanel({
 
         <div className="px-6 py-3 bg-[var(--neutral-50)] border-t border-[var(--neutral-200)] flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--neutral-500)] tabular-nums">
           <span>Current balance: {formatCredits(balance)}</span>
-          <span>
-            Secure checkout via {currency === "ngn" ? "Paystack (Naira)" : "Stripe (USD)"}
+          <span className="flex flex-wrap items-center gap-2">
+            <span>
+              Secure checkout · {currency === "ngn" ? "Nigerian Naira (NGN)" : "US Dollars (USD)"}
+            </span>
+            <span aria-hidden="true">·</span>
+            <Link
+              href="/terms#refund-policy"
+              className="text-[var(--neutral-600)] hover:text-[var(--neutral-900)] underline underline-offset-2"
+            >
+              Refund policy
+            </Link>
           </span>
         </div>
       </section>

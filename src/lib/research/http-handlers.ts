@@ -147,7 +147,11 @@ export async function handleStartResearchSweep(
       .select()
       .from(researchRuns)
       .where(
-        and(eq(researchRuns.id, parsedBody.resumeRunId), eq(researchRuns.projectId, project.id))
+        and(
+          eq(researchRuns.id, parsedBody.resumeRunId),
+          eq(researchRuns.projectId, project.id),
+          eq(researchRuns.status, "failed")
+        )
       )
       .limit(1);
 

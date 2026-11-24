@@ -33,7 +33,7 @@ Configure secrets in Cloudflare Workers (never commit `.dev.vars`):
 - **AI & Search:** Configure only the API key(s) for the provider(s) referenced by `LLM_MODEL_DRAFT`, `LLM_MODEL_VERIFY`, `LLM_MODEL_EXTRACT`, and `LLM_MODEL_CLASSIFY` in `wrangler.jsonc` — mix freely across Google (`GEMINI_API_KEY`, defaults to `GEMINI_API_BACKEND=vertex-express` + non-secret `GOOGLE_CLOUD_PROJECT` in `wrangler.jsonc` for `locations/global` Gemini 4 models), DeepSeek (`DEEPSEEK_API_KEY`), OpenAI (`OPENAI_API_KEY`), and Anthropic (`ANTHROPIC_API_KEY`). Optional Cloudflare AI Gateway proxy is **off by default** (`"USE_CLOUDFLARE_AI_GATEWAY": "false"` in `wrangler.jsonc`) even if gateway tokens are stored in secrets; change `USE_CLOUDFLARE_AI_GATEWAY` to `"true"` in `wrangler.jsonc` (alongside `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_GATEWAY_ID`, and `CLOUDFLARE_AI_GATEWAY_TOKEN` in Worker secrets) whenever you want requests proxied through Cloudflare AI Gateway. Search keys: `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`, `SCHOLARLY_CONTACT_EMAIL` (optional `SEMANTIC_SCHOLAR_API_KEY`, `CORE_API_KEY`).
 - **Security & Auth:** `APP_URL`, `EXPORT_SIGNING_SECRET`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, `INTERNAL_SMOKE_TOKEN`, `ADMIN_EMAILS`
 - **Email:** `EMAIL_PROVIDER`, `EMAIL_FROM`, `RESEND_API_KEY`
-- **Payments:** `PAYSTACK_SECRET_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+- **Payments:** `PAYSTACK_SECRET_KEY` (NGN), `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_ENVIRONMENT` (`production` or `sandbox`), `POLAR_PRODUCT_ID_STARTER`, `POLAR_PRODUCT_ID_PROJECT`, `POLAR_PRODUCT_ID_THESIS` (USD via Polar.sh Merchant of Record)
 - **Observability:** `SENTRY_DSN`
 
 ## Backup, Restore Drill & Rollback

@@ -25,7 +25,7 @@ import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pd
 import { formatProjectType } from "@/lib/ui/formatters";
 import { buildThesisDocx } from "./docx-builder";
 import { resolveExportFiguresForChapters } from "./figure-assets";
-import { buildThesisPdfTwoPass } from "./pdf-assembler";
+import { buildThesisPdfTwoPass, PdfRenderRateLimitError } from "./pdf-assembler";
 import { signExportDownloadParams, verifyExportDownloadParams } from "./signed-urls";
 import type { ExportChapterContent, ThesisExportDocument } from "./templates";
 
@@ -292,6 +292,17 @@ export async function handleCreateExport(
         error: err instanceof Error ? err.message : String(err),
       },
     });
+    if (err instanceof PdfRenderRateLimitError) {
+      return jsonNoStore(
+        {
+          ok: false,
+          error:
+            "PDF generation is briefly busy. Please wait 15 seconds and try again, or download Word (.docx) right away.",
+        },
+        429,
+        err.retryAfterSeconds ? { "retry-after": String(err.retryAfterSeconds) } : {}
+      );
+    }
     return jsonNoStore(
       {
         ok: false,

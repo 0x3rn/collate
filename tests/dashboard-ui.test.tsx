@@ -112,6 +112,10 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(html).toContain('href="/billing"');
     expect(html).toContain('href="/account"');
     expect(html).toContain('href="/projects/new"');
+    expect(html).not.toContain('href="/terms"');
+    expect(html).not.toContain('href="/privacy"');
+    expect(html).not.toContain('href="/acceptable-use"');
+    expect(html).not.toContain('href="/cookies"');
     expect(html).toContain("Research");
     expect(html).not.toMatch(/workspace/i);
     expect(html).toContain("80 credits");
@@ -198,6 +202,12 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     );
     expect(billingHtml).toContain("Credit history");
     expect(billingHtml).toContain("Topic source check");
+    expect(billingHtml).toContain("Buy 25 credits");
+    expect(billingHtml).toContain("Buy 80 credits");
+    expect(billingHtml).toContain("Buy 180 credits");
+    expect(billingHtml).toContain('href="/terms#refund-policy"');
+    expect(billingHtml).toContain("Refund policy");
+    expect(billingHtml).not.toMatch(/paystack|polar|stripe/i);
     expect(billingHtml).not.toContain("Recent ledger");
     expect(billingHtml).not.toContain("sweep_fee");
 

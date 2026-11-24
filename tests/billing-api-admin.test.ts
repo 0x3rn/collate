@@ -15,10 +15,11 @@ import {
   handleAdminOverview,
   handleCreateCheckout,
   handlePaystackWebhook,
+  handlePolarWebhook,
   handleStripeWebhook,
   type BillingHttpDeps,
 } from "@/lib/billing/http-handlers";
-import { computeHmacHex } from "@/lib/billing/webhooks";
+import { computeHmacBase64, computeHmacHex } from "@/lib/billing/webhooks";
 import type { EmailMessage, EmailSender } from "@/lib/email/mailer";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
 
@@ -199,17 +200,17 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
       newBalance: 25,
     });
 
-    // Stripe webhook adds 60 credits once -> total 85
+    // Stripe webhook adds 80 credits once (matching pack_project_60) -> total 105
     const strBody = JSON.stringify({
       id: "evt_s1",
       type: "checkout.session.completed",
       data: {
         object: {
           id: "cs_test_001",
-          amount_total: 1400,
+          amount_total: 2500,
           currency: "usd",
           payment_status: "paid",
-          metadata: { userId: student.userId, credits: "60" },
+          metadata: { userId: student.userId, credits: "80" },
         },
       },
     });
@@ -226,8 +227,163 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
     expect(okStr.status).toBe(200);
     expect((await okStr.json()) as Record<string, unknown>).toMatchObject({
       alreadyProcessed: false,
-      newBalance: 85,
+      newBalance: 105,
     });
+  });
+
+  it("initializes Polar.sh USD checkouts (sandbox & production) and processes order.paid webhooks idempotently", async () => {
+    const student = await signUpUser("Ngozi", "ngozi.polar@uni.edu.ng", "quiet library oak shelf");
+    const rawSecretBytes = new TextEncoder().encode("polar-api-test-secret-bytes-1234");
+    const polarWebhookSecret = `whsec_${Buffer.from(rawSecretBytes).toString("base64")}`;
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+
+    const deps: BillingHttpDeps = {
+      ...authDeps,
+      polarAccessToken: "polar_oat_test_token",
+      polarWebhookSecret,
+      polarEnvironment: "sandbox",
+      polarProductIds: {
+        pack_starter_25: "prod_polar_starter",
+        pack_project_60: "prod_polar_project",
+      },
+      fetchFn: async (url, init) => {
+        const u = String(url);
+        const parsedBody =
+          typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+        calls.push({ url: u, body: parsedBody });
+        return Response.json(
+          {
+            id: "chk_polar_live_001",
+            url: "https://sandbox.polar.sh/checkout/chk_polar_live_001",
+            status: "open",
+          },
+          { status: 201 }
+        );
+      },
+    };
+
+    // Unconfigured pack returns masked 503 cleanly (never leaks Polar/Stripe/Paystack or "not configured")
+    const missingPack = await handleCreateCheckout(
+      new Request("https://collate.app/api/billing/checkout", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: student.cookie,
+        },
+        body: JSON.stringify({ provider: "polar", packId: "pack_thesis_150" }),
+      }),
+      deps
+    );
+    expect(missingPack.status).toBe(503);
+    const missingPackJson = (await missingPack.json()) as { ok: boolean; error: string };
+    expect(missingPackJson.ok).toBe(false);
+    expect(missingPackJson.error).not.toMatch(/polar|paystack|stripe|not configured|product/i);
+
+    // Configured pack creates Polar sandbox checkout session
+    const polarCheckout = await handleCreateCheckout(
+      new Request("https://collate.app/api/billing/checkout", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: student.cookie,
+        },
+        body: JSON.stringify({ provider: "polar", packId: "pack_project_60" }),
+      }),
+      deps
+    );
+    expect(polarCheckout.status).toBe(201);
+    expect((await polarCheckout.json()) as Record<string, unknown>).toEqual({
+      ok: true,
+      provider: "polar",
+      reference: "chk_polar_live_001",
+      checkoutUrl: "https://sandbox.polar.sh/checkout/chk_polar_live_001",
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("https://sandbox-api.polar.sh/v1/checkouts/");
+    expect(calls[0]!.body).toMatchObject({
+      products: ["prod_polar_project"],
+      customer_email: "ngozi.polar@uni.edu.ng",
+      external_customer_id: student.userId,
+      metadata: {
+        userId: student.userId,
+        credits: 80,
+        packId: "pack_project_60",
+      },
+    });
+
+    // Invalid Polar signature -> 401
+    const ts = String(Math.floor(now.getTime() / 1000));
+    const paidBody = JSON.stringify({
+      type: "order.paid",
+      data: {
+        id: "ord_polar_live_001",
+        checkout_id: "chk_polar_live_001",
+        paid: true,
+        total_amount: 2500,
+        currency: "usd",
+        customer: { external_id: student.userId, email: "ngozi.polar@uni.edu.ng" },
+        metadata: { userId: student.userId, credits: 80, packId: "pack_project_60" },
+      },
+    });
+    const badSigRes = await handlePolarWebhook(
+      new Request("https://collate.app/api/webhooks/polar", {
+        method: "POST",
+        headers: {
+          "webhook-id": "wh_1",
+          "webhook-timestamp": ts,
+          "webhook-signature": "v1,badSignature==",
+        },
+        body: paidBody,
+      }),
+      deps
+    );
+    expect(badSigRes.status).toBe(401);
+
+    // Valid order.paid grants 80 credits and dispatches 1 receipt email
+    const emailsBefore = sent.length;
+    const validSig = await computeHmacBase64("SHA-256", rawSecretBytes, `wh_1.${ts}.${paidBody}`);
+    const okPolar1 = await handlePolarWebhook(
+      new Request("https://collate.app/api/webhooks/polar", {
+        method: "POST",
+        headers: {
+          "webhook-id": "wh_1",
+          "webhook-timestamp": ts,
+          "webhook-signature": `v1,${validSig}`,
+        },
+        body: paidBody,
+      }),
+      deps
+    );
+    expect(okPolar1.status).toBe(200);
+    expect((await okPolar1.json()) as Record<string, unknown>).toMatchObject({
+      ok: true,
+      alreadyProcessed: false,
+      newBalance: 80,
+    });
+    expect(sent.length).toBe(emailsBefore + 1);
+
+    // Replay does NOT double-credit or send another receipt
+    const okPolar2 = await handlePolarWebhook(
+      new Request("https://collate.app/api/webhooks/polar", {
+        method: "POST",
+        headers: {
+          "webhook-id": "wh_1",
+          "webhook-timestamp": ts,
+          "webhook-signature": `v1,${validSig}`,
+        },
+        body: paidBody,
+      }),
+      deps
+    );
+    expect(okPolar2.status).toBe(200);
+    expect((await okPolar2.json()) as Record<string, unknown>).toMatchObject({
+      ok: true,
+      alreadyProcessed: true,
+      newBalance: 80,
+    });
+    expect(sent.length).toBe(emailsBefore + 1);
   });
 
   it("enforces admin role boundary (403 for normal users, 200 for allowlisted admin)", async () => {

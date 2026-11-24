@@ -6,6 +6,7 @@ import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { getSessionFromToken } from "@/lib/auth/service";
 import { buildPaymentReceiptEmail, dispatchUserNotification } from "@/lib/email/notifications";
+import { logEvent } from "@/lib/observability/logger";
 import {
   BillingError,
   checkSpendCircuitBreaker,
@@ -14,13 +15,30 @@ import {
   issueAdminManualRefund,
   setGlobalCircuitBreaker,
 } from "./ledger";
-import { verifyPaystackWebhook, verifyStripeWebhook } from "./webhooks";
+import { verifyPaystackWebhook, verifyPolarWebhook, verifyStripeWebhook } from "./webhooks";
+
+export interface PolarProductIdMap {
+  pack_starter_25?: string;
+  pack_project_60?: string;
+  pack_thesis_150?: string;
+  [packId: string]: string | undefined;
+}
 
 export interface BillingHttpDeps extends HttpAuthDeps {
   paystackSecretKey?: string;
+  polarAccessToken?: string;
+  polarWebhookSecret?: string;
+  polarEnvironment?: string;
+  polarProductIds?: PolarProductIdMap;
   stripeSecretKey?: string;
   stripeWebhookSecret?: string;
   adminEmails?: string;
+}
+
+export function resolvePolarApiBaseUrl(environment?: string): string {
+  return environment?.trim().toLowerCase() === "sandbox"
+    ? "https://sandbox-api.polar.sh"
+    : "https://api.polar.sh";
 }
 
 export function isAdminEmail(email: string, adminEmailsEnv?: string): boolean {
@@ -36,7 +54,7 @@ export function isAdminEmail(email: string, adminEmailsEnv?: string): boolean {
 }
 
 const CheckoutBodySchema = z.object({
-  provider: z.enum(["paystack", "stripe"]),
+  provider: z.enum(["paystack", "polar", "stripe"]),
   packId: z.string().trim().min(1),
 });
 
@@ -67,10 +85,7 @@ export async function handleCreateCheckout(
 
   const parsed = CheckoutBodySchema.safeParse(rawBody);
   if (!parsed.success) {
-    return jsonNoStore(
-      { ok: false, error: "Select a valid payment provider and credit pack." },
-      400
-    );
+    return jsonNoStore({ ok: false, error: "Select a valid credit pack and try again." }, 400);
   }
 
   const pack = findCreditPack(parsed.data.packId);
@@ -83,10 +98,18 @@ export async function handleCreateCheckout(
   let appUrl = deps.appUrl.trim();
   while (appUrl.endsWith("/")) appUrl = appUrl.slice(0, -1);
 
+  const CHECKOUT_UNAVAILABLE_MSG =
+    "Checkout for this currency is temporarily unavailable. Please try again shortly or switch currency.";
+  const CHECKOUT_START_FAILED_MSG =
+    "We couldn't start checkout right now. Please try again in a moment.";
+
   if (parsed.data.provider === "paystack") {
     const secret = deps.paystackSecretKey?.trim();
     if (!secret) {
-      return jsonNoStore({ ok: false, error: "Paystack checkout is not configured yet." }, 503);
+      logEvent("error", "billing.checkout_unavailable", {
+        data: { provider: "paystack", reason: "missing_secret_key", packId: pack.id },
+      });
+      return jsonNoStore({ ok: false, error: CHECKOUT_UNAVAILABLE_MSG }, 503);
     }
 
     const reference = `psk_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
@@ -101,7 +124,7 @@ export async function handleCreateCheckout(
         amount: pack.amountNgnKobo,
         currency: "NGN",
         reference,
-        callback_url: `${appUrl}/billing?payment=paystack_pending`,
+        callback_url: `${appUrl}/billing?payment=pending`,
         metadata: {
           userId: session.user.id,
           credits: pack.credits,
@@ -111,7 +134,10 @@ export async function handleCreateCheckout(
     });
 
     if (!initRes.ok) {
-      return jsonNoStore({ ok: false, error: "Could not initialize Paystack checkout." }, 502);
+      logEvent("error", "billing.checkout_init_failed", {
+        data: { provider: "paystack", status: initRes.status, packId: pack.id },
+      });
+      return jsonNoStore({ ok: false, error: CHECKOUT_START_FAILED_MSG }, 502);
     }
 
     const initJson = (await initRes.json()) as {
@@ -120,10 +146,10 @@ export async function handleCreateCheckout(
     };
     const checkoutUrl = initJson.data?.authorization_url;
     if (!initJson.status || !checkoutUrl) {
-      return jsonNoStore(
-        { ok: false, error: "Paystack returned an invalid checkout response." },
-        502
-      );
+      logEvent("error", "billing.checkout_invalid_response", {
+        data: { provider: "paystack", packId: pack.id },
+      });
+      return jsonNoStore({ ok: false, error: CHECKOUT_START_FAILED_MSG }, 502);
     }
 
     await deps.db.insert(payments).values({
@@ -142,15 +168,92 @@ export async function handleCreateCheckout(
     return jsonNoStore({ ok: true, provider: "paystack", reference, checkoutUrl }, 201);
   }
 
+  if (parsed.data.provider === "polar") {
+    const polarToken = deps.polarAccessToken?.trim();
+    if (!polarToken) {
+      logEvent("error", "billing.checkout_unavailable", {
+        data: { provider: "polar", reason: "missing_access_token", packId: pack.id },
+      });
+      return jsonNoStore({ ok: false, error: CHECKOUT_UNAVAILABLE_MSG }, 503);
+    }
+
+    const productId = deps.polarProductIds?.[pack.id]?.trim();
+    if (!productId) {
+      logEvent("error", "billing.checkout_unavailable", {
+        data: { provider: "polar", reason: "missing_product_id", packId: pack.id },
+      });
+      return jsonNoStore({ ok: false, error: CHECKOUT_UNAVAILABLE_MSG }, 503);
+    }
+
+    const polarApiBase = resolvePolarApiBaseUrl(deps.polarEnvironment);
+    const polarRes = await fetchFn(`${polarApiBase}/v1/checkouts/`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${polarToken}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        products: [productId],
+        customer_email: session.user.email,
+        customer_name: session.user.name,
+        external_customer_id: session.user.id,
+        success_url: `${appUrl}/billing?payment=success&checkout_id={CHECKOUT_ID}`,
+        return_url: `${appUrl}/billing?payment=cancelled`,
+        metadata: {
+          userId: session.user.id,
+          credits: pack.credits,
+          packId: pack.id,
+        },
+      }),
+    });
+
+    if (!polarRes.ok) {
+      logEvent("error", "billing.checkout_init_failed", {
+        data: { provider: "polar", status: polarRes.status, packId: pack.id },
+      });
+      return jsonNoStore({ ok: false, error: CHECKOUT_START_FAILED_MSG }, 502);
+    }
+
+    const polarJson = (await polarRes.json()) as { id?: string; url?: string };
+    if (!polarJson.id || !polarJson.url) {
+      logEvent("error", "billing.checkout_invalid_response", {
+        data: { provider: "polar", packId: pack.id },
+      });
+      return jsonNoStore({ ok: false, error: CHECKOUT_START_FAILED_MSG }, 502);
+    }
+
+    await deps.db.insert(payments).values({
+      id: `pay_${crypto.randomUUID()}`,
+      userId: session.user.id,
+      provider: "polar",
+      providerReference: polarJson.id,
+      currency: "USD",
+      amountMinor: pack.amountUsdCents,
+      creditsGranted: pack.credits,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return jsonNoStore(
+      { ok: true, provider: "polar", reference: polarJson.id, checkoutUrl: polarJson.url },
+      201
+    );
+  }
+
   const stripeSecret = deps.stripeSecretKey?.trim();
   if (!stripeSecret) {
-    return jsonNoStore({ ok: false, error: "Stripe checkout is not configured yet." }, 503);
+    logEvent("error", "billing.checkout_unavailable", {
+      data: { provider: "stripe", reason: "missing_secret_key", packId: pack.id },
+    });
+    return jsonNoStore({ ok: false, error: CHECKOUT_UNAVAILABLE_MSG }, 503);
   }
 
   const form = new URLSearchParams({
     mode: "payment",
-    success_url: `${appUrl}/billing?payment=stripe_success`,
-    cancel_url: `${appUrl}/billing?payment=stripe_cancelled`,
+    success_url: `${appUrl}/billing?payment=success`,
+    cancel_url: `${appUrl}/billing?payment=cancelled`,
     customer_email: session.user.email,
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(pack.amountUsdCents),
@@ -171,12 +274,18 @@ export async function handleCreateCheckout(
   });
 
   if (!stripeRes.ok) {
-    return jsonNoStore({ ok: false, error: "Could not initialize Stripe checkout." }, 502);
+    logEvent("error", "billing.checkout_init_failed", {
+      data: { provider: "stripe", status: stripeRes.status, packId: pack.id },
+    });
+    return jsonNoStore({ ok: false, error: CHECKOUT_START_FAILED_MSG }, 502);
   }
 
   const stripeJson = (await stripeRes.json()) as { id?: string; url?: string };
   if (!stripeJson.id || !stripeJson.url) {
-    return jsonNoStore({ ok: false, error: "Stripe returned an invalid checkout session." }, 502);
+    logEvent("error", "billing.checkout_invalid_response", {
+      data: { provider: "stripe", packId: pack.id },
+    });
+    return jsonNoStore({ ok: false, error: CHECKOUT_START_FAILED_MSG }, 502);
   }
 
   await deps.db.insert(payments).values({
@@ -333,6 +442,73 @@ export async function handleStripeWebhook(
   }
 }
 
+export async function handlePolarWebhook(
+  request: Request,
+  deps: BillingHttpDeps
+): Promise<Response> {
+  const secret = deps.polarWebhookSecret?.trim();
+  if (!secret) {
+    return jsonNoStore({ ok: false, error: "Polar webhook secret is not configured." }, 503);
+  }
+
+  const rawBody = await request.text();
+  const now = (deps.nowFn ?? (() => new Date()))();
+  const verified = await verifyPolarWebhook({
+    rawBody,
+    webhookId: request.headers.get("webhook-id"),
+    webhookTimestamp: request.headers.get("webhook-timestamp"),
+    webhookSignature: request.headers.get("webhook-signature"),
+    webhookSecret: secret,
+    polarProductIds: deps.polarProductIds,
+    nowMs: now.getTime(),
+  });
+
+  if (!verified.valid) {
+    return jsonNoStore({ ok: false, error: verified.reason }, 401);
+  }
+  if (verified.ignored || !verified.payment) {
+    return jsonNoStore({ ok: true, ignored: true }, 200);
+  }
+
+  try {
+    const granted = await grantPaymentCreditsIdempotent(deps.db, verified.payment, rawBody, now);
+
+    if (!granted.alreadyProcessed) {
+      const [usr] = await deps.db
+        .select()
+        .from(users)
+        .where(eq(users.id, verified.payment.userId))
+        .limit(1);
+
+      if (usr) {
+        let appUrl = deps.appUrl.trim();
+        while (appUrl.endsWith("/")) appUrl = appUrl.slice(0, -1);
+        await dispatchUserNotification(deps.db, deps.mailer, {
+          userId: usr.id,
+          kind: "receipt",
+          message: buildPaymentReceiptEmail({
+            name: usr.name,
+            amountFormatted: formatMinorAmount(
+              verified.payment.currency,
+              verified.payment.amountMinor
+            ),
+            creditsAdded: verified.payment.creditsGranted,
+            reference: verified.payment.providerReference,
+            accountUrl: `${appUrl}/account`,
+          }),
+        });
+      }
+    }
+
+    return jsonNoStore({ ok: true, ...granted }, 200);
+  } catch (err) {
+    if (err instanceof BillingError) {
+      return jsonNoStore({ ok: false, error: err.message }, err.status);
+    }
+    return jsonNoStore({ ok: false, error: "Failed to process Polar webhook." }, 500);
+  }
+}
+
 async function requireAdminSession(
   request: Request,
   deps: BillingHttpDeps,
@@ -356,7 +532,7 @@ async function requireAdminSession(
   if (!session) {
     return { ok: false, error: jsonNoStore({ ok: false, error: "Authentication required." }, 401) };
   }
-  if (!isAdminEmail(session.user.email, deps.adminEmails)) {
+  if (!session.user.emailVerified || !isAdminEmail(session.user.email, deps.adminEmails)) {
     return { ok: false, error: jsonNoStore({ ok: false, error: "Admin access required." }, 403) };
   }
   return { ok: true, session };

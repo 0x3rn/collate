@@ -17,7 +17,13 @@ import {
   resetReconciliationIsolateCacheForTests,
   setGlobalCircuitBreaker,
 } from "@/lib/billing/ledger";
-import { computeHmacHex, verifyPaystackWebhook, verifyStripeWebhook } from "@/lib/billing/webhooks";
+import {
+  computeHmacBase64,
+  computeHmacHex,
+  verifyPaystackWebhook,
+  verifyPolarWebhook,
+  verifyStripeWebhook,
+} from "@/lib/billing/webhooks";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
 
 describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Refund Rules", () => {
@@ -141,6 +147,136 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
     expect(s1.newBalance).toBe(60);
     expect(s2.alreadyProcessed).toBe(true);
     expect(s2.newBalance).toBe(60);
+  });
+
+  it("verifies Polar.sh Standard Webhooks (both base64 whsec_ and legacy UTF-8), rejects tamper/replay, ignores non-paid events, and grants credits EXACTLY ONCE", async () => {
+    // 1. Post-Sept 2026 Standard Webhooks format: whsec_<base64(rawKeyBytes)>
+    const rawKeyBytes = new TextEncoder().encode("polar-super-secret-key-32-bytes!");
+    const b64Secret = `whsec_${Buffer.from(rawKeyBytes).toString("base64")}`;
+    const webhookId = "msg_polar_001";
+    const ts = String(Math.floor(now.getTime() / 1000));
+    const orderPaidBody = JSON.stringify({
+      type: "order.paid",
+      data: {
+        id: "ord_polar_100",
+        checkout_id: "chk_polar_100",
+        paid: true,
+        total_amount: 2500,
+        currency: "usd",
+        customer: { external_id: "usr_pay", email: "student@uni.edu.ng" },
+        metadata: { userId: "usr_pay", credits: 80, packId: "pack_project_60" },
+      },
+    });
+    const signedPayload = `${webhookId}.${ts}.${orderPaidBody}`;
+    const validB64Sig = await computeHmacBase64("SHA-256", rawKeyBytes, signedPayload);
+
+    // Tampered body must fail
+    const tampered = await verifyPolarWebhook({
+      rawBody: orderPaidBody.replace("80", "9999"),
+      webhookId,
+      webhookTimestamp: ts,
+      webhookSignature: `v1,${validB64Sig}`,
+      webhookSecret: b64Secret,
+      nowMs: now.getTime() + 10_000,
+    });
+    expect(tampered.valid).toBe(false);
+
+    // Replay outside 5-minute window must fail
+    const stale = await verifyPolarWebhook({
+      rawBody: orderPaidBody,
+      webhookId,
+      webhookTimestamp: ts,
+      webhookSignature: `v1,${validB64Sig}`,
+      webhookSecret: b64Secret,
+      nowMs: now.getTime() + 10 * 60 * 1000,
+    });
+    expect(stale.valid).toBe(false);
+
+    // Rotated header with old + valid v1 signatures succeeds
+    const verifiedB64 = await verifyPolarWebhook({
+      rawBody: orderPaidBody,
+      webhookId,
+      webhookTimestamp: ts,
+      webhookSignature: `v1,invalidOldSig== v1,${validB64Sig}`,
+      webhookSecret: b64Secret,
+      nowMs: now.getTime() + 15_000,
+    });
+    expect(verifiedB64.valid).toBe(true);
+    if (!verifiedB64.valid || !verifiedB64.payment) {
+      throw new Error("Expected verified Polar payment");
+    }
+    expect(verifiedB64.payment).toMatchObject({
+      provider: "polar",
+      providerReference: "chk_polar_100",
+      userId: "usr_pay",
+      currency: "USD",
+      amountMinor: 2500,
+      creditsGranted: 80,
+    });
+
+    // Idempotent credit grant across duplicate deliveries -> 80 credits EXACTLY ONCE
+    const p1 = await grantPaymentCreditsIdempotent(db, verifiedB64.payment, orderPaidBody, now);
+    const p2 = await grantPaymentCreditsIdempotent(db, verifiedB64.payment, orderPaidBody, now);
+    expect(p1).toMatchObject({ alreadyProcessed: false, newBalance: 80 });
+    expect(p2).toMatchObject({ alreadyProcessed: true, newBalance: 80 });
+
+    // 2. Legacy Polar UTF-8 secret format (literal bytes of polar_whs_... or whsec_...) + customer.external_id & packId fallback
+    const legacySecret = "polar_whs_legacy_literal_secret_key";
+    const legacyBody = JSON.stringify({
+      type: "order.paid",
+      data: {
+        id: "ord_polar_200",
+        checkout_id: null,
+        amount: 1000,
+        currency: "usd",
+        customer: { external_id: "usr_pay" },
+        metadata: { packId: "pack_starter_25" },
+      },
+    });
+    const legacySig = await computeHmacBase64(
+      "SHA-256",
+      new TextEncoder().encode(legacySecret),
+      `msg_polar_002.${ts}.${legacyBody}`
+    );
+    const verifiedLegacy = await verifyPolarWebhook({
+      rawBody: legacyBody,
+      webhookId: "msg_polar_002",
+      webhookTimestamp: ts,
+      webhookSignature: `v1,${legacySig}`,
+      webhookSecret: legacySecret,
+      nowMs: now.getTime() + 5_000,
+    });
+    expect(verifiedLegacy.valid).toBe(true);
+    if (!verifiedLegacy.valid || !verifiedLegacy.payment) {
+      throw new Error("Expected verified legacy Polar payment");
+    }
+    expect(verifiedLegacy.payment).toMatchObject({
+      provider: "polar",
+      providerReference: "ord_polar_200",
+      userId: "usr_pay",
+      creditsGranted: 25,
+      amountMinor: 1000,
+    });
+
+    // 3. Unrelated Polar events (e.g., checkout.created) are validly ignored
+    const otherBody = JSON.stringify({
+      type: "checkout.created",
+      data: { id: "chk_other", status: "open" },
+    });
+    const otherSig = await computeHmacBase64(
+      "SHA-256",
+      rawKeyBytes,
+      `msg_polar_003.${ts}.${otherBody}`
+    );
+    const ignored = await verifyPolarWebhook({
+      rawBody: otherBody,
+      webhookId: "msg_polar_003",
+      webhookTimestamp: ts,
+      webhookSignature: `v1,${otherSig}`,
+      webhookSecret: b64Secret,
+      nowMs: now.getTime() + 5_000,
+    });
+    expect(ignored).toEqual({ valid: true, ignored: true });
   });
 
   it("reserves credits on start, refunds 100% on failed chapter, and captures on success", async () => {
@@ -459,5 +595,150 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
     await ensurePrematureRefundsReconciled(db, now);
     const [usrAfterHook] = await db.select().from(users).where(eq(users.id, "usr_pay"));
     expect(usrAfterHook?.creditsBalance).toBe(961);
+  });
+
+  it("blocks payment spoofing (underpayment, currency/user/credit/product mismatch), concurrent double-credit, negative reservations, and refunding captured reservations", async () => {
+    // Seed a pending Polar checkout ($25 / 80 credits) for usr_pay
+    const { payments } = await import("@/db/schema");
+    await db.insert(payments).values({
+      id: "pay_pending_guard",
+      userId: "usr_pay",
+      provider: "polar",
+      providerReference: "chk_guard_001",
+      currency: "USD",
+      amountMinor: 2500,
+      creditsGranted: 80,
+      status: "pending",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 1. Underpayment rejected -> balance stays 0
+    await expect(
+      grantPaymentCreditsIdempotent(
+        db,
+        {
+          provider: "polar",
+          providerReference: "chk_guard_001",
+          userId: "usr_pay",
+          currency: "USD",
+          amountMinor: 100,
+          creditsGranted: 80,
+          eventType: "order.paid",
+        },
+        "{}",
+        now
+      )
+    ).rejects.toMatchObject({ code: "PAYMENT_MISMATCH", status: 400 });
+
+    // 2. Currency downgrade rejected -> balance stays 0
+    await expect(
+      grantPaymentCreditsIdempotent(
+        db,
+        {
+          provider: "polar",
+          providerReference: "chk_guard_001",
+          userId: "usr_pay",
+          currency: "NGN",
+          amountMinor: 2500,
+          creditsGranted: 80,
+          eventType: "order.paid",
+        },
+        "{}",
+        now
+      )
+    ).rejects.toMatchObject({ code: "PAYMENT_MISMATCH", status: 400 });
+
+    // 3. Inflated credits mismatch rejected -> balance stays 0
+    await expect(
+      grantPaymentCreditsIdempotent(
+        db,
+        {
+          provider: "polar",
+          providerReference: "chk_guard_001",
+          userId: "usr_pay",
+          currency: "USD",
+          amountMinor: 2500,
+          creditsGranted: 9999,
+          eventType: "order.paid",
+        },
+        "{}",
+        now
+      )
+    ).rejects.toMatchObject({ code: "PAYMENT_MISMATCH", status: 400 });
+
+    // 4. Polar product_id vs tampered metadata.credits rejected at webhook verification
+    const rawKey = new TextEncoder().encode("guard-key-bytes-1234567890123456");
+    const secret = `whsec_${Buffer.from(rawKey).toString("base64")}`;
+    const ts = String(Math.floor(now.getTime() / 1000));
+    const spoofedPolarBody = JSON.stringify({
+      type: "order.paid",
+      data: {
+        id: "ord_spoof",
+        checkout_id: "chk_guard_001",
+        product_id: "prod_starter",
+        total_amount: 1000,
+        currency: "usd",
+        metadata: { userId: "usr_pay", credits: 180 },
+      },
+    });
+    const sig = await computeHmacBase64("SHA-256", rawKey, `wh_spoof.${ts}.${spoofedPolarBody}`);
+    const spoofRes = await verifyPolarWebhook({
+      rawBody: spoofedPolarBody,
+      webhookId: "wh_spoof",
+      webhookTimestamp: ts,
+      webhookSignature: `v1,${sig}`,
+      webhookSecret: secret,
+      polarProductIds: { pack_starter_25: "prod_starter" },
+      nowMs: now.getTime(),
+    });
+    expect(spoofRes.valid).toBe(false);
+
+    // 5. Legitimate Polar discount (subtotal=2500, discount=1000, paid=1500) succeeds EXACTLY ONCE under concurrency
+    const validDiscountPayment = {
+      provider: "polar" as const,
+      providerReference: "chk_guard_001",
+      userId: "usr_pay",
+      currency: "USD",
+      amountMinor: 1500,
+      subtotalAmountMinor: 2500,
+      creditsGranted: 80,
+      eventType: "order.paid",
+    };
+    const [r1, r2, r3] = await Promise.all([
+      grantPaymentCreditsIdempotent(db, validDiscountPayment, "{}", now),
+      grantPaymentCreditsIdempotent(db, validDiscountPayment, "{}", now),
+      grantPaymentCreditsIdempotent(db, validDiscountPayment, "{}", now),
+    ]);
+    expect([r1, r2, r3].filter((r) => !r.alreadyProcessed)).toHaveLength(1);
+    const [afterGrant] = await db.select().from(users).where(eq(users.id, "usr_pay"));
+    expect(afterGrant?.creditsBalance).toBe(80);
+
+    // 6. Negative or zero credit reservation rejected
+    await expect(
+      reserveChapterCredits(db, {
+        userId: "usr_pay",
+        projectId: "prj_pay",
+        credits: -50,
+        idempotencyKey: "neg_attack",
+        now,
+      })
+    ).rejects.toMatchObject({ code: "INVALID_AMOUNT", status: 400 });
+
+    // 7. Already-captured reservation can NEVER be refunded later
+    const held = await reserveChapterCredits(db, {
+      userId: "usr_pay",
+      projectId: "prj_pay",
+      credits: 10,
+      idempotencyKey: "cap_guard_1",
+      now,
+    });
+    expect(held.balanceAfter).toBe(70);
+    await captureChapterReservation(db, held.reservationId, now);
+
+    const badRefund = await refundChapterReservation(db, held.reservationId, "Late error", now);
+    expect(badRefund).toEqual({ refunded: false, balanceAfter: 70 });
+    const [afterBadRefund] = await db.select().from(users).where(eq(users.id, "usr_pay"));
+    expect(afterBadRefund?.creditsBalance).toBe(70);
   });
 });

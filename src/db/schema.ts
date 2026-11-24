@@ -90,7 +90,7 @@ export type SourceFetchStatus = (typeof SOURCE_FETCH_STATUSES)[number];
 export const CHAPTER_VERSION_CREATORS = ["ai", "user", "revision"] as const;
 export type ChapterVersionCreator = (typeof CHAPTER_VERSION_CREATORS)[number];
 
-export const PAYMENT_PROVIDERS = ["paystack", "stripe"] as const;
+export const PAYMENT_PROVIDERS = ["paystack", "polar", "stripe"] as const;
 export type PaymentProvider = (typeof PAYMENT_PROVIDERS)[number];
 
 export const PAYMENT_STATUSES = ["pending", "succeeded", "failed", "refunded"] as const;

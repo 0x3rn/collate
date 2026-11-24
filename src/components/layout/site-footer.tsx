@@ -4,7 +4,7 @@ import { CollateLogo } from "@/components/brand/collate-logo";
 export function SiteFooter() {
   return (
     <footer className="mt-auto border-t border-[var(--neutral-200)] bg-white">
-      <div className="mx-auto max-w-[1120px] px-4 sm:px-6 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 text-sm">
+      <div className="mx-auto max-w-[1120px] px-4 sm:px-6 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 text-sm">
         <div className="sm:col-span-2 space-y-2">
           <div className="inline-flex items-center gap-2">
             <CollateLogo className="w-5 h-5 text-[var(--accent-600)] shrink-0" />
@@ -17,7 +17,7 @@ export function SiteFooter() {
           </div>
           <p className="text-[var(--neutral-600)] max-w-[46ch] leading-relaxed m-0">
             Research and drafting assistant for evidence-backed projects, research papers, theses,
-            and assignments. Built on Cloudflare Workers.
+            and assignments.
           </p>
         </div>
 
@@ -61,12 +61,47 @@ export function SiteFooter() {
 
         <div className="space-y-2.5">
           <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
-            Account &amp; legal
+            Legal
           </p>
-          <nav
-            aria-label="Legal and account links"
-            className="flex flex-col gap-2 text-[var(--neutral-700)]"
-          >
+          <nav aria-label="Legal links" className="flex flex-col gap-2 text-[var(--neutral-700)]">
+            <Link
+              href="/terms"
+              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+            >
+              Terms of service
+            </Link>
+            <Link
+              href="/terms#refund-policy"
+              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+            >
+              Refund policy
+            </Link>
+            <Link
+              href="/privacy"
+              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+            >
+              Privacy policy
+            </Link>
+            <Link
+              href="/acceptable-use"
+              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+            >
+              Acceptable use
+            </Link>
+            <Link
+              href="/cookies"
+              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+            >
+              Cookie policy
+            </Link>
+          </nav>
+        </div>
+
+        <div className="space-y-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+            Account
+          </p>
+          <nav aria-label="Account links" className="flex flex-col gap-2 text-[var(--neutral-700)]">
             <Link
               href="/sign-up"
               className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
@@ -78,18 +113,6 @@ export function SiteFooter() {
               className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
             >
               Sign in
-            </Link>
-            <Link
-              href="/terms"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
-            >
-              Terms of service
-            </Link>
-            <Link
-              href="/privacy"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
-            >
-              Privacy policy
             </Link>
           </nav>
         </div>

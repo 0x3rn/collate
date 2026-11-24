@@ -7,6 +7,13 @@ export async function POST(request: Request): Promise<Response> {
   return handleCreateCheckout(request, {
     ...buildWorkerAuthDeps(request),
     paystackSecretKey: runtimeEnv.PAYSTACK_SECRET_KEY,
+    polarAccessToken: runtimeEnv.POLAR_ACCESS_TOKEN,
+    polarEnvironment: runtimeEnv.POLAR_ENVIRONMENT,
+    polarProductIds: {
+      pack_starter_25: runtimeEnv.POLAR_PRODUCT_ID_STARTER,
+      pack_project_60: runtimeEnv.POLAR_PRODUCT_ID_PROJECT,
+      pack_thesis_150: runtimeEnv.POLAR_PRODUCT_ID_THESIS,
+    },
     stripeSecretKey: runtimeEnv.STRIPE_SECRET_KEY,
   });
 }

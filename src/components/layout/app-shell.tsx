@@ -219,16 +219,6 @@ function SidebarContent({
             {signingOut ? <SpinnerIcon className="w-4 h-4" /> : <LogOutIcon className="w-4 h-4" />}
           </button>
         </div>
-
-        <div className="flex items-center gap-3 px-0.5 text-[11px] text-[var(--neutral-500)]">
-          <Link href="/terms" className="hover:text-[var(--neutral-800)]">
-            Terms
-          </Link>
-          <span aria-hidden="true">·</span>
-          <Link href="/privacy" className="hover:text-[var(--neutral-800)]">
-            Privacy
-          </Link>
-        </div>
       </div>
     </div>
   );

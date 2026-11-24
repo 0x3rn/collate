@@ -136,13 +136,6 @@ export function markdownToPrintHtml(
       }
       case "figure": {
         const asset = resolvedFigures?.[block.figure.url];
-        const natW = asset?.naturalWidth ?? block.figure.width;
-        const natH = asset?.naturalHeight ?? block.figure.height;
-        const dims = computeControlledFigureDimensions(natW, natH, {
-          maxWidthPx: 560,
-          maxHeightPx: 370,
-        });
-        const imgSrc = asset ? asset.dataUrl : escapeHtml(block.figure.url);
         const captionHtml = `<div class="figure-caption">${formatInlineMarkdown(block.figure.caption)}</div>`;
         const cleanAttr = formatFigureAttributionForDisplay(
           block.figure.attribution,
@@ -152,9 +145,26 @@ export function markdownToPrintHtml(
           ? `<div class="figure-attribution">${escapeHtml(cleanAttr)}</div>`
           : "";
 
+        // Never hot-link an external image into the PDF renderer: if the figure could not be
+        // fetched and embedded, a remote <img> can hang the renderer until it times out and
+        // fails the whole export. Degrade to caption + attribution instead.
+        if (!asset) {
+          htmlParts.push(
+            `<figure class="academic-figure"><figcaption>${captionHtml}${attrHtml}</figcaption></figure>`
+          );
+          break;
+        }
+
+        const natW = asset.naturalWidth ?? block.figure.width;
+        const natH = asset.naturalHeight ?? block.figure.height;
+        const dims = computeControlledFigureDimensions(natW, natH, {
+          maxWidthPx: 560,
+          maxHeightPx: 370,
+        });
+
         htmlParts.push(
           `<figure class="academic-figure">` +
-            `<img src="${imgSrc}" alt="${escapeHtml(block.figure.alt)}" width="${dims.widthPx}" height="${dims.heightPx}" style="width:${dims.widthPx}px;max-width:100%;height:auto;max-height:105mm;" />` +
+            `<img src="${asset.dataUrl}" alt="${escapeHtml(block.figure.alt)}" width="${dims.widthPx}" height="${dims.heightPx}" style="width:${dims.widthPx}px;max-width:100%;height:auto;max-height:105mm;" />` +
             `<figcaption>${captionHtml}${attrHtml}</figcaption>` +
             `</figure>`
         );
@@ -380,6 +390,57 @@ export function buildReferencesHtmlDocument(
       ${refItems || "<p>No cited references recorded yet.</p>"}
     </section>
     ${appendixBlock}
+  </body>
+</html>`;
+}
+
+/**
+ * Builds a single self-contained HTML print document containing all target chapters
+ * and optional References/Appendices separated by explicit print page breaks.
+ * Used whenever a Table of Contents page-number pass is not needed (single-chapter
+ * and combined exports), cutting Cloudflare Browser Rendering API calls down to 1.
+ */
+export function buildCombinedBodyHtmlDocument(
+  doc: ThesisExportDocument,
+  options: { includeReferences?: boolean } = {}
+): string {
+  const includeReferences = options.includeReferences ?? true;
+  const sectionsHtml: string[] = [];
+
+  doc.chapters.forEach((ch, idx) => {
+    const breakClass = idx > 0 ? ' class="page-break"' : "";
+    sectionsHtml.push(
+      `<article${breakClass}>${markdownToPrintHtml(ch.markdown, doc.resolvedFigures)}</article>`
+    );
+  });
+
+  if (includeReferences && doc.bibliographyEntries.length > 0) {
+    const refItems = doc.bibliographyEntries
+      .map((entry) => `<p class="ref-item">${escapeHtml(entry)}</p>`)
+      .join("\n");
+    sectionsHtml.push(`<section class="page-break"><h1>References</h1>${refItems}</section>`);
+
+    if (doc.formatting.frontMatter.appendices && doc.appendicesMarkdown?.trim()) {
+      sectionsHtml.push(
+        `<section class="page-break"><h1>Appendices</h1>${markdownToPrintHtml(doc.appendicesMarkdown)}</section>`
+      );
+    }
+  }
+
+  const title =
+    doc.chapters.length === 1
+      ? `Chapter ${doc.chapters[0]!.number}: ${doc.chapters[0]!.title}`
+      : doc.projectTitle;
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>${escapeHtml(title)}</title>
+    <style>${buildPrintCss(doc.formatting)}</style>
+  </head>
+  <body>
+    ${sectionsHtml.join("\n")}
   </body>
 </html>`;
 }

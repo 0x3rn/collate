@@ -150,21 +150,23 @@ function ToastCard({
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
-      className="toast-enter pointer-events-auto bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] shadow-[0_12px_32px_rgba(24,24,27,0.1)] flex items-start gap-3 p-4"
+      className="toast-enter pointer-events-auto w-full bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] shadow-[0_12px_32px_rgba(24,24,27,0.1)] flex items-start gap-2.5 sm:gap-3 p-3 sm:p-4"
     >
       <span
-        className={`mt-0.5 w-7 h-7 rounded-[var(--radius-sm)] border grid place-items-center shrink-0 ${style.iconBg} ${style.iconColor}`}
+        className={`mt-0.5 w-6 h-6 sm:w-7 sm:h-7 rounded-[var(--radius-sm)] border grid place-items-center shrink-0 ${style.iconBg} ${style.iconColor}`}
       >
         <ToastIcon tone={toast.tone} />
       </span>
 
-      <div className="flex-1 min-w-0 flex flex-col gap-1">
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5 sm:gap-1">
         {toast.title ? (
-          <p className="text-sm font-semibold text-[var(--neutral-900)] leading-snug m-0">
+          <p className="text-[13px] sm:text-sm font-semibold text-[var(--neutral-900)] leading-snug m-0">
             {toast.title}
           </p>
         ) : null}
-        <p className="text-sm text-[var(--neutral-700)] leading-relaxed m-0">{toast.message}</p>
+        <p className="text-[13px] sm:text-sm text-[var(--neutral-700)] leading-relaxed m-0">
+          {toast.message}
+        </p>
         {toast.action ? (
           <div className="pt-0.5">
             <Link
@@ -276,7 +278,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       {mounted && toasts.length > 0 && typeof document !== "undefined"
         ? createPortal(
-            <div className="fixed bottom-5 right-4 left-4 sm:left-auto sm:right-5 z-[60] sm:w-[390px] flex flex-col gap-2.5 pointer-events-none">
+            <div className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-[60] w-[min(296px,calc(100vw-4.5rem))] sm:w-[376px] max-w-[376px] flex flex-col items-end gap-2.5 pointer-events-none">
               {toasts.map((item) => (
                 <ToastCard key={item.id} toast={item} onDismiss={() => dismiss(item.id)} />
               ))}
@@ -309,7 +311,7 @@ export function Toast({
   }
 
   return createPortal(
-    <div className="fixed bottom-5 right-4 left-4 sm:left-auto sm:right-5 z-[60] sm:w-[390px] pointer-events-none">
+    <div className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-[60] w-[min(296px,calc(100vw-4.5rem))] sm:w-[376px] max-w-[376px] pointer-events-none">
       <ToastCard toast={toast} onDismiss={onDismiss} defaultDurationMs={durationMs} />
     </div>,
     document.body

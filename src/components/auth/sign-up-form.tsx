@@ -156,8 +156,15 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
         By creating an account, you agree to the{" "}
         <Link href="/terms" className="underline underline-offset-2 text-[var(--neutral-800)]">
           Terms of service
-        </Link>{" "}
-        and{" "}
+        </Link>
+        ,{" "}
+        <Link
+          href="/acceptable-use"
+          className="underline underline-offset-2 text-[var(--neutral-800)]"
+        >
+          Acceptable use policy
+        </Link>
+        , and{" "}
         <Link href="/privacy" className="underline underline-offset-2 text-[var(--neutral-800)]">
           Privacy policy
         </Link>

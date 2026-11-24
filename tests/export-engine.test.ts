@@ -10,6 +10,7 @@ import {
 import {
   buildThesisPdfTwoPass,
   createBrowserRunPageMeasurer,
+  PdfRenderRateLimitError,
   toRomanNumeral,
 } from "@/lib/export/pdf-assembler";
 import { markdownToPrintHtml, type ThesisExportDocument } from "@/lib/export/templates";
@@ -246,5 +247,72 @@ describe("Phase 9 — Two-Pass Thesis PDF & DOCX Export Engine", () => {
     expect(documentXml).toContain("Source: Dr. Botanist, Wikimedia Commons (CC BY-SA 4.0)");
     expect(documentXml).not.toContain("File:Beetroot_sample.png");
     expect(documentXml).not.toContain("commons.wikimedia.org");
+  });
+
+  it("batches single-chapter + references PDF into 1 Browser Run call and retries transient HTTP 429 cleanly", async () => {
+    let calls = 0;
+    let capturedHtml = "";
+    const sleptMs: number[] = [];
+
+    const flakeySinglePassBrowser: BrowserRunPdfBinding = {
+      async quickAction(_action, options) {
+        calls += 1;
+        capturedHtml = options.html;
+        if (calls === 1) {
+          return new Response(
+            '{"success":false,"errors":[{"code":2001,"message":"Rate limit exceeded"}]}',
+            {
+              status: 429,
+              headers: { "retry-after": "2" },
+            }
+          );
+        }
+        const pdf = await makeRealPdfWithPages(4);
+        return new Response(new Uint8Array(pdf), { status: 200 });
+      },
+    };
+
+    const singleChapterDoc: ThesisExportDocument = {
+      ...SAMPLE_DOC,
+      chapters: [SAMPLE_DOC.chapters[0]!],
+    };
+
+    const result = await buildThesisPdfTwoPass(singleChapterDoc, flakeySinglePassBrowser, {
+      includeFrontMatter: false,
+      includeReferences: true,
+      sleepFn: async (ms) => {
+        sleptMs.push(ms);
+      },
+    });
+
+    // Only 1 logical PDF render (attempted twice due to the simulated 429), combining Chapter + References
+    expect(calls).toBe(2);
+    expect(sleptMs).toEqual([2000]);
+    expect(capturedHtml).toContain("Chapter 1: Introduction");
+    expect(capturedHtml).toContain("<h1>References</h1>");
+    expect(capturedHtml).toContain('class="page-break"');
+    expect(result.totalPageCount).toBe(4);
+
+    // Persistent 429 throws PdfRenderRateLimitError after bounded retries
+    let always429Calls = 0;
+    const always429Browser: BrowserRunPdfBinding = {
+      async quickAction() {
+        always429Calls += 1;
+        return new Response(
+          '{"success":false,"errors":[{"code":2001,"message":"Rate limit exceeded"}]}',
+          {
+            status: 429,
+          }
+        );
+      },
+    };
+    await expect(
+      buildThesisPdfTwoPass(singleChapterDoc, always429Browser, {
+        includeFrontMatter: false,
+        includeReferences: true,
+        sleepFn: async () => {},
+      })
+    ).rejects.toBeInstanceOf(PdfRenderRateLimitError);
+    expect(always429Calls).toBe(3);
   });
 });
