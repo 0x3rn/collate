@@ -93,10 +93,10 @@ export default async function HomePage() {
           <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-10">
             <Reveal>
               <div className="max-w-[64ch] space-y-3">
-                <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium m-0">
+                <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium">
                   Built for four types of academic work
                 </h2>
-                <p className="text-[var(--neutral-600)] leading-relaxed m-0">
+                <p className="text-[var(--neutral-600)] leading-relaxed">
                   Collate adapts source thresholds, chapter templates, and recommended lengths to
                   what you are writing, and lets you adjust the final page count.
                 </p>
@@ -157,7 +157,7 @@ export default async function HomePage() {
                 </Reveal>
               </div>
 
-              <ol className="lg:col-span-7 space-y-5 list-none p-0 m-0">
+              <ol className="lg:col-span-7 space-y-5 list-none p-0">
                 {WORKFLOW_STEPS.map((item, idx) => (
                   <li key={item.step}>
                     <Reveal delayMs={idx * 70}>
@@ -194,10 +194,10 @@ export default async function HomePage() {
             <div className="space-y-10">
               <Reveal>
                 <div className="max-w-[64ch] space-y-3">
-                  <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium m-0">
+                  <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium">
                     What you get in every finished project
                   </h2>
-                  <p className="text-[var(--neutral-600)] leading-relaxed m-0">
+                  <p className="text-[var(--neutral-600)] leading-relaxed">
                     Select any capability below to inspect how Collate verifies citations, checks
                     claims, handles research data, and formats final files.
                   </p>
@@ -266,10 +266,10 @@ export default async function HomePage() {
           <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-8">
             <Reveal>
               <div className="max-w-[64ch] space-y-3">
-                <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium m-0">
+                <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium">
                   Simple credit packs, pay as you write
                 </h2>
-                <p className="text-[var(--neutral-600)] leading-relaxed m-0">
+                <p className="text-[var(--neutral-600)] leading-relaxed">
                   Start with {pricing.freeSweeps} free topic checks. Credits are deducted one
                   chapter at a time and refunded automatically if any chapter fails. Pay in Naira or
                   US dollars.
@@ -337,10 +337,10 @@ export default async function HomePage() {
             <Reveal>
               <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-8 sm:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div className="space-y-2 max-w-[54ch]">
-                  <h2 className="text-[1.75rem] font-medium m-0">
+                  <h2 className="text-[1.75rem] font-medium">
                     Test your topic against real sources first
                   </h2>
-                  <p className="text-[var(--neutral-600)] m-0">
+                  <p className="text-[var(--neutral-600)]">
                     Create a free account to see whether your topic has enough credible evidence
                     before you spend time writing.
                   </p>

@@ -107,7 +107,7 @@ export function PricingShowcase({
               {estimate.baseCredits} credits
             </span>
           </div>
-          <p className="text-xs text-[var(--neutral-600)] tabular-nums m-0">
+          <p className="text-xs text-[var(--neutral-600)] tabular-nums">
             Recommended with revision buffer: {estimate.recommendedTotalCredits} credits · Best fit:{" "}
             <strong className="text-[var(--accent-600)]">{estimate.recommendedPack.label}</strong>
           </p>
@@ -153,7 +153,7 @@ export function PricingShowcase({
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-[var(--accent-600)] m-0">{pack.label}</p>
+                <p className="text-sm font-semibold text-[var(--accent-600)]">{pack.label}</p>
                 {pack.featured ? (
                   <span className="px-2.5 py-0.5 text-[11px] font-medium rounded-[var(--radius-sm)] bg-[var(--accent-100)] text-[var(--accent-600)]">
                     Most common
@@ -163,23 +163,23 @@ export function PricingShowcase({
 
               <div className="space-y-0.5">
                 <p
-                  className="text-3xl font-medium text-[var(--neutral-900)] tabular-nums m-0"
+                  className="text-3xl font-medium text-[var(--neutral-900)] tabular-nums"
                   style={{ fontFamily: "var(--font-serif)" }}
                 >
                   {currency === "ngn" ? pack.ngnFormatted : pack.usdFormatted}
                 </p>
-                <p className="text-xs text-[var(--neutral-500)] tabular-nums m-0">
+                <p className="text-xs text-[var(--neutral-500)] tabular-nums">
                   {currency === "ngn"
                     ? `or ${pack.usdFormatted} USD`
                     : `or ${pack.ngnFormatted} NGN`}
                 </p>
               </div>
 
-              <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+              <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
                 {pack.description}
               </p>
 
-              <ul className="pt-3 border-t border-[var(--neutral-200)] space-y-2 list-none p-0 m-0 text-xs text-[var(--neutral-700)]">
+              <ul className="pt-3 border-t border-[var(--neutral-200)] space-y-2 list-none p-0 text-xs text-[var(--neutral-700)]">
                 <li>{pack.credits} writing credits (no expiry)</li>
                 <li>Full PDF and Word (.docx) exports</li>
                 <li>Automatic refund if a chapter fails</li>

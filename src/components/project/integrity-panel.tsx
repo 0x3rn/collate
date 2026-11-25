@@ -70,7 +70,7 @@ export function IntegrityPanel({
             >
               Editable AI-use disclosure statement
             </label>
-            <p className="text-xs text-[var(--neutral-500)] leading-snug m-0">
+            <p className="text-xs text-[var(--neutral-500)] leading-snug">
               Optional. Only use if your institution requires an AI-use disclosure.
             </p>
           </div>

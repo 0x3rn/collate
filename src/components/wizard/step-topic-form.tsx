@@ -130,7 +130,7 @@ export function StepTopicForm({
       {isAssignment ? (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-[var(--neutral-800)] m-0">
+            <p className="text-sm font-medium text-[var(--neutral-800)]">
               Questions ({questionList.length})
             </p>
             <Button
@@ -221,10 +221,10 @@ export function StepTopicForm({
         <fieldset className="rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]/70 p-4 sm:p-5 space-y-4">
           <legend className="sr-only">Experimental or empirical study settings</legend>
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
+            <p className="text-sm font-semibold text-[var(--neutral-900)]">
               Does this study involve an experiment or empirical data?
             </p>
-            <p className="text-xs text-[var(--neutral-600)] leading-relaxed m-0">
+            <p className="text-xs text-[var(--neutral-600)] leading-relaxed">
               Tell Collate if your topic includes lab assays, animal or clinical trials, field
               measurements, or survey datasets that require numerical results.
             </p>
@@ -246,10 +246,10 @@ export function StepTopicForm({
                   : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
               }`}
             >
-              <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+              <p className="text-sm font-medium text-[var(--neutral-900)]">
                 No, standard / literature study
               </p>
-              <p className="text-xs text-[var(--neutral-500)] mt-0.5 m-0">
+              <p className="text-xs text-[var(--neutral-500)] mt-0.5">
                 No primary lab or experimental values needed
               </p>
             </button>
@@ -265,10 +265,10 @@ export function StepTopicForm({
                   : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
               }`}
             >
-              <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+              <p className="text-sm font-medium text-[var(--neutral-900)]">
                 Yes, experimental / empirical study
               </p>
-              <p className="text-xs text-[var(--neutral-500)] mt-0.5 m-0">
+              <p className="text-xs text-[var(--neutral-500)] mt-0.5">
                 Includes lab assays, trials, or numerical findings
               </p>
             </button>
@@ -276,7 +276,7 @@ export function StepTopicForm({
 
           {isExperimental ? (
             <div className="pt-3 border-t border-[var(--neutral-200)] space-y-2.5">
-              <p className="text-xs font-semibold text-[var(--neutral-800)] m-0">
+              <p className="text-xs font-semibold text-[var(--neutral-800)]">
                 How should experimental results and figures be handled?
               </p>
               <div
@@ -295,10 +295,10 @@ export function StepTopicForm({
                       : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
                   }`}
                 >
-                  <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                  <p className="text-sm font-medium text-[var(--neutral-900)]">
                     I will provide my own lab or survey data
                   </p>
-                  <p className="text-xs text-[var(--neutral-600)] mt-1 leading-relaxed m-0">
+                  <p className="text-xs text-[var(--neutral-600)] mt-1 leading-relaxed">
                     Upload your CSV file on the project page before starting Results so Collate
                     calculates your tables directly from your real readings.
                   </p>
@@ -315,10 +315,10 @@ export function StepTopicForm({
                       : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
                   }`}
                 >
-                  <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                  <p className="text-sm font-medium text-[var(--neutral-900)]">
                     Gather published benchmark data from similar studies
                   </p>
-                  <p className="text-xs text-[var(--neutral-600)] mt-1 leading-relaxed m-0">
+                  <p className="text-xs text-[var(--neutral-600)] mt-1 leading-relaxed">
                     Collate gathers verified published experimental studies, extracts accepted
                     physiological or empirical value ranges, and builds range-grounded comparative
                     tables strictly within those cited bounds.

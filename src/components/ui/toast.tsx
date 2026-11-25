@@ -160,11 +160,11 @@ function ToastCard({
 
       <div className="flex-1 min-w-0 flex flex-col gap-0.5 sm:gap-1">
         {toast.title ? (
-          <p className="text-[13px] sm:text-sm font-semibold text-[var(--neutral-900)] leading-snug m-0">
+          <p className="text-[13px] sm:text-sm font-semibold text-[var(--neutral-900)] leading-snug">
             {toast.title}
           </p>
         ) : null}
-        <p className="text-[13px] sm:text-sm text-[var(--neutral-700)] leading-relaxed m-0">
+        <p className="text-[13px] sm:text-sm text-[var(--neutral-700)] leading-relaxed">
           {toast.message}
         </p>
         {toast.action ? (

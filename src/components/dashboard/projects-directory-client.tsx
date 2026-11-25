@@ -209,7 +209,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
             <div className="col-span-2 text-right">Next step</div>
           </div>
 
-          <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+          <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
             {filtered.map((project) => {
               const status = resolveProjectDisplayStatus(project);
               const inSetup = SETUP_PROJECT_STATUSES.has(project.status);
@@ -289,10 +289,10 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
 
                   {/* Sources & date */}
                   <div className="md:col-span-2 text-xs text-[var(--neutral-600)] tabular-nums flex items-center justify-between gap-2 md:block md:space-y-0.5">
-                    <p className="font-medium text-[var(--neutral-800)] m-0">
+                    <p className="font-medium text-[var(--neutral-800)]">
                       {project.sourcesCount} {project.sourcesCount === 1 ? "source" : "sources"}
                     </p>
-                    <p className="text-[var(--neutral-500)] m-0">
+                    <p className="text-[var(--neutral-500)]">
                       {formatShortDate(project.updatedAt)}
                     </p>
                   </div>

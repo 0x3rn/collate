@@ -896,7 +896,7 @@ export function ChapterRichEditor({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+      <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
         Edit directly below. Highlight any text for formatting and heading sizes, or press Enter to
         push items across the fixed page boundary lines. Blue citations stay locked automatically.
       </p>
@@ -1378,7 +1378,7 @@ export function ChapterRichEditor({
                           block.figure.sourceUrl
                         ).displayText;
                         return cleanAttr ? (
-                          <p className="w-full min-w-0 text-[11px] text-[var(--neutral-500)] leading-relaxed m-0 [overflow-wrap:anywhere]">
+                          <p className="w-full min-w-0 text-[11px] text-[var(--neutral-500)] leading-relaxed [overflow-wrap:anywhere]">
                             {cleanAttr}
                           </p>
                         ) : null;
@@ -1447,7 +1447,7 @@ export function ChapterRichEditor({
                         : "border-[var(--neutral-200)]"
                     }`}
                   >
-                    <ul className="list-disc pl-5 flex flex-col gap-2 m-0">
+                    <ul className="list-disc pl-5 flex flex-col gap-2">
                       {block.items.map((item, itemIdx) => (
                         <li key={itemIdx} className="text-sm text-[var(--neutral-800)]">
                           <div className="flex items-start gap-2">
@@ -1670,7 +1670,7 @@ export function ChapterRichEditor({
           </Button>
         }
       >
-        <p className="text-sm text-[var(--neutral-600)] leading-relaxed m-0">
+        <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
           Search for real, openly licensed photographs or scientific diagrams (never synthetic or
           generated illustrations). Collate automatically preserves natural proportions and adds
           fine-print attribution underneath the caption.
@@ -1718,10 +1718,10 @@ export function ChapterRichEditor({
                       className="max-h-full max-w-full w-auto h-auto object-contain"
                     />
                   </div>
-                  <p className="text-xs font-medium text-[var(--neutral-900)] line-clamp-2 m-0">
+                  <p className="text-xs font-medium text-[var(--neutral-900)] line-clamp-2">
                     {fig.caption}
                   </p>
-                  <p className="text-[11px] text-[var(--neutral-500)] m-0">
+                  <p className="text-[11px] text-[var(--neutral-500)]">
                     {fig.license} · {fig.naturalWidth}×{fig.naturalHeight}px
                   </p>
                 </div>
@@ -1737,7 +1737,7 @@ export function ChapterRichEditor({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-[var(--neutral-500)] text-center py-4 m-0">
+          <p className="text-xs text-[var(--neutral-500)] text-center py-4">
             Search above to browse openly licensed Wikimedia Commons photographs and diagrams for
             your chapter.
           </p>

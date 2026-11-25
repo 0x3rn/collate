@@ -46,7 +46,7 @@ export function WizardStepper({
         <span>{steps[currentIndex]?.label}</span>
       </div>
 
-      <ol className="flex flex-wrap gap-2 list-none p-0 m-0">
+      <ol className="flex flex-wrap gap-2 list-none p-0">
         {steps.map((s, idx) => {
           const isCurrent = s.number === currentStep;
           const isClickable = s.number <= maxReachedStep;

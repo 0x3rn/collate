@@ -227,7 +227,7 @@ export function AssignmentPipelinePanel({
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-medium m-0">
+            <h2 className="text-xl font-medium">
               Assignment answer plan ({questions.length} question
               {questions.length === 1 ? "" : "s"})
             </h2>
@@ -237,12 +237,12 @@ export function AssignmentPipelinePanel({
               {badge.label}
             </span>
           </div>
-          <p className="text-xs text-[var(--neutral-600)] m-0">
+          <p className="text-xs text-[var(--neutral-600)]">
             Each question is answered from its own verified sources and assembled into a single
             cited PDF and Word document.
           </p>
           {assignmentChapter?.originalityReport ? (
-            <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] m-0">
+            <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)]">
               Similarity report:{" "}
               <span
                 className={
@@ -315,7 +315,7 @@ export function AssignmentPipelinePanel({
                   >
                     What should be revised across your assignment answers?
                   </label>
-                  <p className="text-xs text-[var(--neutral-500)] m-0 tabular-nums">
+                  <p className="text-xs text-[var(--neutral-500)] tabular-nums">
                     Requesting changes deducts{" "}
                     <span className="font-semibold text-[var(--neutral-800)]">
                       {revCredits} {creditWord}
@@ -356,14 +356,14 @@ export function AssignmentPipelinePanel({
           })()
         : null}
 
-      <ol className="space-y-3 list-none p-0 m-0">
+      <ol className="space-y-3 list-none p-0">
         {questions.map((q) => (
           <li
             key={q.questionId}
             className="p-4 border border-[var(--neutral-200)] rounded-[var(--radius-sm)] space-y-1.5"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+              <p className="text-sm font-medium text-[var(--neutral-900)]">
                 <span className="tabular-nums font-semibold mr-1.5">Q{q.orderIndex}.</span>
                 {q.questionText}
               </p>
@@ -371,7 +371,7 @@ export function AssignmentPipelinePanel({
                 ~{q.pageBudget} pages (~{q.wordBudget.toLocaleString()} words)
               </span>
             </div>
-            <p className="text-xs text-[var(--neutral-600)] m-0">
+            <p className="text-xs text-[var(--neutral-600)]">
               Sections: {q.sectionHeadings.join(" · ")}
             </p>
           </li>

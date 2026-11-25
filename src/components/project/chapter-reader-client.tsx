@@ -492,8 +492,8 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
       {initial.chapter.status === "needs_attention" && hasDraft && initial.attention ? (
         <div className="rounded-[var(--radius-md)] border border-[var(--warning-border)] bg-[var(--warning-bg)] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex flex-col gap-1.5 text-sm text-[var(--warning-text)]">
-            <p className="font-semibold m-0">{initial.attention.title}</p>
-            <p className="m-0 leading-relaxed">{initial.attention.userMessage}</p>
+            <p className="font-semibold">{initial.attention.title}</p>
+            <p className="leading-relaxed">{initial.attention.userMessage}</p>
           </div>
           <div className="shrink-0 flex items-center gap-2">
             {initial.attention.kind === "user_input_required" ? (
@@ -524,10 +524,10 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 <span className="self-start inline-flex items-center px-2.5 py-0.5 text-xs font-medium border rounded-[4px] bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]">
                   Needs Attention
                 </span>
-                <h2 className="text-xl font-medium text-[var(--neutral-900)] m-0">
+                <h2 className="text-xl font-medium text-[var(--neutral-900)]">
                   {initial.attention?.title ?? "Drafting paused temporarily"}
                 </h2>
-                <p className="text-sm text-[var(--neutral-700)] leading-relaxed max-w-[60ch] m-0">
+                <p className="text-sm text-[var(--neutral-700)] leading-relaxed max-w-[60ch]">
                   {initial.attention?.userMessage ??
                     "We ran into a temporary service issue while drafting this chapter. Your saved progress is intact and any reserved credits have been refunded. Please resume to try again."}
                 </p>
@@ -600,7 +600,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
               </div>
             </div>
           ) : !hasDraft ? (
-            <p className="text-sm text-[var(--neutral-600)] m-0">
+            <p className="text-sm text-[var(--neutral-600)]">
               {initial.chapter.status === "queued" || initial.chapter.status === "writing"
                 ? "This chapter is currently being drafted. You will receive an email as soon as it is ready to review."
                 : "No drafted text is stored for this chapter yet. Start the chapter from the project overview page."}
@@ -610,7 +610,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
               {previewVersion ? (
                 <div className="rounded-[var(--radius-sm)] border border-[var(--info-border)] bg-[var(--info-bg)] px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex flex-col gap-0.5 text-xs text-[var(--info-text)]">
-                    <p className="font-semibold m-0">
+                    <p className="font-semibold">
                       Viewing Version {previewVersion.version.version} (
                       {formatVersionLabel(
                         previewVersion.version.version,
@@ -619,7 +619,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                       ) · read-only preview
                     </p>
                     {previewVersion.version.revisionNotes ? (
-                      <p className="m-0 opacity-90">{previewVersion.version.revisionNotes}</p>
+                      <p className="opacity-90">{previewVersion.version.revisionNotes}</p>
                     ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -683,7 +683,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                       blockNode = (
                         <h2
                           key={block.id}
-                          className="text-2xl font-medium leading-snug text-[var(--neutral-900)] mt-2 first:mt-0 m-0"
+                          className="text-2xl font-medium leading-snug text-[var(--neutral-900)] mt-2 first:mt-0"
                         >
                           {renderInlineFormatting(block.text, `h1-${idx}`)}
                         </h2>
@@ -694,7 +694,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                         <h3
                           key={block.id}
                           id={`sec-${headingCounter}`}
-                          className="text-xl font-medium leading-snug text-[var(--neutral-900)] mt-4 first:mt-0 m-0"
+                          className="text-xl font-medium leading-snug text-[var(--neutral-900)] mt-4 first:mt-0"
                         >
                           {renderInlineFormatting(block.text, `h2-${idx}`)}
                         </h3>
@@ -705,7 +705,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                         <h4
                           key={block.id}
                           id={`sec-${headingCounter}`}
-                          className="text-base font-semibold leading-snug text-[var(--neutral-900)] mt-2 first:mt-0 m-0"
+                          className="text-base font-semibold leading-snug text-[var(--neutral-900)] mt-2 first:mt-0"
                         >
                           {renderInlineFormatting(block.text, `h3-${idx}`)}
                         </h4>
@@ -716,7 +716,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                         <h5
                           key={block.id}
                           id={`sec-${headingCounter}`}
-                          className="text-[0.9375rem] font-semibold leading-snug text-[var(--neutral-800)] mt-2 first:mt-0 m-0"
+                          className="text-[0.9375rem] font-semibold leading-snug text-[var(--neutral-800)] mt-2 first:mt-0"
                         >
                           {renderInlineFormatting(block.text, `h4-${idx}`)}
                         </h5>
@@ -780,7 +780,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                     blockNode = (
                       <pre
                         key={block.id}
-                        className="overflow-x-auto text-xs bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-3 m-0"
+                        className="overflow-x-auto text-xs bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-3"
                       >
                         {block.raw}
                       </pre>
@@ -789,7 +789,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                     blockNode = (
                       <ul
                         key={block.id}
-                        className="list-disc pl-5 flex flex-col gap-2 text-base text-[var(--neutral-800)] leading-[1.7] m-0"
+                        className="list-disc pl-5 flex flex-col gap-2 text-base text-[var(--neutral-800)] leading-[1.7]"
                       >
                         {block.items.map((item, liIdx) => (
                           <li key={liIdx}>
@@ -807,7 +807,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                     blockNode = (
                       <blockquote
                         key={block.id}
-                        className="pl-4 border-l-2 border-[var(--neutral-300)] text-base text-[var(--neutral-700)] italic leading-[1.75] m-0"
+                        className="pl-4 border-l-2 border-[var(--neutral-300)] text-base text-[var(--neutral-700)] italic leading-[1.75]"
                       >
                         {renderParagraphWithCitations(
                           block.text,
@@ -823,7 +823,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                     blockNode = (
                       <p
                         key={block.id}
-                        className="text-base text-[var(--neutral-800)] leading-[1.75] m-0"
+                        className="text-base text-[var(--neutral-800)] leading-[1.75]"
                       >
                         {renderParagraphWithCitations(
                           block.text,
@@ -853,9 +853,9 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
         <aside className="xl:col-span-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-5 items-start">
           {initial.headings.length > 0 ? (
             <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-3.5">
-              <h2 className="text-base font-semibold text-[var(--neutral-900)] m-0">Sections</h2>
+              <h2 className="text-base font-semibold text-[var(--neutral-900)]">Sections</h2>
               <nav aria-label="Chapter sections">
-                <ul className="flex flex-col gap-2.5 list-none p-0 m-0 text-sm leading-snug">
+                <ul className="flex flex-col gap-2.5 list-none p-0 text-sm leading-snug">
                   {initial.headings.map((h) => (
                     <li
                       key={h.id}
@@ -881,7 +881,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
           ) : null}
 
           <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-4">
-            <h2 className="text-base font-semibold text-[var(--neutral-900)] m-0">
+            <h2 className="text-base font-semibold text-[var(--neutral-900)]">
               Citation inspector
             </h2>
             {inspectedCitations.length > 0 ? (
@@ -894,39 +894,37 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                     <span className="self-start inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-700)]">
                       Verified source
                     </span>
-                    <p className="text-[0.9375rem] font-medium text-[var(--neutral-900)] leading-snug m-0">
+                    <p className="text-[0.9375rem] font-medium text-[var(--neutral-900)] leading-snug">
                       {citation.title}
                     </p>
                     <div className="pt-2.5 border-t border-[var(--neutral-100)] flex flex-col gap-1.5 text-xs text-[var(--neutral-600)]">
-                      <p className="m-0">
+                      <p>
                         {citation.venue ? `${citation.venue} · ` : ""}
                         {citation.year ?? "n.d."}
                       </p>
                       {citation.doi ? (
-                        <p className="m-0 break-all text-[var(--neutral-500)]">
-                          DOI: {citation.doi}
-                        </p>
+                        <p className="break-all text-[var(--neutral-500)]">DOI: {citation.doi}</p>
                       ) : null}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-[var(--neutral-600)] leading-relaxed m-0">
+              <p className="text-xs text-[var(--neutral-600)] leading-relaxed">
                 Hover over or click any citation in the chapter to view its verified source details.
               </p>
             )}
           </section>
 
           <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-4">
-            <h2 className="text-base font-semibold text-[var(--neutral-900)] m-0">
+            <h2 className="text-base font-semibold text-[var(--neutral-900)]">
               Originality &amp; checks
             </h2>
             {initial.originalityReport ? (
-              <dl className="flex flex-col gap-2.5 text-xs tabular-nums m-0">
+              <dl className="flex flex-col gap-2.5 text-xs tabular-nums">
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-[var(--neutral-600)]">Originality check</dt>
-                  <dd className="m-0">
+                  <dd>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[4px] border ${
                         initial.originalityReport.passed
@@ -940,38 +938,38 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-[var(--neutral-600)]">Matched source text</dt>
-                  <dd className="font-semibold text-[var(--neutral-900)] m-0">
+                  <dd className="font-semibold text-[var(--neutral-900)]">
                     {initial.originalityReport.overlapScore}%
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-[var(--neutral-600)]">Direct quotes</dt>
-                  <dd className="font-semibold text-[var(--neutral-900)] m-0">
+                  <dd className="font-semibold text-[var(--neutral-900)]">
                     {initial.originalityReport.quoteSharePct}%
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-[var(--neutral-600)]">Shared across projects</dt>
-                  <dd className="font-semibold text-[var(--neutral-900)] m-0">
+                  <dd className="font-semibold text-[var(--neutral-900)]">
                     {initial.originalityReport.crossUserScore}%
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-[var(--neutral-100)]">
                   <dt className="text-[var(--neutral-600)]">Verified claims</dt>
-                  <dd className="font-semibold text-[var(--neutral-900)] m-0">
+                  <dd className="font-semibold text-[var(--neutral-900)]">
                     {initial.verifiedClaimsCount}
                   </dd>
                 </div>
               </dl>
             ) : (
               <div className="flex flex-col gap-2 text-xs text-[var(--neutral-600)] tabular-nums">
-                <p className="m-0">
+                <p>
                   Verified claims:{" "}
                   <strong className="text-[var(--neutral-900)]">
                     {initial.verifiedClaimsCount}
                   </strong>
                 </p>
-                <p className="m-0 leading-relaxed">
+                <p className="leading-relaxed">
                   Originality checks appear here once drafting completes.
                 </p>
               </div>
@@ -981,14 +979,14 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
           {initial.versions.length > 0 ? (
             <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-3.5">
               <div className="flex flex-col gap-1">
-                <h2 className="text-base font-semibold text-[var(--neutral-900)] m-0">
+                <h2 className="text-base font-semibold text-[var(--neutral-900)]">
                   Draft history ({initial.versions.length})
                 </h2>
-                <p className="text-xs text-[var(--neutral-500)] m-0">
+                <p className="text-xs text-[var(--neutral-500)]">
                   Every save and revision is preserved. Select a draft to preview or restore.
                 </p>
               </div>
-              <ul className="flex flex-col gap-2 list-none p-0 m-0 text-xs tabular-nums">
+              <ul className="flex flex-col gap-2 list-none p-0 text-xs tabular-nums">
                 {initial.versions.slice(0, 8).map((v) => {
                   const isCurrent = v.id === latestVersionId;
                   const isSelected = previewVersion

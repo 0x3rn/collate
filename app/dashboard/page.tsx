@@ -56,10 +56,10 @@ export default async function DashboardOverviewPage() {
             </p>
           </div>
 
-          <dl className="flex items-center gap-x-3.5 text-xs text-[var(--neutral-600)] tabular-nums whitespace-nowrap shrink-0 m-0">
+          <dl className="flex items-center gap-x-3.5 text-xs text-[var(--neutral-600)] tabular-nums whitespace-nowrap shrink-0">
             <div className="flex items-center gap-1.5">
               <dt className="sr-only">Active projects</dt>
-              <dd className="m-0">
+              <dd>
                 <strong className="font-semibold text-[var(--neutral-900)]">
                   {stats.activeProjects}
                 </strong>{" "}
@@ -71,7 +71,7 @@ export default async function DashboardOverviewPage() {
             </span>
             <div className="flex items-center gap-1.5">
               <dt className="sr-only">Ready for review</dt>
-              <dd className="m-0">
+              <dd>
                 <strong
                   className={
                     stats.chaptersReadyForReview > 0
@@ -89,7 +89,7 @@ export default async function DashboardOverviewPage() {
             </span>
             <div className="flex items-center gap-1.5">
               <dt className="sr-only">Verified sources</dt>
-              <dd className="m-0">
+              <dd>
                 <strong className="font-semibold text-[var(--neutral-900)]">
                   {formatNumber(stats.verifiedSourcesTotal)}
                 </strong>{" "}
@@ -178,7 +178,7 @@ export default async function DashboardOverviewPage() {
                   </p>
                 </div>
               ) : (
-                <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+                <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
                   {recentExports.map((exp) => (
                     <li
                       key={exp.id}

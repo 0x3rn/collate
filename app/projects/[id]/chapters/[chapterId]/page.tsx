@@ -179,7 +179,7 @@ export default async function ChapterReaderPage({
             <ArrowLeftIcon className="w-4 h-4 shrink-0" />
             <span className="truncate">Back to {state.project.title}</span>
           </Link>
-          <h1 className="text-[1.75rem] sm:text-[1.875rem] font-medium leading-tight m-0">
+          <h1 className="text-[1.75rem] sm:text-[1.875rem] font-medium leading-tight">
             Chapter {chapter.number}: {chapter.title}
           </h1>
         </div>

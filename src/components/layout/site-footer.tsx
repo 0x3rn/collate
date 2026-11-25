@@ -9,20 +9,20 @@ export function SiteFooter() {
           <div className="inline-flex items-center gap-2">
             <CollateLogo className="w-5 h-5 text-[var(--accent-600)] shrink-0" />
             <p
-              className="text-lg font-semibold leading-none translate-y-[0.5px] text-[var(--neutral-900)] m-0"
+              className="text-lg font-semibold leading-none translate-y-[0.5px] text-[var(--neutral-900)]"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               Collate
             </p>
           </div>
-          <p className="text-[var(--neutral-600)] max-w-[46ch] leading-relaxed m-0">
+          <p className="text-[var(--neutral-600)] max-w-[46ch] leading-relaxed">
             Research and drafting assistant for evidence-backed projects, research papers, theses,
             and assignments.
           </p>
         </div>
 
         <div className="space-y-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             Product
           </p>
           <nav aria-label="Product links" className="flex flex-col gap-2 text-[var(--neutral-700)]">
@@ -60,7 +60,7 @@ export function SiteFooter() {
         </div>
 
         <div className="space-y-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             Legal
           </p>
           <nav aria-label="Legal links" className="flex flex-col gap-2 text-[var(--neutral-700)]">
@@ -98,7 +98,7 @@ export function SiteFooter() {
         </div>
 
         <div className="space-y-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             Account
           </p>
           <nav aria-label="Account links" className="flex flex-col gap-2 text-[var(--neutral-700)]">

@@ -80,6 +80,8 @@ export interface UserExportItem {
   chapterId: string | null;
   chapterNumber: number | null;
   chapterTitle: string | null;
+  /** Chapter version a single-chapter export was made from; null for other exports. */
+  chapterVersion: number | null;
   scope: ExportScope;
   format: ExportFormat;
   pageCount: number;
@@ -469,6 +471,7 @@ export async function listExportsForUser(
       chapterId: exportsTable.chapterId,
       chapterNumber: chapters.number,
       chapterTitle: chapters.title,
+      chapterVersion: exportsTable.chapterVersion,
       scope: exportsTable.scope,
       format: exportsTable.format,
       pageCount: exportsTable.pageCount,
@@ -507,6 +510,7 @@ export async function listExportsForUser(
       chapterId: row.chapterId,
       chapterNumber: row.chapterNumber,
       chapterTitle: row.chapterTitle,
+      chapterVersion: row.chapterVersion,
       scope: row.scope,
       format: row.format,
       pageCount: row.pageCount,

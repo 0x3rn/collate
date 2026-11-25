@@ -64,9 +64,9 @@ export function ModalCard({
         <div className="px-6 py-4 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] flex items-start justify-between gap-4 shrink-0">
           <div className="flex flex-col gap-1 min-w-0">
             {eyebrow ? (
-              <p className="text-xs font-medium text-[var(--accent-600)] m-0">{eyebrow}</p>
+              <p className="text-xs font-medium text-[var(--accent-600)]">{eyebrow}</p>
             ) : null}
-            <h3 id={titleId} className="text-lg font-medium text-[var(--neutral-900)] m-0">
+            <h3 id={titleId} className="text-lg font-medium text-[var(--neutral-900)]">
               {title}
             </h3>
           </div>
@@ -144,7 +144,7 @@ export function InsufficientCreditsModal({
     >
       {details ? (
         <>
-          <p className="text-sm text-[var(--neutral-700)] leading-relaxed m-0">
+          <p className="text-sm text-[var(--neutral-700)] leading-relaxed">
             {details.actionLabel} requires{" "}
             <strong className="font-semibold text-[var(--neutral-900)] tabular-nums">
               {formatCredits(required)}
@@ -164,26 +164,26 @@ export function InsufficientCreditsModal({
 
           <div className="grid grid-cols-3 divide-x divide-[var(--neutral-200)] rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
             <div className="p-3.5 flex flex-col gap-1">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)] m-0">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)]">
                 Required
               </p>
-              <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+              <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums">
                 {formatCredits(required)}
               </p>
             </div>
             <div className="p-3.5 flex flex-col gap-1">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)] m-0">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)]">
                 Available
               </p>
-              <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+              <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums">
                 {details.creditsAvailable !== undefined ? formatCredits(available) : "—"}
               </p>
             </div>
             <div className="p-3.5 flex flex-col gap-1">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)] m-0">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)]">
                 Needed
               </p>
-              <p className="text-base font-semibold text-[var(--accent-600)] tabular-nums m-0">
+              <p className="text-base font-semibold text-[var(--accent-600)] tabular-nums">
                 {details.creditsAvailable !== undefined
                   ? formatCredits(shortfall)
                   : formatCredits(required)}
@@ -191,7 +191,7 @@ export function InsufficientCreditsModal({
             </div>
           </div>
 
-          <p className="text-xs text-[var(--neutral-500)] leading-relaxed m-0">
+          <p className="text-xs text-[var(--neutral-500)] leading-relaxed">
             Credits are only finalized when drafting finishes cleanly; interrupted runs are refunded
             in full.
           </p>

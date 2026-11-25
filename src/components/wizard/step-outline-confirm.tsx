@@ -232,20 +232,20 @@ export function StepOutlineConfirm({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
-          <p className="text-xs text-[var(--neutral-600)] m-0">Work type</p>
-          <p className="text-base font-semibold text-[var(--neutral-900)] m-0">
+          <p className="text-xs text-[var(--neutral-600)]">Work type</p>
+          <p className="text-base font-semibold text-[var(--neutral-900)]">
             {formatProjectType(project.type)}
           </p>
         </div>
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
-          <p className="text-xs text-[var(--neutral-600)] m-0">Budget allocation</p>
-          <p className="text-base font-semibold tabular-nums text-[var(--neutral-900)] m-0">
+          <p className="text-xs text-[var(--neutral-600)]">Budget allocation</p>
+          <p className="text-base font-semibold tabular-nums text-[var(--neutral-900)]">
             {validation.allocatedPages} / {outline.targetPages} pages
           </p>
         </div>
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
-          <p className="text-xs text-[var(--neutral-600)] m-0">Layout density</p>
-          <p className="text-base font-semibold tabular-nums text-[var(--neutral-900)] m-0">
+          <p className="text-xs text-[var(--neutral-600)]">Layout density</p>
+          <p className="text-base font-semibold tabular-nums text-[var(--neutral-900)]">
             ~{outline.wordsPerPage} words/page
           </p>
         </div>
@@ -261,7 +261,7 @@ export function StepOutlineConfirm({
               className="p-5 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] space-y-3"
             >
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
+                <p className="text-sm font-semibold text-[var(--neutral-900)]">
                   <span className="tabular-nums mr-1.5">Q{q.orderIndex}.</span>
                   {q.questionText}
                 </p>
@@ -284,7 +284,7 @@ export function StepOutlineConfirm({
                   />
                 </div>
               </div>
-              <p className="text-xs text-[var(--neutral-600)] tabular-nums m-0">
+              <p className="text-xs text-[var(--neutral-600)] tabular-nums">
                 Answer structure:{" "}
                 {q.sections.map((s) => `${s.heading} (~${s.wordBudget}w)`).join(" · ")}
               </p>
@@ -347,7 +347,7 @@ export function StepOutlineConfirm({
 
               {ch.needsConfirmation ? (
                 <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-bg)] space-y-3">
-                  <p className="text-xs font-semibold text-[var(--warning-text)] m-0">
+                  <p className="text-xs font-semibold text-[var(--warning-text)]">
                     Custom chapter confirmation required
                   </p>
                   <textarea
@@ -371,7 +371,7 @@ export function StepOutlineConfirm({
                   </label>
                 </div>
               ) : (
-                <p className="text-xs text-[var(--neutral-600)] m-0">{ch.inferredPurpose}</p>
+                <p className="text-xs text-[var(--neutral-600)]">{ch.inferredPurpose}</p>
               )}
 
               {!ch.isAutoReferences ? (
@@ -396,7 +396,7 @@ export function StepOutlineConfirm({
           ))}
 
           {enabledFrontMatter.length > 0 ? (
-            <p className="text-xs text-[var(--neutral-600)] m-0">
+            <p className="text-xs text-[var(--neutral-600)]">
               Included front/back matter: {enabledFrontMatter.join(", ")}.
             </p>
           ) : null}

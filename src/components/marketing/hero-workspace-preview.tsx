@@ -79,10 +79,10 @@ export function HeroWorkspacePreview() {
       {/* Header bar */}
       <div className="px-5 py-3.5 bg-[var(--neutral-100)] border-b border-[var(--neutral-200)] flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)] m-0">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)]">
             Sample project
           </p>
-          <p className="text-sm font-semibold text-[var(--neutral-900)] truncate m-0">
+          <p className="text-sm font-semibold text-[var(--neutral-900)] truncate">
             Solar Microgrid Reliability in Rural Clinics
           </p>
         </div>
@@ -138,20 +138,20 @@ export function HeroWorkspacePreview() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                <p className="text-[11px] text-[var(--neutral-600)] m-0">Sources verified</p>
-                <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+                <p className="text-[11px] text-[var(--neutral-600)]">Sources verified</p>
+                <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums">
                   38 of 30 min
                 </p>
               </div>
               <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                <p className="text-[11px] text-[var(--neutral-600)] m-0">Ideal length</p>
-                <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+                <p className="text-[11px] text-[var(--neutral-600)]">Ideal length</p>
+                <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums">
                   80 pages
                 </p>
               </div>
               <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                <p className="text-[11px] text-[var(--neutral-600)] m-0">Citation style</p>
-                <p className="text-base font-semibold text-[var(--neutral-900)] m-0">APA 7th ed.</p>
+                <p className="text-[11px] text-[var(--neutral-600)]">Citation style</p>
+                <p className="text-base font-semibold text-[var(--neutral-900)]">APA 7th ed.</p>
               </div>
             </div>
 
@@ -210,7 +210,7 @@ export function HeroWorkspacePreview() {
                   Claims verified · Similarity passed
                 </span>
               </div>
-              <p className="text-sm text-[var(--neutral-800)] leading-relaxed m-0">
+              <p className="text-sm text-[var(--neutral-800)] leading-relaxed">
                 Primary clinics powered by localized solar storage maintained cold-chain
                 temperatures during grid outages{" "}
                 <button
@@ -225,10 +225,10 @@ export function HeroWorkspacePreview() {
 
               {citationOpen ? (
                 <div className="p-2.5 rounded-[var(--radius-sm)] bg-white border border-[var(--neutral-200)] text-xs space-y-0.5">
-                  <p className="font-semibold text-[var(--neutral-900)] m-0">
+                  <p className="font-semibold text-[var(--neutral-900)]">
                     Verified source · Energy Policy (2024)
                   </p>
-                  <p className="text-[var(--neutral-600)] m-0">
+                  <p className="text-[var(--neutral-600)]">
                     Stored passage: &ldquo;Vaccine refrigerator uptime rose from 61% to 97% across
                     18 monitored facilities.&rdquo;
                   </p>
@@ -236,7 +236,7 @@ export function HeroWorkspacePreview() {
               ) : null}
             </div>
 
-            <ul className="divide-y divide-[var(--neutral-200)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] list-none p-0 m-0 text-xs">
+            <ul className="divide-y divide-[var(--neutral-200)] border border-[var(--neutral-200)] rounded-[var(--radius-sm)] list-none p-0 text-xs">
               <li className="px-3.5 py-2.5 flex items-center justify-between">
                 <span>
                   <strong className="mr-1.5">Ch. 1</strong> Introduction
@@ -270,7 +270,7 @@ export function HeroWorkspacePreview() {
             <div className="p-4 sm:p-5 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] space-y-3">
               <div className="flex items-center justify-between border-b border-[var(--neutral-200)] pb-2.5">
                 <p
-                  className="text-sm font-semibold text-[var(--neutral-900)] m-0"
+                  className="text-sm font-semibold text-[var(--neutral-900)]"
                   style={{ fontFamily: "var(--font-serif)" }}
                 >
                   Table of Contents

@@ -126,7 +126,7 @@ export function OverviewLedgerClient({
                   </p>
                 </div>
 
-                <ol className="flex flex-wrap items-center justify-center sm:justify-start gap-x-5 gap-y-2 list-none p-0 m-0 text-xs text-[var(--neutral-700)]">
+                <ol className="flex flex-wrap items-center justify-center sm:justify-start gap-x-5 gap-y-2 list-none p-0 text-xs text-[var(--neutral-700)]">
                   <li className="flex items-center gap-1.5">
                     <span className="font-semibold text-[var(--accent-600)] tabular-nums">01</span>
                     <span>Check sources ({freeSweepsRemaining} free)</span>
@@ -144,7 +144,7 @@ export function OverviewLedgerClient({
             </div>
           </div>
         ) : (
-          <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+          <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
             {recentProjects.map((project, index) => {
               const status = resolveProjectDisplayStatus(project);
               const inSetup = SETUP_PROJECT_STATUSES.has(project.status);
@@ -254,7 +254,7 @@ export function OverviewLedgerClient({
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
           {attentionItems.map((item) => (
             <li
               key={item.id}
@@ -278,12 +278,8 @@ export function OverviewLedgerClient({
                       {item.projectTitle}
                     </span>
                   </div>
-                  <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
-                    {item.title}
-                  </p>
-                  <p className="text-xs text-[var(--neutral-600)] leading-relaxed m-0">
-                    {item.detail}
-                  </p>
+                  <p className="text-sm font-semibold text-[var(--neutral-900)]">{item.title}</p>
+                  <p className="text-xs text-[var(--neutral-600)] leading-relaxed">{item.detail}</p>
                 </div>
 
                 <div className="pt-3 border-t border-[var(--neutral-100)] sm:border-t-0 sm:pt-0 shrink-0">

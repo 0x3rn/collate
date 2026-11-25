@@ -61,7 +61,7 @@ export function ProjectCard({ project }: { project: DashboardProjectSummary }) {
         </div>
 
         <div className="space-y-1">
-          <h2 className="text-lg sm:text-[1.1875rem] font-medium text-[var(--neutral-900)] leading-snug m-0">
+          <h2 className="text-lg sm:text-[1.1875rem] font-medium text-[var(--neutral-900)] leading-snug">
             <Link
               href={projectOverviewHref}
               className="hover:text-[var(--accent-600)] transition-colors"
@@ -70,7 +70,7 @@ export function ProjectCard({ project }: { project: DashboardProjectSummary }) {
             </Link>
           </h2>
           {project.field || project.institution ? (
-            <p className="text-xs text-[var(--neutral-500)] truncate m-0">
+            <p className="text-xs text-[var(--neutral-500)] truncate">
               {[project.field, project.institution].filter(Boolean).join(" · ")}
             </p>
           ) : null}

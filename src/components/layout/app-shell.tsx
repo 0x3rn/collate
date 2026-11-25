@@ -91,7 +91,7 @@ function SidebarContent({
         <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-400)]">
           {heading}
         </p>
-        <ul className="space-y-0.5 list-none p-0 m-0">
+        <ul className="space-y-0.5 list-none p-0">
           {items.map((item) => {
             const active = item.match(pathname);
             const Icon = item.icon;

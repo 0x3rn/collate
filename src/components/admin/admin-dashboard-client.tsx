@@ -351,14 +351,14 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
 
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
         <div className="space-y-1">
-          <h2 className="text-xl font-medium m-0">Global circuit breaker</h2>
-          <p className="text-sm text-[var(--neutral-600)] m-0">
+          <h2 className="text-xl font-medium">Global circuit breaker</h2>
+          <p className="text-sm text-[var(--neutral-600)]">
             Pausing blocks all new chapter drafts, revisions, assignments, and topic checks without
             charging credits, while letting any runs already in progress finish cleanly.
           </p>
         </div>
         {!initial.circuitBreaker.allowed && initial.circuitBreaker.reason ? (
-          <p className="text-xs font-medium text-[var(--error-text)] bg-[var(--error-bg)] border border-[var(--error-border)] rounded-[var(--radius-sm)] px-3.5 py-2.5 m-0">
+          <p className="text-xs font-medium text-[var(--error-text)] bg-[var(--error-bg)] border border-[var(--error-border)] rounded-[var(--radius-sm)] px-3.5 py-2.5">
             Active pause reason: {initial.circuitBreaker.reason}
           </p>
         ) : null}
@@ -391,8 +391,8 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
 
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
         <div className="space-y-1">
-          <h2 className="text-xl font-medium m-0">Credit users in batches</h2>
-          <p className="text-sm text-[var(--neutral-600)] m-0">
+          <h2 className="text-xl font-medium">Credit users in batches</h2>
+          <p className="text-sm text-[var(--neutral-600)]">
             Grant credits to all registered accounts (or a random subset) in automatic 50-user
             batches for outages or promotions. Every batch is idempotent and safe to resume at
             100,000+ users.
@@ -524,7 +524,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
               />
             </div>
             {batchProgress.errorMessage ? (
-              <p className="text-xs text-[var(--error-text)] m-0">{batchProgress.errorMessage}</p>
+              <p className="text-xs text-[var(--error-text)]">{batchProgress.errorMessage}</p>
             ) : null}
           </div>
         ) : null}
@@ -547,7 +547,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
           </>
         }
       >
-        <p className="text-sm text-[var(--neutral-700)] leading-relaxed m-0">
+        <p className="text-sm text-[var(--neutral-700)] leading-relaxed">
           You are about to grant{" "}
           <strong className="text-[var(--neutral-900)]">
             +{previewBatchCreditsNum.toLocaleString("en-US")} credits
@@ -564,18 +564,18 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
           </strong>
           ).
         </p>
-        <p className="text-xs text-[var(--neutral-600)] m-0">
+        <p className="text-xs text-[var(--neutral-600)]">
           Reason:{" "}
           <span className="font-medium text-[var(--neutral-800)]">{batchReason.trim()}</span>
         </p>
-        <p className="text-xs text-[var(--neutral-500)] m-0">
+        <p className="text-xs text-[var(--neutral-500)]">
           Credits are applied in automatic 50-user batches with per-user idempotency keys, so no
           account can ever be credited twice for the same campaign.
         </p>
       </ModalCard>
 
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
-        <h2 className="text-xl font-medium m-0">Manual credit refund / adjustment</h2>
+        <h2 className="text-xl font-medium">Manual credit refund / adjustment</h2>
         <form onSubmit={handleManualRefund} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -622,10 +622,8 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
       </section>
 
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-3">
-        <h2 className="text-xl font-medium m-0">
-          Recent drafting jobs ({initial.recentJobs.length})
-        </h2>
-        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0 text-xs tabular-nums">
+        <h2 className="text-xl font-medium">Recent drafting jobs ({initial.recentJobs.length})</h2>
+        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 text-xs tabular-nums">
           {initial.recentJobs.map((j) => (
             <li
               key={j.id}
@@ -651,10 +649,8 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
       </section>
 
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-3">
-        <h2 className="text-xl font-medium m-0">
-          Recent payments ({initial.recentPayments.length})
-        </h2>
-        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0 text-xs tabular-nums">
+        <h2 className="text-xl font-medium">Recent payments ({initial.recentPayments.length})</h2>
+        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 text-xs tabular-nums">
           {initial.recentPayments.map((p) => (
             <li key={p.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2">
               <span>

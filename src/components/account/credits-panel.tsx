@@ -206,7 +206,7 @@ export function CreditsPanel({
               <div className="col-span-2 text-right">Change</div>
               <div className="col-span-2 text-right">Balance</div>
             </div>
-            <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+            <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
               {recentLedger.map((item) => (
                 <li
                   key={item.id}

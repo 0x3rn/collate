@@ -28,8 +28,8 @@ export default async function ExportsPage() {
     <WorkspaceShell user={user}>
       <div className="space-y-6">
         <header className="space-y-1">
-          <h1 className="text-[1.875rem] sm:text-[2.125rem] font-medium m-0">Exports</h1>
-          <p className="text-sm sm:text-base text-[var(--neutral-600)] m-0">
+          <h1 className="text-[1.875rem] sm:text-[2.125rem] font-medium">Exports</h1>
+          <p className="text-sm sm:text-base text-[var(--neutral-600)]">
             Re-download finished PDF and Word (.docx) files generated across your projects.
           </p>
         </header>

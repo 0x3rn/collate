@@ -179,6 +179,9 @@ export async function handleCreateExport(
   const citationMap = await loadProjectCitationMap(deps.db, projectId, { excludeRejected: true });
   const exportChapters: ExportChapterContent[] = [];
   const allCombinedRawMarkdown: string[] = [];
+  // "chapterId:version" for every chapter in the file; identifies what was exported.
+  const sourceParts: string[] = [];
+  let singleChapterVersion: number | null = null;
 
   for (const ch of targetChapters) {
     const [latestVer] = await deps.db
@@ -194,6 +197,8 @@ export async function handleCreateExport(
 
     const rawMd = await obj.text();
     allCombinedRawMarkdown.push(rawMd);
+    sourceParts.push(`${ch.id}:${latestVer.version}`);
+    if (scope === "chapter") singleChapterVersion = latestVer.version;
     const formatted = renderDraftWithCitations({
       draftText: rawMd,
       registry: citationMap,
@@ -311,8 +316,25 @@ export async function handleCreateExport(
     );
   }
 
-  const exportId = `exp_${crypto.randomUUID()}`;
-  const r2Key = `exports/${projectId}/${exportId}.${format}`;
+  // Exporting the same chapter versions in the same scope and format again replaces the
+  // earlier export (same id and storage key, new file and date) instead of adding another.
+  const sourceKey = sourceParts.join("|");
+  const [existing] = await deps.db
+    .select({ id: exportsTable.id, r2Key: exportsTable.r2Key })
+    .from(exportsTable)
+    .where(
+      and(
+        eq(exportsTable.projectId, projectId),
+        eq(exportsTable.scope, scope),
+        eq(exportsTable.format, format),
+        eq(exportsTable.sourceKey, sourceKey)
+      )
+    )
+    .limit(1);
+
+  const newExportId = `exp_${crypto.randomUUID()}`;
+  const exportIdForStorage = existing?.id ?? newExportId;
+  const r2Key = existing?.r2Key ?? `exports/${projectId}/${newExportId}.${format}`;
   const sha256 = await sha256Hex(bytes);
 
   try {
@@ -329,7 +351,7 @@ export async function handleCreateExport(
     logEvent("error", "export.storage_failed", {
       projectId,
       data: {
-        exportId,
+        exportId: exportIdForStorage,
         scope,
         format,
         error: err instanceof Error ? err.message : String(err),
@@ -344,18 +366,41 @@ export async function handleCreateExport(
     );
   }
 
-  await deps.db.insert(exportsTable).values({
-    id: exportId,
-    projectId,
-    chapterId: scope === "chapter" ? (chapterId ?? null) : null,
-    scope,
-    format,
-    r2Key,
-    pageCount,
-    sizeBytes: bytes.byteLength,
-    sha256,
-    createdAt: now,
-  });
+  // Upsert so two simultaneous identical exports still end up as one row.
+  const [saved] = await deps.db
+    .insert(exportsTable)
+    .values({
+      id: exportIdForStorage,
+      projectId,
+      chapterId: scope === "chapter" ? (chapterId ?? null) : null,
+      scope,
+      format,
+      r2Key,
+      pageCount,
+      sizeBytes: bytes.byteLength,
+      sha256,
+      sourceKey,
+      chapterVersion: singleChapterVersion,
+      createdAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [
+        exportsTable.projectId,
+        exportsTable.scope,
+        exportsTable.format,
+        exportsTable.sourceKey,
+      ],
+      set: {
+        r2Key,
+        pageCount,
+        sizeBytes: bytes.byteLength,
+        sha256,
+        chapterVersion: singleChapterVersion,
+        createdAt: now,
+      },
+    })
+    .returning({ id: exportsTable.id });
+  const exportId = saved?.id ?? exportIdForStorage;
 
   const signed = await signExportDownloadParams({
     exportId,

@@ -162,7 +162,7 @@ export function SignInForm({
           </>
         }
       >
-        <p className="text-sm text-[var(--neutral-700)] leading-relaxed m-0">
+        <p className="text-sm text-[var(--neutral-700)] leading-relaxed">
           Your account for{" "}
           <strong className="font-semibold text-[var(--neutral-900)]">{unverifiedEmail}</strong> has
           not been verified yet. Open the verification link we sent to your inbox, or request a

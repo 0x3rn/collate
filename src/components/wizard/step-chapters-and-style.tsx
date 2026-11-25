@@ -183,8 +183,8 @@ export function StepChaptersForm({
 
         <div className="p-3.5 rounded-[var(--radius-sm)] border border-dashed border-[var(--neutral-300)] bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <p className="text-sm font-medium text-[var(--neutral-900)] m-0">References</p>
-            <p className="text-xs text-[var(--neutral-600)] m-0">
+            <p className="text-sm font-medium text-[var(--neutral-900)]">References</p>
+            <p className="text-xs text-[var(--neutral-600)]">
               Added automatically and formatted from verified source metadata by the citation
               engine.
             </p>
@@ -286,7 +286,7 @@ export function StepCitationsForm({
                   : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-400)]"
               }`}
             >
-              <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">{opt.label}</p>
+              <p className="text-sm font-semibold text-[var(--neutral-900)]">{opt.label}</p>
               <p className="text-xs text-[var(--neutral-600)] mt-1">{opt.example}</p>
             </button>
           );
@@ -306,10 +306,10 @@ export function StepCitationsForm({
             className="mt-1 accent-[var(--accent-600)]"
           />
           <div>
-            <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+            <p className="text-sm font-medium text-[var(--neutral-900)]">
               Inline citations and reference list (recommended)
             </p>
-            <p className="text-xs text-[var(--neutral-600)] m-0">
+            <p className="text-xs text-[var(--neutral-600)]">
               Includes in-text citations on every supported claim plus the matching reference list.
             </p>
           </div>
@@ -324,8 +324,8 @@ export function StepCitationsForm({
             className="mt-1 accent-[var(--accent-600)]"
           />
           <div>
-            <p className="text-sm font-medium text-[var(--neutral-900)] m-0">Reference list only</p>
-            <p className="text-xs text-[var(--neutral-600)] m-0">
+            <p className="text-sm font-medium text-[var(--neutral-900)]">Reference list only</p>
+            <p className="text-xs text-[var(--neutral-600)]">
               Claims are still verified against sources internally, with citations listed at the
               end.
             </p>

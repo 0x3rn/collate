@@ -162,7 +162,7 @@ export function ExportsLibraryClient({ exportsList }: { exportsList: UserExportI
             <div className="col-span-2 text-right">Download</div>
           </div>
 
-          <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+          <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
             {filtered.map((item) => (
               <li
                 key={item.id}
@@ -179,6 +179,7 @@ export function ExportsLibraryClient({ exportsList }: { exportsList: UserExportI
                     {formatProjectType(item.projectType)} ·{" "}
                     {formatExportScope(item.scope, item.chapterNumber)}
                     {item.chapterTitle ? ` (${item.chapterTitle})` : ""}
+                    {item.chapterVersion ? ` · Version ${item.chapterVersion}` : ""}
                   </p>
                 </div>
 

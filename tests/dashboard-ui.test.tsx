@@ -83,6 +83,7 @@ const SAMPLE_EXPORT: UserExportItem = {
   chapterId: null,
   chapterNumber: null,
   chapterTitle: null,
+  chapterVersion: null,
   scope: "full",
   format: "pdf",
   pageCount: 82,
@@ -187,6 +188,26 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(exportsHtml).toContain(
       'href="/api/projects/prj_001/exports/exp_001/download?exp=9999999999&amp;sig=test"'
     );
+    // Full manuscripts span many chapters, so only single-chapter exports show a version
+    expect(exportsHtml).not.toContain("Version");
+
+    const chapterExportHtml = renderToStaticMarkup(
+      <ExportsLibraryClient
+        exportsList={[
+          {
+            ...SAMPLE_EXPORT,
+            id: "exp_002",
+            scope: "chapter",
+            format: "docx",
+            chapterId: "ch_1",
+            chapterNumber: 1,
+            chapterTitle: "Introduction",
+            chapterVersion: 3,
+          },
+        ]}
+      />
+    );
+    expect(chapterExportHtml).toContain("Chapter 1 (Introduction) · Version 3");
   });
 
   it("renders plain-language billing and account panels without developer jargon", () => {

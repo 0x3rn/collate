@@ -104,7 +104,7 @@ export function DeliverablesBento() {
             }`}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
                 Live citation formatter
               </p>
               <span className="text-xs font-medium text-[var(--success-text)]">
@@ -134,10 +134,10 @@ export function DeliverablesBento() {
 
             <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-5 space-y-4">
               <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
                   In-text sentence
                 </p>
-                <p className="text-sm text-[var(--neutral-900)] leading-relaxed m-0">
+                <p className="text-sm text-[var(--neutral-900)] leading-relaxed">
                   Off-grid battery storage lowered vaccine spoilage rates by more than half across
                   monitored clinics{" "}
                   <strong className="text-[var(--accent-600)]">{specimen.inText}</strong>.
@@ -145,16 +145,16 @@ export function DeliverablesBento() {
               </div>
 
               <div className="border-t border-[var(--neutral-200)] pt-4 space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
                   Generated reference list entry
                 </p>
-                <p className="text-xs text-[var(--neutral-800)] leading-relaxed pl-4 -indent-4 m-0">
+                <p className="text-xs text-[var(--neutral-800)] leading-relaxed pl-4 -indent-4">
                   {specimen.reference}
                 </p>
               </div>
             </div>
 
-            <p className="text-xs text-[var(--neutral-600)] m-0">
+            <p className="text-xs text-[var(--neutral-600)]">
               Choose in-text citations with a reference list, or a reference list only. Uncited
               sources are never included in the final bibliography.
             </p>
@@ -169,7 +169,7 @@ export function DeliverablesBento() {
                 : "opacity-0 invisible pointer-events-none select-none"
             }`}
           >
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
               Sentence-to-source verification trace
             </p>
 
@@ -183,17 +183,17 @@ export function DeliverablesBento() {
                     Supported
                   </span>
                 </div>
-                <p className="text-sm text-[var(--neutral-900)] m-0">
+                <p className="text-sm text-[var(--neutral-900)]">
                   Solar microgrids increased vaccine refrigerator uptime from 61% to 97% across 18
                   monitored rural clinics.
                 </p>
               </div>
 
               <div className="border-l-2 border-[var(--accent-600)] pl-4 space-y-1 bg-[var(--neutral-50)] py-2.5 pr-3 rounded-r-[var(--radius-sm)]">
-                <p className="text-[11px] font-semibold text-[var(--accent-600)] m-0">
+                <p className="text-[11px] font-semibold text-[var(--accent-600)]">
                   Matched source passage · Okonkwo &amp; Mensah (2024), Section 3
                 </p>
-                <p className="text-xs text-[var(--neutral-700)] m-0">
+                <p className="text-xs text-[var(--neutral-700)]">
                   &ldquo;Across the 18 primary clinics monitored for 12 months, mean cold-chain
                   uptime rose from 61% under diesel generators to 97% following solar
                   installation.&rdquo;
@@ -220,7 +220,7 @@ export function DeliverablesBento() {
                 : "opacity-0 invisible pointer-events-none select-none"
             }`}
           >
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
               Real tables calculated from your data
             </p>
 
@@ -264,7 +264,7 @@ export function DeliverablesBento() {
                 </table>
               </div>
 
-              <p className="text-xs text-[var(--neutral-600)] m-0">
+              <p className="text-xs text-[var(--neutral-600)]">
                 No spreadsheet ready? Collate can cite public datasets or output a clearly labelled{" "}
                 <span className="font-mono text-[11px] bg-[var(--neutral-100)] px-1 py-0.5 rounded">
                   [ADD: value]
@@ -283,18 +283,18 @@ export function DeliverablesBento() {
                 : "opacity-0 invisible pointer-events-none select-none"
             }`}
           >
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
               Publication layout preview
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-4 flex flex-col justify-between min-h-[190px] text-xs">
                 <div className="text-center space-y-2 pt-2">
-                  <p className="text-[10px] uppercase tracking-wider text-[var(--neutral-500)] m-0">
+                  <p className="text-[10px] uppercase tracking-wider text-[var(--neutral-500)]">
                     Front matter
                   </p>
                   <p
-                    className="text-sm font-semibold text-[var(--neutral-900)] m-0"
+                    className="text-sm font-semibold text-[var(--neutral-900)]"
                     style={{ fontFamily: "var(--font-serif)" }}
                   >
                     Table of Contents
@@ -314,28 +314,28 @@ export function DeliverablesBento() {
                     </div>
                   </div>
                 </div>
-                <p className="text-center text-[10px] text-[var(--neutral-500)] m-0 tabular-nums">
+                <p className="text-center text-[10px] text-[var(--neutral-500)] tabular-nums">
                   Roman numerals (i, ii, iii)
                 </p>
               </div>
 
               <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-4 flex flex-col justify-between min-h-[190px] text-xs">
                 <div className="space-y-2">
-                  <p className="text-[10px] uppercase tracking-wider text-[var(--neutral-500)] m-0">
+                  <p className="text-[10px] uppercase tracking-wider text-[var(--neutral-500)]">
                     Body &amp; References
                   </p>
                   <p
-                    className="text-sm font-semibold text-[var(--neutral-900)] m-0"
+                    className="text-sm font-semibold text-[var(--neutral-900)]"
                     style={{ fontFamily: "var(--font-serif)" }}
                   >
                     Chapter 1: Introduction
                   </p>
-                  <p className="text-[11px] text-[var(--neutral-600)] leading-relaxed m-0">
+                  <p className="text-[11px] text-[var(--neutral-600)] leading-relaxed">
                     Formatted in your exact font, size, line spacing, and margins, available as both
                     print-ready PDF and editable Word (.docx).
                   </p>
                 </div>
-                <p className="text-center text-[10px] text-[var(--neutral-500)] m-0 tabular-nums">
+                <p className="text-center text-[10px] text-[var(--neutral-500)] tabular-nums">
                   Arabic numerals (1, 2, 3…)
                 </p>
               </div>
@@ -351,39 +351,33 @@ export function DeliverablesBento() {
                 : "opacity-0 invisible pointer-events-none select-none"
             }`}
           >
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] m-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
               Integrity report &amp; cross-chapter memory
             </p>
 
             <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-5 space-y-4">
               <div className="grid grid-cols-3 gap-3 text-xs tabular-nums">
                 <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                  <p className="text-[var(--neutral-600)] m-0">Source overlap</p>
-                  <p className="text-base font-semibold text-[var(--success-text)] m-0">2.8%</p>
+                  <p className="text-[var(--neutral-600)]">Source overlap</p>
+                  <p className="text-base font-semibold text-[var(--success-text)]">2.8%</p>
                 </div>
                 <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                  <p className="text-[var(--neutral-600)] m-0">Direct quotes</p>
-                  <p className="text-base font-semibold text-[var(--neutral-900)] m-0">0.4%</p>
+                  <p className="text-[var(--neutral-600)]">Direct quotes</p>
+                  <p className="text-base font-semibold text-[var(--neutral-900)]">0.4%</p>
                 </div>
                 <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                  <p className="text-[var(--neutral-600)] m-0">Uniqueness</p>
-                  <p className="text-base font-semibold text-[var(--success-text)] m-0">Passed</p>
+                  <p className="text-[var(--neutral-600)]">Uniqueness</p>
+                  <p className="text-base font-semibold text-[var(--success-text)]">Passed</p>
                 </div>
               </div>
 
               <div className="space-y-1.5 text-xs text-[var(--neutral-700)] border-t border-[var(--neutral-200)] pt-3">
-                <p className="font-semibold text-[var(--neutral-900)] m-0">
+                <p className="font-semibold text-[var(--neutral-900)]">
                   Included with every project:
                 </p>
-                <p className="m-0">
-                  • Downloadable writing-process log showing sources, drafts, and edits
-                </p>
-                <p className="m-0">
-                  • Editable AI-use disclosure statement tailored to your institution
-                </p>
-                <p className="m-0">
-                  • Shared chapter memory carrying terms and edits into later chapters
-                </p>
+                <p>• Downloadable writing-process log showing sources, drafts, and edits</p>
+                <p>• Editable AI-use disclosure statement tailored to your institution</p>
+                <p>• Shared chapter memory carrying terms and edits into later chapters</p>
               </div>
             </div>
           </div>

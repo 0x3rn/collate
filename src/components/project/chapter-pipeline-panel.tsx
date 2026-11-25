@@ -550,7 +550,7 @@ export function ChapterPipelinePanel({
           </p>
         </div>
 
-        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
           {chapters.map((ch) => {
             const badge = CHAPTER_STATUS_BADGE[ch.status];
             const gate = canStartChapter(chapters, ch.number);
@@ -588,7 +588,7 @@ export function ChapterPipelinePanel({
                     <div className="flex flex-col gap-1.5 min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2.5">
                         <h3
-                          className="text-base font-semibold text-[var(--neutral-900)] leading-snug m-0"
+                          className="text-base font-semibold text-[var(--neutral-900)] leading-snug"
                           style={{ fontFamily: "var(--font-sans)" }}
                         >
                           {ch.isAutoReferences ? ch.title : `Chapter ${ch.number}: ${ch.title}`}
@@ -607,14 +607,14 @@ export function ChapterPipelinePanel({
                         )}
                       </div>
 
-                      <p className="text-xs text-[var(--neutral-600)] tabular-nums leading-relaxed m-0">
+                      <p className="text-xs text-[var(--neutral-600)] tabular-nums leading-relaxed">
                         {ch.isAutoReferences
                           ? "Built automatically from the verified sources cited across your chapters."
                           : `Target: ~${(ch.pageBudget ?? 0).toLocaleString("en-US")} pages (~${(ch.wordBudget ?? 0).toLocaleString("en-US")} words)`}
                       </p>
 
                       {ch.sectionHeadings.length > 0 ? (
-                        <p className="text-xs text-[var(--neutral-500)] leading-relaxed m-0">
+                        <p className="text-xs text-[var(--neutral-500)] leading-relaxed">
                           Sections: {ch.sectionHeadings.join(" · ")}
                         </p>
                       ) : null}
@@ -623,7 +623,7 @@ export function ChapterPipelinePanel({
                       ch.status === "not_started" &&
                       !ch.hasDraftVersion &&
                       (ch.userInstructions || ch.userAttachmentName || ch.hasUserDataTables) ? (
-                        <p className="inline-flex flex-wrap items-center gap-1.5 text-xs font-medium text-[var(--accent-600)] pt-0.5 m-0">
+                        <p className="inline-flex flex-wrap items-center gap-1.5 text-xs font-medium text-[var(--accent-600)] pt-0.5">
                           <span
                             aria-hidden="true"
                             className="w-1.5 h-1.5 rounded-full bg-[var(--accent-600)] shrink-0"
@@ -639,7 +639,7 @@ export function ChapterPipelinePanel({
                       ) : null}
 
                       {ch.originalityReport ? (
-                        <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] pt-0.5 m-0">
+                        <p className="text-xs font-medium tabular-nums text-[var(--neutral-700)] pt-0.5">
                           Similarity report:{" "}
                           <span
                             className={
@@ -657,7 +657,7 @@ export function ChapterPipelinePanel({
                       ) : null}
 
                       {ch.status === "queued" || ch.status === "writing" ? (
-                        <p className="inline-flex items-center gap-2 text-xs font-medium text-[var(--info-text)] pt-0.5 m-0">
+                        <p className="inline-flex items-center gap-2 text-xs font-medium text-[var(--info-text)] pt-0.5">
                           <span
                             aria-hidden="true"
                             className="w-1.5 h-1.5 rounded-full bg-[var(--accent-600)] animate-pulse"
@@ -672,8 +672,8 @@ export function ChapterPipelinePanel({
 
                       {ch.status === "needs_attention" && ch.attention ? (
                         <div className="mt-2 rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3.5 py-2.5 text-xs text-[var(--warning-text)] leading-relaxed max-w-[64ch]">
-                          <p className="font-semibold m-0">{ch.attention.title}</p>
-                          <p className="mt-0.5 m-0">{ch.attention.userMessage}</p>
+                          <p className="font-semibold">{ch.attention.title}</p>
+                          <p className="mt-0.5">{ch.attention.userMessage}</p>
                         </div>
                       ) : null}
                     </div>
@@ -852,7 +852,7 @@ export function ChapterPipelinePanel({
                             >
                               What should be revised in Chapter {ch.number}?
                             </label>
-                            <p className="text-xs text-[var(--neutral-500)] m-0">
+                            <p className="text-xs text-[var(--neutral-500)]">
                               Requesting changes deducts credits when the revision finishes
                               (refunded automatically if it fails).{" "}
                               {hasMultipleSections
@@ -900,7 +900,7 @@ export function ChapterPipelinePanel({
                             className="block w-full px-3 py-2 text-sm bg-white border border-[var(--neutral-300)] rounded-[var(--radius-sm)]"
                           />
                           <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                            <p className="text-xs text-[var(--neutral-600)] tabular-nums m-0">
+                            <p className="text-xs text-[var(--neutral-600)] tabular-nums">
                               Estimated deduction:{" "}
                               <span className="font-semibold text-[var(--neutral-900)]">
                                 {selectedCredits} {creditWord(selectedCredits)}
@@ -1007,10 +1007,10 @@ export function ChapterPipelinePanel({
             <div className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] p-3.5 space-y-2.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-0.5 min-w-0">
-                  <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                  <p className="text-sm font-medium text-[var(--neutral-900)]">
                     Upload CSV or Markdown (optional)
                   </p>
-                  <p className="text-xs text-[var(--neutral-600)] m-0">
+                  <p className="text-xs text-[var(--neutral-600)]">
                     Attach a .csv dataset for automatic statistical tables, or load a .md / .txt
                     file directly into the box below.
                   </p>
@@ -1131,10 +1131,10 @@ export function ChapterPipelinePanel({
               <div className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] p-4 space-y-2.5">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-0.5">
-                    <p className="text-sm font-medium text-[var(--neutral-900)] m-0">
+                    <p className="text-sm font-medium text-[var(--neutral-900)]">
                       Upload CSV data (optional)
                     </p>
-                    <p className="text-xs text-[var(--neutral-600)] m-0">
+                    <p className="text-xs text-[var(--neutral-600)]">
                       Attach survey or lab measurements to include real calculated tables.
                     </p>
                   </div>
@@ -1150,7 +1150,7 @@ export function ChapterPipelinePanel({
                   </label>
                 </div>
                 {datasets.length > 0 ? (
-                  <p className="text-xs text-[var(--neutral-700)] tabular-nums m-0 pt-2 border-t border-[var(--neutral-200)]">
+                  <p className="text-xs text-[var(--neutral-700)] tabular-nums pt-2 border-t border-[var(--neutral-200)]">
                     Attached:{" "}
                     {datasets
                       .map((d) => `${d.filename} (${d.rowCount.toLocaleString("en-US")} rows)`)
@@ -1177,7 +1177,7 @@ export function ChapterPipelinePanel({
                 placeholder="e.g. Emphasize the physiological mechanism in Wistar rats and compare against Nigerian regional studies."
                 className="block w-full px-3.5 py-2.5 text-sm bg-white text-[var(--neutral-900)] border border-[var(--neutral-300)] rounded-[var(--radius-sm)] leading-relaxed"
               />
-              <p className="text-xs text-[var(--neutral-500)] m-0">
+              <p className="text-xs text-[var(--neutral-500)]">
                 Your notes will guide the resumed draft while staying grounded in your verified
                 sources.
               </p>

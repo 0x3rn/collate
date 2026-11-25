@@ -24,8 +24,8 @@ export default async function ProjectsPage() {
       <div className="space-y-6">
         <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div className="space-y-1">
-            <h1 className="text-[1.875rem] sm:text-[2.125rem] font-medium m-0">Projects</h1>
-            <p className="text-sm sm:text-base text-[var(--neutral-600)] m-0">
+            <h1 className="text-[1.875rem] sm:text-[2.125rem] font-medium">Projects</h1>
+            <p className="text-sm sm:text-base text-[var(--neutral-600)]">
               View your active drafts, finished manuscripts, and past work in one place.
             </p>
           </div>

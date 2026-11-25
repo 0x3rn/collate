@@ -240,20 +240,20 @@ export function StepResearchSweep({
         {activeRun ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[var(--neutral-200)]">
             <div className="p-3 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)]">
-              <p className="text-xs text-[var(--neutral-600)] m-0">Sources found</p>
-              <p className="text-xl font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+              <p className="text-xs text-[var(--neutral-600)]">Sources found</p>
+              <p className="text-xl font-semibold text-[var(--neutral-900)] tabular-nums">
                 {activeRun.sourcesFound}
               </p>
             </div>
             <div className="p-3 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)]">
-              <p className="text-xs text-[var(--neutral-600)] m-0">Sources fetched</p>
-              <p className="text-xl font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+              <p className="text-xs text-[var(--neutral-600)]">Sources fetched</p>
+              <p className="text-xl font-semibold text-[var(--neutral-900)] tabular-nums">
                 {activeRun.sourcesFetched}
               </p>
             </div>
             <div className="p-3 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)]">
-              <p className="text-xs text-[var(--neutral-600)] m-0">Subtopics covered</p>
-              <p className="text-xl font-semibold text-[var(--neutral-900)] tabular-nums m-0">
+              <p className="text-xs text-[var(--neutral-600)]">Subtopics covered</p>
+              <p className="text-xl font-semibold text-[var(--neutral-900)] tabular-nums">
                 {activeRun.subtopicsCovered}
                 {activeRun.totalSubtopics > 0 ? ` / ${activeRun.totalSubtopics}` : ""}
               </p>
@@ -275,8 +275,8 @@ export function StepResearchSweep({
           {primaryDataNotice ? <FormAlert tone="warning">{primaryDataNotice}</FormAlert> : null}
 
           <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-3">
-            <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">Evidence summary</p>
-            <ul className="list-disc pl-5 space-y-1.5 text-sm text-[var(--neutral-700)] m-0">
+            <p className="text-sm font-semibold text-[var(--neutral-900)]">Evidence summary</p>
+            <ul className="list-disc pl-5 space-y-1.5 text-sm text-[var(--neutral-700)]">
               {primaryReport.reasons.map((reason, idx) => (
                 <li key={idx}>{reason}</li>
               ))}
@@ -285,10 +285,8 @@ export function StepResearchSweep({
 
           {subtopicBreakdown.length > 0 ? (
             <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-3">
-              <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
-                Subtopic coverage
-              </p>
-              <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 m-0">
+              <p className="text-sm font-semibold text-[var(--neutral-900)]">Subtopic coverage</p>
+              <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
                 {subtopicBreakdown.map((item) => (
                   <li
                     key={item.subtopic}
@@ -312,10 +310,10 @@ export function StepResearchSweep({
 
           {suggestedRefinements.length > 0 ? (
             <div className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-2">
-              <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
+              <p className="text-sm font-semibold text-[var(--neutral-900)]">
                 Suggested topic refinements
               </p>
-              <ul className="list-disc pl-5 space-y-1.5 text-sm text-[var(--neutral-700)] m-0">
+              <ul className="list-disc pl-5 space-y-1.5 text-sm text-[var(--neutral-700)]">
                 {suggestedRefinements.map((s, idx) => (
                   <li key={idx}>{s}</li>
                 ))}
@@ -328,7 +326,7 @@ export function StepResearchSweep({
               <p className="text-sm font-semibold text-[var(--neutral-900)]">
                 Per-question verdicts ({wizard.questions.length})
               </p>
-              <ul className="space-y-2 list-none p-0 m-0">
+              <ul className="space-y-2 list-none p-0">
                 {wizard.questions.map((q) => {
                   const rep = reports.find((r) => r.questionId === q.id) ?? primaryReport;
                   return (
@@ -354,14 +352,14 @@ export function StepResearchSweep({
 
       {liveSummary && liveSummary.topSources.length > 0 ? (
         <div className="space-y-3">
-          <p className="text-sm font-semibold text-[var(--neutral-900)] m-0">
+          <p className="text-sm font-semibold text-[var(--neutral-900)]">
             Top retrieved sources ({liveSummary.topSources.length} shown)
           </p>
-          <ul className="divide-y divide-[var(--neutral-200)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] bg-white list-none p-0 m-0">
+          <ul className="divide-y divide-[var(--neutral-200)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] bg-white list-none p-0">
             {liveSummary.topSources.slice(0, 8).map((src) => (
               <li key={src.id} className="p-4 space-y-1">
-                <p className="text-sm font-medium text-[var(--neutral-900)] m-0">{src.title}</p>
-                <p className="text-xs text-[var(--neutral-600)] tabular-nums m-0">
+                <p className="text-sm font-medium text-[var(--neutral-900)]">{src.title}</p>
+                <p className="text-xs text-[var(--neutral-600)] tabular-nums">
                   {src.venue ? `${src.venue} · ` : ""}
                   {src.year ?? "n.d."} · Credibility {Math.round(src.credibilityScore)}/100 ·
                   Relevance {Math.round(src.relevanceScore)}/100
@@ -422,7 +420,7 @@ export function StepResearchSweep({
             Continue to page length
           </Button>
         ) : (
-          <p className="text-sm text-[var(--neutral-600)] m-0">
+          <p className="text-sm text-[var(--neutral-600)]">
             Run a source sweep and pass the feasibility gate to continue.
           </p>
         )}
@@ -473,14 +471,14 @@ export function StepLengthForm({
       </div>
 
       <div className="p-5 rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--accent-100)] space-y-2">
-        <p className="text-xs font-semibold text-[var(--accent-600)] m-0">Ideal recommendation</p>
+        <p className="text-xs font-semibold text-[var(--accent-600)]">Ideal recommendation</p>
         <p
-          className="text-3xl font-medium text-[var(--neutral-900)] tabular-nums m-0"
+          className="text-3xl font-medium text-[var(--neutral-900)] tabular-nums"
           style={{ fontFamily: "var(--font-serif)" }}
         >
           {recommended} pages
         </p>
-        <p className="text-sm text-[var(--neutral-700)] m-0">{reason}</p>
+        <p className="text-sm text-[var(--neutral-700)]">{reason}</p>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-end gap-3">

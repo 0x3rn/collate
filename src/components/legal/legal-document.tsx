@@ -229,7 +229,7 @@ export function LegalDocumentView({
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
               On this page
             </p>
-            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 list-none p-0 m-0 text-sm">
+            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 list-none p-0 text-sm">
               {document.sections.map((section) => (
                 <li key={section.id}>
                   <a
@@ -250,7 +250,7 @@ export function LegalDocumentView({
                 On this page
               </p>
               <nav aria-label="Table of contents">
-                <ol className="space-y-1 list-none p-0 m-0 text-xs">
+                <ol className="space-y-1 list-none p-0 text-xs">
                   {document.sections.map((section) => (
                     <li key={section.id}>
                       <a

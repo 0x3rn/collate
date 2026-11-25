@@ -762,10 +762,25 @@ export const exportsTable = sqliteTable(
     pageCount: integer("page_count").notNull().default(0),
     sizeBytes: integer("size_bytes").notNull().default(0),
     sha256: text("sha256").notNull(),
+    /**
+     * Which chapter versions the file was made from, as "chapterId:version" pairs joined by "|".
+     * Re-exporting the same versions in the same scope and format replaces the earlier export
+     * instead of adding another one. Null on exports made before versions were recorded.
+     */
+    sourceKey: text("source_key"),
+    /** Chapter version number for single-chapter exports (shown on /exports). */
+    chapterVersion: integer("chapter_version"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [
     index("exports_project_idx").on(table.projectId, table.createdAt),
+    // NULL source keys never collide in SQLite, so older exports are unaffected.
+    uniqueIndex("exports_project_source_unique").on(
+      table.projectId,
+      table.scope,
+      table.format,
+      table.sourceKey
+    ),
     check("exports_counts_non_negative", sql`${table.pageCount} >= 0 AND ${table.sizeBytes} >= 0`),
   ]
 );

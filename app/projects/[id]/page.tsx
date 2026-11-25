@@ -193,16 +193,16 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         >
           <div className="p-5 sm:p-6 space-y-3">
             <h2 className="text-base font-semibold text-[var(--neutral-900)]">Citations</h2>
-            <dl className="space-y-2 text-sm m-0">
+            <dl className="space-y-2 text-sm">
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-[var(--neutral-500)]">Style</dt>
-                <dd className="font-medium text-[var(--neutral-900)] m-0">
+                <dd className="font-medium text-[var(--neutral-900)]">
                   {formatCitationStyle(settings.citationStyle)}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-[var(--neutral-500)]">Format</dt>
-                <dd className="text-[var(--neutral-800)] text-right m-0">
+                <dd className="text-[var(--neutral-800)] text-right">
                   {settings.inlineMode === "inline_and_list"
                     ? "In-text citations + reference list"
                     : "Reference list only"}
@@ -213,17 +213,17 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
           <div className="p-5 sm:p-6 space-y-3">
             <h2 className="text-base font-semibold text-[var(--neutral-900)]">Formatting</h2>
-            <dl className="space-y-2 text-sm m-0">
+            <dl className="space-y-2 text-sm">
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-[var(--neutral-500)]">Typography</dt>
-                <dd className="text-[var(--neutral-900)] text-right tabular-nums m-0">
+                <dd className="text-[var(--neutral-900)] text-right tabular-nums">
                   {settings.font}, {settings.fontSizePt}pt, {settings.lineSpacing.replace("_", " ")}{" "}
                   spacing
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-[var(--neutral-500)]">Layout</dt>
-                <dd className="text-[var(--neutral-800)] text-right tabular-nums m-0">
+                <dd className="text-[var(--neutral-800)] text-right tabular-nums">
                   {settings.pageSize === "letter" ? "US Letter" : "A4"} · {settings.marginsMm}mm
                   margins · {settings.spelling.toUpperCase()} English ·{" "}
                   {settings.pageNumbering ? "Page numbers included" : "No page numbers"}

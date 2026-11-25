@@ -20,7 +20,7 @@ export default function AppError({ error, reset }: ErrorBoundaryProps) {
         role="alert"
         className="w-full max-w-[480px] bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-8 space-y-4"
       >
-        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-700)] m-0">
+        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--neutral-700)]">
           <CollateLogo className="w-4 h-4 text-[var(--accent-600)] shrink-0" />
           <span style={{ fontFamily: "var(--font-serif)" }}>Collate</span>
         </p>
