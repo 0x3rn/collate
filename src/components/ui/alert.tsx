@@ -20,17 +20,21 @@ export function FormAlert({
   tone,
   children,
   className = "",
+  label,
 }: {
   tone: AlertTone;
   children: ReactNode;
   className?: string;
+  /** Overrides the tone's prefix ("Confirmed:", "Notice:"…); null hides it. */
+  label?: string | null;
 }) {
+  const prefix = label === undefined ? TONE_LABELS[tone] : label;
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
       className={`border rounded-[var(--radius-sm)] px-4 py-3 text-sm leading-relaxed ${TONE_STYLES[tone]} ${className}`}
     >
-      <span className="font-semibold mr-1.5">{TONE_LABELS[tone]}: </span>
+      {prefix ? <span className="font-semibold mr-1.5">{prefix}: </span> : null}
       {children}
     </div>
   );

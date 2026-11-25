@@ -34,7 +34,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Collate is an academic research, scholarly source verification, citation formatting, and manuscript drafting workspace designed to support legitimate scholarship, literature synthesis, feasibility screening, structure planning, and responsible manuscript preparation. By creating an account, purchasing credits, uploading data, or generating or exporting content through Collate, you agree to use the Platform lawfully, ethically, and transparently. A violation of this AUP constitutes a material breach of Collate's Terms of Service."
+              "Collate is an academic research, source verification, citation formatting, and manuscript drafting workspace designed to support legitimate scholarship, literature synthesis, feasibility screening, structure planning, and responsible manuscript preparation. By creating an account, purchasing credits, uploading data, or generating or exporting content through Collate, you agree to use the Platform lawfully, ethically, and transparently. A violation of this AUP constitutes a material breach of Collate's Terms of Service."
             ),
           ],
         },
@@ -99,7 +99,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
             [
               b("Citation and Attribution Forgery: "),
               t(
-                "Fabricating, falsifying, or misrepresenting bibliographic references, DOIs, ISBNs, URLs, publication venues, peer-review status, or author attributions, or knowingly presenting unverified or retracted claims as verified scholarly literature."
+                "Fabricating, falsifying, or misrepresenting bibliographic references, DOIs, ISBNs, URLs, publication venues, peer-review status, or author attributions, or knowingly presenting unverified or retracted claims as verified academic literature."
               ),
             ],
             [
@@ -132,7 +132,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
             [
               b("Child Sexual Abuse Material and Exploitation of Minors: "),
               t(
-                "Absolute zero tolerance for Child Sexual Abuse Material (CSAM), child sexual exploitation and abuse (CSAE), grooming, or any sexualized, abusive, or exploitative content involving minors (real, fictional, or synthetic). No scholarly or analytical framing permits any exception."
+                "Absolute zero tolerance for Child Sexual Abuse Material (CSAM), child sexual exploitation and abuse (CSAE), grooming, or any sexualized, abusive, or exploitative content involving minors (real, fictional, or synthetic). No academic or analytical framing permits any exception."
               ),
             ],
             [
@@ -313,7 +313,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "To protect users, scholarly reliability, and platform integrity, Collate operates automated technical and billing controls across the Service:"
+              "To protect users, academic reliability, and platform integrity, Collate operates automated technical and billing controls across the Service:"
             ),
           ],
         },
@@ -329,7 +329,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
             [
               b("Verification and Originality Safeguards: "),
               t(
-                "Automated DOI and bibliographic checks against scholarly registries, grounding rules prohibiting fabricated empirical data, and privacy-preserving internal originality checks comparing irreversible one-way shingle hashes without exposing raw prose to other users."
+                "Automated DOI and bibliographic checks against bibliographic registries, grounding rules prohibiting fabricated empirical data, and privacy-preserving internal originality checks comparing irreversible one-way shingle hashes without exposing raw prose to other users."
               ),
             ],
             [
@@ -451,7 +451,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Collate may update this Acceptable Use Policy from time to time to reflect changes in applicable law, Polar.sh and Paystack compliance standards, scholarly integrity norms, or platform capabilities. Material revisions will be reflected in the Last Updated date and communicated via email or in-app notice where appropriate. Where any provision of this AUP conflicts with another Collate policy regarding prohibited content, security, or payment compliance, the more protective restriction governs."
+              "Collate may update this Acceptable Use Policy from time to time to reflect changes in applicable law, Polar.sh and Paystack compliance standards, academic integrity norms, or platform capabilities. Material revisions will be reflected in the Last Updated date and communicated via email or in-app notice where appropriate. Where any provision of this AUP conflicts with another Collate policy regarding prohibited content, security, or payment compliance, the more protective restriction governs."
             ),
           ],
         },

@@ -123,7 +123,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
               ),
             ],
             [
-              b("Scholarly Metadata and Verification Records: "),
+              b("Source Metadata and Verification Records: "),
               t(
                 "Retrieved bibliographic metadata (titles, authors, DOIs, venues, publication years, abstracts, and open-access URLs), extracted source passages, claim-to-source verification verdicts, and openly licensed academic figures selected for your project."
               ),
@@ -335,8 +335,8 @@ export const PRIVACY_POLICY: LegalDocumentData = {
               "Recipient email address, display name, and transactional email body",
             ],
             [
-              "Scholarly & Open-Media APIs (OpenAlex, Crossref, Semantic Scholar, CORE, arXiv, Europe PMC / PubMed, DOAJ, Unpaywall, Wikimedia Commons)",
-              "Scholarly literature discovery, DOI and citation verification, open-access lookup, and openly licensed academic figure search",
+              "Research index and open-media providers (academic metadata and DOI registries, open-access repositories, and openly licensed image libraries)",
+              "Literature discovery, DOI and citation verification, open-access lookup, and openly licensed academic figure search",
               "Topic and keyword search queries or DOIs only; zero personal account data, user names, emails, or private drafts are transmitted",
             ],
             [
@@ -350,7 +350,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Where supplementary web search connectors (such as Tavily or Brave Search) are active for institutional reports or public statistics, only derived search query strings are transmitted, never your personal account identifiers or uploaded files."
+              "Where supplementary web search providers are used for institutional reports or public statistics, only derived search query strings are transmitted, never your personal account identifiers or uploaded files."
             ),
           ],
         },
@@ -432,7 +432,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Active Accounts: "),
               t(
-                "Your profile, projects, scholarly sources, uploaded CSV datasets, chapter versions, originality reports, and exported files are retained while your account remains active or until you delete individual projects or your entire account."
+                "Your profile, projects, research sources, uploaded CSV datasets, chapter versions, originality reports, and exported files are retained while your account remains active or until you delete individual projects or your entire account."
               ),
             ],
             [
@@ -620,7 +620,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Collate uses automated workflows and AI language models to assist with scholarly search query planning, topic feasibility scoring, outline generation, section drafting, claim-to-source verification, and originality checks. Collate does "
+              "Collate uses automated workflows and AI language models to assist with research query planning, topic feasibility scoring, outline generation, section drafting, claim-to-source verification, and originality checks. Collate does "
             ),
             b("not"),
             t(

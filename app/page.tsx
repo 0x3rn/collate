@@ -40,7 +40,7 @@ export default async function HomePage() {
                   </h1>
                 </div>
                 <p className="text-lg text-[var(--neutral-600)] max-w-[54ch] leading-relaxed">
-                  Collate searches scholarly databases and credible publications before any writing
+                  Collate searches research databases and credible publications before any writing
                   starts. If evidence is missing, it tells you why instead of guessing. When a topic
                   passes, it drafts chapter by chapter and exports print-ready PDF and Word files.
                 </p>

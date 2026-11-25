@@ -46,24 +46,8 @@ export const TERMS_POLICY: LegalDocumentData = {
           items: [
             [
               t(
-                "Verify topic feasibility and gather verifiable source passages against supported scholarly indexes, including "
+                "Verify topic feasibility and gather verifiable source passages against supported research indexes, such as academic metadata and DOI registries, open-access journal directories, and preprint and open-access repositories."
               ),
-              b("OpenAlex"),
-              t(", "),
-              b("Crossref"),
-              t(", "),
-              b("Semantic Scholar"),
-              t(", "),
-              b("CORE"),
-              t(", "),
-              b("PubMed / Europe PMC"),
-              t(", "),
-              b("arXiv"),
-              t(", "),
-              b("DOAJ"),
-              t(", and "),
-              b("Unpaywall"),
-              t("."),
             ],
             [
               t(
@@ -310,7 +294,7 @@ export const TERMS_POLICY: LegalDocumentData = {
             t("Your use of Collate is subject to our full "),
             a("Acceptable Use Policy", "/acceptable-use"),
             t(
-              ", which is incorporated into these Terms by reference. In particular, you agree to use Collate solely for lawful academic, scholarly, and research assistance purposes, and you must "
+              ", which is incorporated into these Terms by reference. In particular, you agree to use Collate solely for lawful academic and research assistance purposes, and you must "
             ),
             b("not"),
             t(" use the Platform to:"),
@@ -331,7 +315,7 @@ export const TERMS_POLICY: LegalDocumentData = {
             ],
             [
               t(
-                "Circumvent publisher paywalls, scrape restricted scholarly repositories, strip required open-license attributions, or infringe third-party copyrights."
+                "Circumvent publisher paywalls, scrape restricted academic repositories, strip required open-license attributions, or infringe third-party copyrights."
               ),
             ],
             [
@@ -387,7 +371,7 @@ export const TERMS_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "If you purchase a credit pack and Collate is unable to work on or support your research topic (for example, where our scholarly feasibility screening determines that insufficient verifiable scholarly sources exist to draft the topic responsibly, or the Platform cannot produce a viable feasibility path for your topic), you qualify for a "
+              "If you purchase a credit pack and Collate is unable to work on or support your research topic (for example, where our feasibility screening determines that insufficient verifiable academic sources exist to draft the topic responsibly, or the Platform cannot produce a viable feasibility path for your topic), you qualify for a "
             ),
             b("full cash refund"),
             t(" of your unused credit pack purchase."),
@@ -436,7 +420,7 @@ export const TERMS_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Because prepaid credit packs fund immediate scholarly index lookups and server-side processing, cash refunds are "
+              "Because prepaid credit packs fund immediate research index lookups and server-side processing, cash refunds are "
             ),
             b("not"),
             t(" issued in the following circumstances:"),
@@ -587,13 +571,13 @@ export const TERMS_POLICY: LegalDocumentData = {
             [
               b("Open-License Media Attributions: "),
               t(
-                "Any figures or illustrations sourced from third-party open repositories (such as Wikimedia Commons Creative Commons media), which remain subject to their respective open licenses and attribution requirements."
+                "Any figures or illustrations sourced from third-party open repositories (such as Creative Commons-licensed media), which remain subject to their respective open licenses and attribution requirements."
               ),
             ],
             [
-              b("Underlying Scholarly Source Copyrights: "),
+              b("Underlying Source Copyrights: "),
               t(
-                "Copyrights belonging to original authors and publishers of referenced scholarly works; Collate provides verified bibliographic metadata and grounded academic synthesis rather than transferring third-party copyrights."
+                "Copyrights belonging to original authors and publishers of referenced academic works; Collate provides verified bibliographic metadata and grounded academic synthesis rather than transferring third-party copyrights."
               ),
             ],
           ],
@@ -673,7 +657,7 @@ export const TERMS_POLICY: LegalDocumentData = {
             [
               b("Service Availability: "),
               t(
-                "Collate does not guarantee uninterrupted, error-free operation or continuous availability of third-party scholarly APIs or cloud infrastructure providers."
+                "Collate does not guarantee uninterrupted, error-free operation or continuous availability of third-party research APIs or cloud infrastructure providers."
               ),
             ],
           ],
@@ -683,13 +667,13 @@ export const TERMS_POLICY: LegalDocumentData = {
     {
       id: "third-party-services",
       number: "8",
-      title: "Third-Party Services and External Scholarly Indexes",
+      title: "Third-Party Services and External Research Indexes",
       blocks: [
         {
           type: "paragraph",
           runs: [
             t(
-              "Collate integrates with external scholarly metadata registries (OpenAlex, Crossref, Semantic Scholar, CORE, Europe PMC / PubMed, arXiv, DOAJ, and Unpaywall), open-license media repositories (Wikimedia Commons), payment providers (Polar.sh and Paystack), and cloud and AI infrastructure providers. Collate does not control and is not responsible for the uptime, accuracy, completeness, or policies of external scholarly registries or third-party websites. You should verify critical bibliographic details against the primary publication prior to final academic submission."
+              "Collate integrates with external research metadata registries, open-access repositories, open-license media repositories, payment providers (Polar.sh and Paystack), and cloud and AI infrastructure providers. Collate does not control and is not responsible for the uptime, accuracy, completeness, or policies of external research registries or third-party websites. You should verify critical bibliographic details against the primary publication prior to final academic submission. Some academic metadata is provided by Semantic Scholar."
             ),
           ],
         },

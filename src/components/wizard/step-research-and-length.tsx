@@ -23,24 +23,16 @@ interface LiveResearchSummary {
     totalSubtopics: number;
     error: string | null;
   } | null;
-  topSources: Array<{
-    id: string;
-    title: string;
-    url: string;
-    doi: string | null;
-    year: number | null;
-    venue: string | null;
-    sourceType: string;
-    credibilityScore: number;
-    relevanceScore: number;
-    accessStatus: string;
-  }>;
+}
+
+function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 const RUN_STAGE_LABELS: Record<ResearchRunStatus, string> = {
   queued: "Queued for research sweep",
-  planning: "Planning subtopics and scholarly queries",
-  searching: "Searching scholarly databases and web sources",
+  planning: "Planning subtopics and search queries",
+  searching: "Searching research databases and web sources",
   fetching: "Fetching pages, extracting passages, and saving snapshots",
   scoring: "Evaluating credibility, coverage, and feasibility verdict",
   completed: "Source sweep and feasibility check completed",
@@ -51,14 +43,14 @@ const VERDICT_META: Record<
   FeasibilityVerdict,
   { title: string; tone: "success" | "warning" | "error"; badge: string }
 > = {
-  feasible: { title: "Topic is feasible", tone: "success", badge: "Feasible" },
+  feasible: { title: "Good news: your topic is feasible.", tone: "success", badge: "Feasible" },
   needs_refinement: {
-    title: "Topic needs refinement",
+    title: "Your topic needs some refinement.",
     tone: "warning",
     badge: "Needs refinement",
   },
   not_feasible: {
-    title: "Cannot be worked on as written",
+    title: "This topic can't be worked on as written.",
     tone: "error",
     badge: "Not feasible",
   },
@@ -106,7 +98,7 @@ export function StepResearchSweep({
         if (!res.ok) return;
         const data = (await res.json()) as { ok: boolean } & LiveResearchSummary;
         if (!cancelled && data.ok) {
-          setLiveSummary({ run: data.run, topSources: data.topSources });
+          setLiveSummary({ run: data.run });
           if (data.run?.status === "completed" && data.run.id !== lastCompletedRunIdRef.current) {
             lastCompletedRunIdRef.current = data.run.id;
             if (onRefreshWizard) {
@@ -182,7 +174,7 @@ export function StepResearchSweep({
       if (statusRes.ok) {
         const statusData = (await statusRes.json()) as { ok: boolean } & LiveResearchSummary;
         if (statusData.ok) {
-          setLiveSummary({ run: statusData.run, topSources: statusData.topSources });
+          setLiveSummary({ run: statusData.run });
         }
       }
     } catch {
@@ -206,7 +198,7 @@ export function StepResearchSweep({
       <div className="space-y-1.5">
         <h2 className="text-2xl font-medium">Source check and length</h2>
         <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
-          Collate searches scholarly databases and credible publications first to verify your topic
+          Collate searches research databases and credible publications first to verify your topic
           has enough real evidence before any writing starts.
         </p>
       </div>
@@ -218,7 +210,7 @@ export function StepResearchSweep({
             <p className="text-xs text-[var(--neutral-600)] mt-1">
               {activeRun
                 ? RUN_STAGE_LABELS[activeRun.status]
-                : "Searches peer-reviewed journals, scholarly indexes, institutional reports, and credible publications."}
+                : "Searches peer-reviewed journals, research indexes, institutional reports, and credible publications."}
             </p>
           </div>
           <Button
@@ -264,12 +256,16 @@ export function StepResearchSweep({
 
       {primaryReport ? (
         <div className="space-y-4">
-          <FormAlert tone={VERDICT_META[primaryReport.verdict].tone}>
-            <span className="font-semibold">{VERDICT_META[primaryReport.verdict].title}:</span>{" "}
-            Evidence score {primaryReport.score}/100 (
-            {primaryReport.coverage.credibleRelevantSources ?? primaryReport.coverage.sourcesFound}{" "}
-            credible sources, {primaryReport.coverage.subtopicsCovered} subtopics covered
-            {primaryReport.isMocked ? ", preview mode" : ""}).
+          <FormAlert tone={VERDICT_META[primaryReport.verdict].tone} label={null}>
+            <span className="font-semibold">{VERDICT_META[primaryReport.verdict].title}</span>{" "}
+            {countLabel(
+              primaryReport.coverage.credibleRelevantSources ?? primaryReport.coverage.sourcesFound,
+              "credible source",
+              "credible sources"
+            )}{" "}
+            found, {countLabel(primaryReport.coverage.subtopicsCovered, "subtopic", "subtopics")}{" "}
+            covered
+            {primaryReport.isMocked ? " (preview mode)" : ""}.
           </FormAlert>
 
           {primaryDataNotice ? <FormAlert tone="warning">{primaryDataNotice}</FormAlert> : null}
@@ -350,27 +346,6 @@ export function StepResearchSweep({
         </div>
       ) : null}
 
-      {liveSummary && liveSummary.topSources.length > 0 ? (
-        <div className="space-y-3">
-          <p className="text-sm font-semibold text-[var(--neutral-900)]">
-            Top retrieved sources ({liveSummary.topSources.length} shown)
-          </p>
-          <ul className="divide-y divide-[var(--neutral-200)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] bg-white list-none p-0">
-            {liveSummary.topSources.slice(0, 8).map((src) => (
-              <li key={src.id} className="p-4 space-y-1">
-                <p className="text-sm font-medium text-[var(--neutral-900)]">{src.title}</p>
-                <p className="text-xs text-[var(--neutral-600)] tabular-nums">
-                  {src.venue ? `${src.venue} · ` : ""}
-                  {src.year ?? "n.d."} · Credibility {Math.round(src.credibilityScore)}/100 ·
-                  Relevance {Math.round(src.relevanceScore)}/100
-                  {src.doi ? ` · DOI: ${src.doi}` : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
       {allowDevPreview ? (
         <details className="border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-4 bg-white">
           <summary className="text-sm font-medium text-[var(--neutral-700)] cursor-pointer">
@@ -421,7 +396,9 @@ export function StepResearchSweep({
           </Button>
         ) : (
           <p className="text-sm text-[var(--neutral-600)]">
-            Run a source sweep and pass the feasibility gate to continue.
+            {primaryReport
+              ? "Edit your topic and run the sweep again. You can continue once enough sources are found."
+              : "Start the source sweep to check your topic. You can continue once enough sources are found."}
           </p>
         )}
       </div>
@@ -481,27 +458,18 @@ export function StepLengthForm({
         <p className="text-sm text-[var(--neutral-700)]">{reason}</p>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-        <div className="flex-1 max-w-[260px]">
-          <FormField
-            id="target-pages"
-            label="Your target page count"
-            type="number"
-            min={1}
-            max={300}
-            required
-            value={pagesInput}
-            onChange={(e) => setPagesInput(e.target.value)}
-            helpText="Accepted range: 1 to 300 pages."
-          />
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => setPagesInput(String(recommended))}
-        >
-          Use recommended ({recommended})
-        </Button>
+      <div className="max-w-[260px]">
+        <FormField
+          id="target-pages"
+          label="Your target page count"
+          type="number"
+          min={1}
+          max={300}
+          required
+          value={pagesInput}
+          onChange={(e) => setPagesInput(e.target.value)}
+          helpText="Accepted range: 1 to 300 pages."
+        />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2">

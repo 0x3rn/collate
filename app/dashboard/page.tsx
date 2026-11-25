@@ -52,7 +52,7 @@ export default async function DashboardOverviewPage() {
               Welcome back, {firstName}
             </h1>
             <p className="text-sm text-[var(--neutral-600)]">
-              Check new topics against real scholarly sources or pick up an active draft.
+              Check new topics against credible sources or pick up an active draft.
             </p>
           </div>
 

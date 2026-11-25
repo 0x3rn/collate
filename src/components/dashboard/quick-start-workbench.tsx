@@ -169,7 +169,7 @@ export function QuickStartWorkbench() {
         {/* Quiet editorial reassurance strip */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-[var(--neutral-500)]">
           <span>
-            Sources are verified against scholarly indexes before any chapter drafting starts.
+            Sources are verified against research indexes before any chapter drafting starts.
           </span>
 
           <Link

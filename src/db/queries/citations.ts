@@ -219,7 +219,7 @@ export async function verifyProjectCitations(
               .update(citations)
               .set({
                 verificationStatus: "verified",
-                verificationNotes: `Verified directly via ${connector} scholarly index record.`,
+                verificationNotes: `Verified directly via ${connector} index record.`,
                 verifiedAt: now,
               })
               .where(eq(citations.id, row.id));

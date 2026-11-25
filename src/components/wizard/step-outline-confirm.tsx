@@ -298,11 +298,11 @@ export function StepOutlineConfirm({
               key={ch.number}
               className="p-5 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] space-y-4"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                 <div className="flex-1 space-y-1">
                   <label
                     htmlFor={`out-title-${idx}`}
-                    className="text-xs font-medium text-[var(--neutral-500)]"
+                    className="block text-xs font-medium text-[var(--neutral-500)]"
                   >
                     {ch.isAutoReferences
                       ? "Automatic reference list"

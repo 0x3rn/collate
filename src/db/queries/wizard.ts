@@ -422,7 +422,7 @@ export async function saveWizardStepForUser(
     const mockReasons =
       verdict === "feasible"
         ? [
-            "Mock check: sufficient scholarly and web coverage simulated for Phase 2 wizard testing.",
+            "Mock check: sufficient research and web coverage simulated for Phase 2 wizard testing.",
             "Real multi-source verification and DOI checks will replace this screen in Phases 3 and 4.",
           ]
         : verdict === "needs_refinement"

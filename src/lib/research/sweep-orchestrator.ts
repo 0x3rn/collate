@@ -949,13 +949,8 @@ export async function getLatestResearchRunSummary(db: AppDb, projectId: string) 
     .orderBy(desc(researchRuns.startedAt))
     .limit(1);
 
-  const projectSources = await db
-    .select()
-    .from(sources)
-    .where(eq(sources.projectId, projectId))
-    .orderBy(desc(sources.credibilityScore), desc(sources.relevanceScore))
-    .limit(15);
-
+  // Only run progress is returned. The retrieved sources themselves stay server-side so the
+  // research gathered for a project is never handed to the browser.
   let subtopics: string[] = [];
   if (run) {
     try {
@@ -980,20 +975,6 @@ export async function getLatestResearchRunSummary(db: AppDb, projectId: string) 
           finishedAt: run.finishedAt ? run.finishedAt.toISOString() : null,
         }
       : null,
-    topSources: projectSources.map((s) => ({
-      id: s.id,
-      title: s.title,
-      url: s.url,
-      doi: s.doi,
-      year: s.year,
-      venue: s.venue,
-      sourceType: s.sourceType,
-      connectorName: s.connectorName,
-      credibilityScore: s.credibilityScore,
-      relevanceScore: s.relevanceScore,
-      accessStatus: s.accessStatus,
-      retrievedAt: s.retrievedAt.toISOString(),
-    })),
   };
 }
 

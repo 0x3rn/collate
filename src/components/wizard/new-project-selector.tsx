@@ -24,7 +24,7 @@ const WORK_TYPES: Array<{
     title: "Research paper",
     typicalPages: "15–40 pages",
     description:
-      "Focused scholarly study or report built from peer-reviewed sources and verified references.",
+      "Focused academic study or report built from peer-reviewed sources and verified references.",
   },
   {
     type: "thesis",

@@ -162,7 +162,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
             <div className="space-y-2">
               <h2 className="text-2xl font-medium">No projects yet</h2>
               <p className="text-sm sm:text-base text-[var(--neutral-600)] leading-relaxed">
-                Start with a topic or assignment question. Collate verifies scholarly sources first,
+                Start with a topic or assignment question. Collate verifies credible sources first,
                 then drafts one checked chapter at a time.
               </p>
             </div>

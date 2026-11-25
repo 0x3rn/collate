@@ -349,7 +349,7 @@ export const COOKIE_POLICY: LegalDocumentData = {
     {
       id: "third-party-domains",
       number: "7",
-      title: "Third-Party Checkout Pages and External Scholarly Links",
+      title: "Third-Party Checkout Pages and External Source Links",
       blocks: [
         {
           type: "list",
@@ -361,9 +361,9 @@ export const COOKIE_POLICY: LegalDocumentData = {
               ),
             ],
             [
-              b("External Scholarly and Media Links: "),
+              b("External Source and Media Links: "),
               t(
-                "Clicking a verified DOI link, publisher page, or Wikimedia Commons figure attribution opens a third-party website outside Collate's control, governed by that publisher's or repository's own cookie and privacy policies."
+                "Clicking a verified DOI link, publisher page, or open-license figure attribution opens a third-party website outside Collate's control, governed by that publisher's or repository's own cookie and privacy policies."
               ),
             ],
           ],

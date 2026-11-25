@@ -302,14 +302,14 @@ export function buildFrontMatterHtml(doc: ThesisExportDocument, tocEntries: TocE
   if (fm.preface) {
     blocks.push(`<section class="page-break">
       <h1>Preface</h1>
-      <p>This work examines ${escapeHtml(doc.projectTitle)} through evidence-bound synthesis of verified scholarly and institutional records.</p>
+      <p>This work examines ${escapeHtml(doc.projectTitle)} through evidence-bound synthesis of verified academic and institutional records.</p>
     </section>`);
   }
 
   if (fm.abstract) {
     blocks.push(`<section class="page-break">
       <h1>Abstract</h1>
-      <p>${escapeHtml(doc.abstractText?.trim() || `This ${doc.workTypeLabel.toLowerCase()} investigates ${doc.projectTitle} using verified scholarly literature and structured chapter analysis.`)}</p>
+      <p>${escapeHtml(doc.abstractText?.trim() || `This ${doc.workTypeLabel.toLowerCase()} investigates ${doc.projectTitle} using verified academic literature and structured chapter analysis.`)}</p>
     </section>`);
   }
 
