@@ -24,6 +24,7 @@ import { logEvent } from "@/lib/observability/logger";
 import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pdf";
 import { formatProjectType } from "@/lib/ui/formatters";
 import { buildThesisDocx } from "./docx-builder";
+import { estimatePageCountFromDocxBytes } from "./docx-page-count";
 import { resolveExportFiguresForChapters } from "./figure-assets";
 import { buildThesisPdfTwoPass, PdfRenderRateLimitError } from "./pdf-assembler";
 import { signExportDownloadParams, verifyExportDownloadParams } from "./signed-urls";
@@ -275,11 +276,9 @@ export async function handleCreateExport(
       pageCount = rendered.totalPageCount;
       contentType = "application/pdf";
     } else {
-      bytes = await buildThesisDocx(thesisDoc, {
-        includeFrontMatter,
-        includeReferences: true,
-      });
-      pageCount = Math.max(1, exportChapters.length * 2);
+      const docxOptions = { includeFrontMatter, includeReferences: true };
+      bytes = await buildThesisDocx(thesisDoc, docxOptions);
+      pageCount = estimatePageCountFromDocxBytes(bytes);
       contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     }
   } catch (err) {

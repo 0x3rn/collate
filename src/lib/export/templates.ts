@@ -6,6 +6,7 @@ import {
   computeControlledFigureDimensions,
   formatFigureAttributionForDisplay,
 } from "./figure-layout";
+import { keepWordsTogether } from "./keep-together";
 import { getPageSizeSpec } from "./page-sizes";
 
 export interface ExportFormattingSettings {
@@ -59,7 +60,7 @@ function lineHeightCss(spacing: LineSpacing): string {
 }
 
 function formatInlineMarkdown(raw: string): string {
-  const escaped = escapeHtml(raw);
+  const escaped = escapeHtml(keepWordsTogether(raw));
   return escaped
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>");
@@ -369,7 +370,7 @@ export function buildReferencesHtmlDocument(
   appendicesMarkdown?: string
 ): string {
   const refItems = bibliographyEntries
-    .map((entry) => `<p class="ref-item">${escapeHtml(entry)}</p>`)
+    .map((entry) => `<p class="ref-item">${escapeHtml(keepWordsTogether(entry))}</p>`)
     .join("\n");
 
   const appendixBlock =
@@ -416,7 +417,7 @@ export function buildCombinedBodyHtmlDocument(
 
   if (includeReferences && doc.bibliographyEntries.length > 0) {
     const refItems = doc.bibliographyEntries
-      .map((entry) => `<p class="ref-item">${escapeHtml(entry)}</p>`)
+      .map((entry) => `<p class="ref-item">${escapeHtml(keepWordsTogether(entry))}</p>`)
       .join("\n");
     sectionsHtml.push(`<section class="page-break"><h1>References</h1>${refItems}</section>`);
 

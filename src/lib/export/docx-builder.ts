@@ -20,6 +20,7 @@ import {
   computeControlledFigureDimensions,
   formatFigureAttributionForDisplay,
 } from "./figure-layout";
+import { keepWordsTogether } from "./keep-together";
 import { getPageSizeSpec } from "./page-sizes";
 import type { ThesisExportDocument } from "./templates";
 
@@ -35,6 +36,7 @@ function parseInlineMarkdownRuns(
   sizeHalfPt: number,
   baseBold = false
 ): TextRun[] {
+  raw = keepWordsTogether(raw);
   const segments = raw.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).filter((s) => s.length > 0);
   if (segments.length === 0) {
     return [new TextRun({ text: raw, font, size: sizeHalfPt, bold: baseBold })];
@@ -365,7 +367,7 @@ export async function buildThesisDocx(
           new Paragraph({
             spacing: { after: 140, line: lineTwips },
             indent: { left: 720, hanging: 720 },
-            children: [new TextRun({ text: entry, font, size: sizeHalfPt })],
+            children: [new TextRun({ text: keepWordsTogether(entry), font, size: sizeHalfPt })],
           })
       )
     );

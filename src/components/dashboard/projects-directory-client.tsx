@@ -13,7 +13,6 @@ import {
 } from "@/db/queries/dashboard";
 import type { ProjectType } from "@/db/schema";
 import {
-  formatCitationStyle,
   formatProjectType,
   formatShortDate,
   resolveProjectDisplayStatus,
@@ -206,7 +205,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
           <div className="hidden md:grid md:grid-cols-12 gap-4 px-6 py-2.5 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             <div className="col-span-5">Project</div>
             <div className="col-span-3">Stage &amp; progress</div>
-            <div className="col-span-2">Evidence</div>
+            <div className="col-span-2">Sources</div>
             <div className="col-span-2 text-right">Next step</div>
           </div>
 
@@ -231,7 +230,6 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                       : "Ready to draft"
                     : `${completedChapters} of ${project.chaptersTotal} chapters drafted`
                   : "Outline ready";
-              const pagesLabel = project.targetPages ?? project.idealPages;
               const projectOverviewHref = inSetup
                 ? `/projects/${project.id}/setup`
                 : `/projects/${project.id}`;
@@ -247,14 +245,6 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                       <span className="font-medium text-[var(--neutral-700)]">
                         {formatProjectType(project.type)}
                       </span>
-                      <span aria-hidden="true">·</span>
-                      <span>{formatCitationStyle(project.citationStyle)}</span>
-                      {pagesLabel ? (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="tabular-nums">{pagesLabel}p</span>
-                        </>
-                      ) : null}
                     </div>
                     <Link
                       href={projectOverviewHref}

@@ -10,7 +10,6 @@ import {
   type DashboardProjectSummary,
 } from "@/db/queries/dashboard";
 import {
-  formatCitationStyle,
   formatProjectType,
   formatShortDate,
   resolveProjectDisplayStatus,
@@ -174,14 +173,12 @@ export function OverviewLedgerClient({
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-5">
                     <div className="min-w-0 flex-1 flex flex-col gap-3 sm:gap-2">
-                      {/* Row 1: Work type, citation style, and status badge (anchored right on mobile) */}
+                      {/* Row 1: Work type and status badge (anchored right on mobile) */}
                       <div className="flex items-center justify-between sm:justify-start gap-2 text-xs text-[var(--neutral-500)]">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="font-medium text-[var(--neutral-700)]">
                             {formatProjectType(project.type)}
                           </span>
-                          <span aria-hidden="true">·</span>
-                          <span>{formatCitationStyle(project.citationStyle)}</span>
                           {index === 0 && project.lifecycleTab === "active" ? (
                             <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-600)]">
                               Active

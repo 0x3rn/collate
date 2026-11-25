@@ -160,6 +160,11 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(dirHtml).toContain("3 of 5 chapters drafted");
     expect(dirHtml).toContain("60%");
     expect(dirHtml).toContain("Review Chapter 3");
+    // Column is named for what it shows; the target length and citation style stay on the project page
+    expect(dirHtml).toContain(">Sources</div>");
+    expect(dirHtml).not.toContain(">Evidence<");
+    expect(dirHtml).not.toContain("80p");
+    expect(dirHtml).not.toContain("APA 7");
     // Clicking the project title navigates to the main project overview page, while the CTA opens Chapter 3
     expect(dirHtml).toContain(
       'href="/projects/prj_001" title="Solar Microgrid Reliability in Rural Clinics"'
@@ -167,7 +172,7 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(dirHtml).toContain('href="/projects/prj_001/chapters/ch_3"');
 
     const cardHtml = renderToStaticMarkup(<ProjectCard project={SAMPLE_PROJECT} />);
-    expect(cardHtml).toContain("APA 7");
+    expect(cardHtml).not.toContain("APA 7");
     expect(cardHtml).toContain("38 sources");
     expect(cardHtml).toContain(
       '<a href="/projects/prj_001" class="hover:text-[var(--accent-600)] transition-colors">Solar Microgrid Reliability in Rural Clinics</a>'

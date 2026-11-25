@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowRightIcon } from "@/components/layout/workspace-icons";
 import { SETUP_PROJECT_STATUSES, type DashboardProjectSummary } from "@/db/queries/dashboard";
 import {
-  formatCitationStyle,
   formatProjectType,
   formatShortDate,
   resolveProjectDisplayStatus,
@@ -52,10 +51,6 @@ export function ProjectCard({ project }: { project: DashboardProjectSummary }) {
             <span className="font-medium text-[var(--neutral-800)]">
               {formatProjectType(project.type)}
             </span>
-            <span aria-hidden="true" className="text-[var(--neutral-300)]">
-              ·
-            </span>
-            <span>{formatCitationStyle(project.citationStyle)}</span>
           </div>
 
           <span

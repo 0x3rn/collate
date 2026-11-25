@@ -3,6 +3,11 @@ import { inflateRawSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { buildThesisDocx } from "@/lib/export/docx-builder";
 import {
+  estimatePageCountFromDocxBytes,
+  estimatePageCountFromDocxXml,
+  readZipEntryText,
+} from "@/lib/export/docx-page-count";
+import {
   detectImageFormatFromBytes,
   extractImageDimensionsFromBytes,
   resolveExportFiguresForChapters,
@@ -314,5 +319,170 @@ describe("Phase 9 — Two-Pass Thesis PDF & DOCX Export Engine", () => {
       })
     ).rejects.toBeInstanceOf(PdfRenderRateLimitError);
     expect(always429Calls).toBe(3);
+  });
+});
+
+function readDocxEntry(docxBytes: Uint8Array, entryName: string): string {
+  const zipBuf = Buffer.from(docxBytes);
+  const nameIdx = zipBuf.indexOf(Buffer.from(entryName, "utf8"));
+  if (nameIdx < 30) throw new Error(`${entryName} not found in .docx archive`);
+  const headerStart = nameIdx - 30;
+  const compMethod = zipBuf.readUInt16LE(headerStart + 8);
+  const compSize = zipBuf.readUInt32LE(headerStart + 18);
+  const nameLen = zipBuf.readUInt16LE(headerStart + 26);
+  const extraLen = zipBuf.readUInt16LE(headerStart + 28);
+  const dataStart = headerStart + 30 + nameLen + extraLen;
+  const rawEntry = zipBuf.subarray(dataStart, dataStart + compSize);
+  return (compMethod === 8 ? inflateRawSync(rawEntry) : rawEntry).toString("utf8");
+}
+
+function wordsParagraph(wordCount: number): string {
+  return Array.from({ length: wordCount }, (_, i) => `word${i}`).join(" ");
+}
+
+const chapterOnly = (
+  markdown: string,
+  overrides: Partial<ThesisExportDocument["formatting"]> = {}
+): ThesisExportDocument => ({
+  ...SAMPLE_DOC,
+  formatting: { ...SAMPLE_DOC.formatting, ...overrides },
+  chapters: [{ number: 1, title: "Introduction", markdown }],
+  bibliographyEntries: [],
+});
+
+describe("Word (.docx) pages", () => {
+  it("writes real Word pages: page size, Light edit page breaks, and a PAGE number footer", async () => {
+    const md = [
+      "# Chapter 1: Introduction",
+      "First page text.",
+      "<!-- pagebreak -->",
+      "## 1.1 Moved to the next page",
+      "Second page text.",
+    ].join("\n\n");
+    const bytes = await buildThesisDocx(chapterOnly(md, { pageSize: "letter" }), {
+      includeFrontMatter: false,
+    });
+    const documentXml = readDocxEntry(bytes, "word/document.xml");
+    expect(documentXml.match(/<w:br w:type="page"\/>/g)?.length).toBe(1);
+    expect(documentXml).toContain('<w:pgSz w:w="12240" w:h="15840"');
+    expect(documentXml).toContain('<w:footerReference w:type="default"');
+    expect(readDocxEntry(bytes, "word/footer1.xml")).toContain(">PAGE</w:instrText>");
+
+    const noNumbers = await buildThesisDocx(chapterOnly(md, { pageNumbering: false }), {
+      includeFrontMatter: false,
+    });
+    expect(readDocxEntry(noNumbers, "word/document.xml")).not.toContain("w:footerReference");
+  });
+});
+
+describe("Word (.docx) page count layout", () => {
+  // A4 with 25 mm margins: body 14004 twips tall, 9072 wide. Times New Roman 12 pt fits
+  // 91 characters per line; double spacing is 552 twips per line, so 25 lines per page.
+  const A4 =
+    '<w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417"/>';
+  const LETTER =
+    '<w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/>';
+  const run = (text: string) =>
+    `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
+  const para = (lines: number, lineRule = 480) =>
+    `<w:p><w:pPr><w:spacing w:line="${lineRule}"/></w:pPr>${run("x".repeat(91 * lines))}</w:p>`;
+  const heading = (text: string) =>
+    `<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr>${run(text)}</w:p>`;
+  const pageBreak = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+  const image = (heightTwips: number) =>
+    `<w:p><w:r><w:drawing><wp:inline><wp:extent cx="4572000" cy="${heightTwips * 635}"/></wp:inline></w:drawing></w:r></w:p>`;
+  const doc = (page: string, ...items: string[]) =>
+    `<w:document><w:body>${items.join("")}<w:sectPr>${page}</w:sectPr></w:body></w:document>`;
+
+  it("splits a long paragraph across pages like Word, instead of moving it whole", () => {
+    expect(estimatePageCountFromDocxXml(doc(A4, para(25)))).toBe(1);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(26)))).toBe(2);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(20), para(10)))).toBe(2);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(50)))).toBe(2);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(51)))).toBe(3);
+  });
+
+  it("follows the file's line spacing and page size", () => {
+    expect(estimatePageCountFromDocxXml(doc(A4, para(30)))).toBe(2);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(30, 240)))).toBe(1);
+    // US Letter with 1 inch margins holds 23 double-spaced lines of 94 characters.
+    expect(estimatePageCountFromDocxXml(doc(A4, para(48)))).toBe(2);
+    expect(estimatePageCountFromDocxXml(doc(LETTER, para(48)))).toBe(3);
+  });
+
+  it("starts a new page at every page break, including a trailing one, as Word shows it", () => {
+    expect(estimatePageCountFromDocxXml(doc(A4, para(1), pageBreak, para(1)))).toBe(2);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(1), pageBreak))).toBe(2);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(1), pageBreak, pageBreak, para(1)))).toBe(3);
+    expect(estimatePageCountFromDocxXml(doc(A4))).toBe(1);
+  });
+
+  it("keeps a heading with the next paragraph and never splits an image", () => {
+    expect(estimatePageCountFromDocxXml(doc(A4, para(24), para(1)))).toBe(1);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(24), heading("1.2 Next"), para(1)))).toBe(2);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(10), image(5400)))).toBe(1);
+    expect(estimatePageCountFromDocxXml(doc(A4, para(20), image(5400)))).toBe(2);
+  });
+
+  it("counts a full export: cover, abstract, each chapter and references on their own pages", async () => {
+    expect(estimatePageCountFromDocxBytes(await buildThesisDocx(SAMPLE_DOC))).toBe(5);
+    expect(
+      estimatePageCountFromDocxBytes(
+        await buildThesisDocx(SAMPLE_DOC, { includeFrontMatter: false })
+      )
+    ).toBe(3);
+  });
+
+  it("gives more pages for more text, larger type and looser spacing", async () => {
+    const chapter = `# Chapter 1\n\n${Array.from({ length: 10 }, () => wordsParagraph(240)).join("\n\n")}`;
+    const count = async (f: Partial<ThesisExportDocument["formatting"]>) =>
+      estimatePageCountFromDocxBytes(
+        await buildThesisDocx(chapterOnly(chapter, f), { includeFrontMatter: false })
+      );
+    const double12 = await count({});
+    expect(double12).toBeGreaterThanOrEqual(9);
+    expect(double12).toBeLessThanOrEqual(13);
+    expect(await count({ lineSpacing: "one_half" })).toBeLessThan(double12);
+    expect(await count({ lineSpacing: "single" })).toBeLessThan(
+      await count({ lineSpacing: "one_half" })
+    );
+    expect(await count({ fontSizePt: 14 })).toBeGreaterThan(double12);
+  });
+
+  it("reads files whether stored compressed or not, and rejects non-Word files", async () => {
+    const bytes = await buildThesisDocx(SAMPLE_DOC);
+    expect(readZipEntryText(bytes, "word/document.xml")).toContain("<w:body>");
+    expect(() => readZipEntryText(bytes, "word/missing.xml")).toThrow(/not found/);
+    expect(() => estimatePageCountFromDocxBytes(new TextEncoder().encode("not a zip"))).toThrow(
+      /Not a ZIP archive/
+    );
+  });
+});
+
+describe("Exports keep short words and citation pieces on one line", () => {
+  const md =
+    "# Chapter 1\n\nThis is a test of *A dose* response (Smith et al., 2020, p. 12; Darvish, Ludwig and Ikoba, 2024).";
+
+  it("writes non-breaking spaces into the Word file", async () => {
+    const bytes = await buildThesisDocx(
+      {
+        ...SAMPLE_DOC,
+        chapters: [{ number: 1, title: "Intro", markdown: md }],
+        bibliographyEntries: ["Smith, J. et al. (2020) A study of beetroot, pp. 3–5."],
+      },
+      { includeFrontMatter: false }
+    );
+    const xml = readDocxEntry(bytes, "word/document.xml");
+    expect(xml).toContain("is a test of ");
+    expect(xml).toContain(">A dose<");
+    expect(xml).toContain("Smith et al., 2020, p. 12");
+    expect(xml).toContain("Darvish, Ludwig and Ikoba, 2024");
+    expect(xml).toContain("Smith, J. et al. (2020) A study of beetroot, pp. 3–5.");
+  });
+
+  it("writes the same non-breaking spaces into the PDF page", () => {
+    const html = markdownToPrintHtml(md);
+    expect(html).toContain("is a test of <em>A dose</em>");
+    expect(html).toContain("Smith et al., 2020, p. 12");
   });
 });
