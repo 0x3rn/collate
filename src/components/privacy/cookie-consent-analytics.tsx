@@ -273,16 +273,15 @@ export function CookieConsentAnalytics({ measurementId }: { measurementId?: stri
           <p className="text-sm font-semibold text-[var(--neutral-900)]">Cookie preferences</p>
           <p className="text-xs sm:text-[0.8125rem] text-[var(--neutral-600)] leading-relaxed">
             Collate uses essential cookies for sign-in and security. With your permission, we also
-            use Google Analytics to understand site traffic and improve the product.{" "}
-            {signedIn
-              ? "Accepted preferences stay saved on your account; if you decline, we will ask again after 7 days."
-              : "If you decline, we will ask again on your next visit."}{" "}
+            use optional cookies to understand site traffic and improve the product. By accepting,
+            you agree to our{" "}
             <Link
               href="/cookies"
               className="font-medium text-[var(--accent-700)] underline underline-offset-2 hover:text-[var(--accent-600)]"
             >
               Cookie policy
             </Link>
+            .
           </p>
         </div>
 

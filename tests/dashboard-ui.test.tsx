@@ -154,7 +154,8 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
 
   it("renders ProjectsDirectoryClient tabs, ProjectCard progress, and ExportsLibraryClient downloads", () => {
     const dirHtml = renderToStaticMarkup(<ProjectsDirectoryClient projects={[SAMPLE_PROJECT]} />);
-    expect(dirHtml).toContain("Active");
+    expect(dirHtml).toContain("Ongoing");
+    expect(dirHtml).not.toContain(">Active<");
     expect(dirHtml).toContain("Completed");
     expect(dirHtml).toContain("Archived");
     expect(dirHtml).toContain("Solar Microgrid Reliability in Rural Clinics");
@@ -261,20 +262,46 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
   it("renders QuickStartWorkbench, OverviewLedgerClient, Button spinner, and shimmer skeletons", () => {
     const workbenchHtml = renderToStaticMarkup(<QuickStartWorkbench />);
     expect(workbenchHtml).toContain("Start a new project");
+    expect(workbenchHtml).toContain(
+      "Enter your project title to jump straight into setup, or leave it blank to refine it next."
+    );
+    expect(workbenchHtml).toContain(
+      "Sources are verified against research indexes before any chapter drafting starts."
+    );
     expect(workbenchHtml).toContain("Research paper");
     expect(workbenchHtml).toContain("Thesis");
     expect(workbenchHtml).toContain("Assignment");
     expect(workbenchHtml).toContain("Start project");
 
-    // The start button names whichever work type tab is active.
-    for (const [type, button] of [
-      ["research", "Start research paper"],
-      ["thesis", "Start thesis"],
-      ["assignment", "Start assignment"],
+    // Each work type tab renders tailored heading, subtitle, button, and verification copy.
+    for (const [type, button, expectedSubtitle, expectedFooter] of [
+      [
+        "research",
+        "Start research paper",
+        "Enter your research paper title to jump straight into setup, or leave it blank to refine it next.",
+        "Sources are verified against research indexes before any chapter drafting starts.",
+      ],
+      [
+        "thesis",
+        "Start thesis",
+        "Enter your thesis title to jump straight into setup, or leave it blank to refine it next.",
+        "Sources are verified against research indexes before any chapter drafting starts.",
+      ],
+      [
+        "assignment",
+        "Start assignment",
+        "Enter your assignment or course title to begin, then add your questions on the next screen.",
+        "Sources are verified for each question before any answer drafting starts.",
+      ],
     ] as const) {
       const html = renderToStaticMarkup(<QuickStartWorkbench initialType={type} />);
       expect(html).toContain(`<span>${button}</span>`);
+      expect(html).toContain(expectedSubtitle);
+      expect(html).toContain(expectedFooter);
       expect(html).not.toContain("Start project");
+      if (type === "assignment") {
+        expect(html).not.toContain("chapter drafting");
+      }
     }
 
     const overviewHtml = renderToStaticMarkup(
@@ -286,6 +313,8 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
       />
     );
     expect(overviewHtml).toContain("Recent work");
+    expect(overviewHtml).toContain("Ongoing");
+    expect(overviewHtml).not.toContain(">Active<");
     expect(overviewHtml).toContain("Needs review");
     expect(overviewHtml).toContain("Solar Microgrid Reliability in Rural Clinics");
     expect(overviewHtml).toContain(

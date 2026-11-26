@@ -19,7 +19,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     credits: 25,
     amountNgnKobo: 1_000_000, // NGN 10,000
     amountUsdCents: 1000, // $10.00
-    description: "Covers assignments or a short research paper up to 25 pages.",
+    description: "Covers assignments or a short research paper up to 20 pages with revision room.",
   },
   {
     id: "pack_project_60",
@@ -126,7 +126,8 @@ export interface ProjectCreditEstimate {
 
 /**
  * Transparent credit calculation system: 1 credit per target page (minimum 2 per run),
- * plus an optional 15% revision buffer recommendation.
+ * plus a 15% revision buffer used when selecting the best-fit credit pack so a 100-page
+ * project recommends Thesis (200 credits) instead of running out of credits during revisions.
  */
 export function calculateProjectCreditEstimate(params: {
   workType: ProjectType;
@@ -141,7 +142,8 @@ export function calculateProjectCreditEstimate(params: {
   const recommendedTotalCredits = baseCredits + recommendedRevisionBuffer;
 
   const matchingPack =
-    CREDIT_PACKS.find((p) => p.credits >= baseCredits) ?? CREDIT_PACKS[CREDIT_PACKS.length - 1]!;
+    CREDIT_PACKS.find((p) => p.credits >= recommendedTotalCredits) ??
+    CREDIT_PACKS[CREDIT_PACKS.length - 1]!;
 
   return {
     pages: safePages,

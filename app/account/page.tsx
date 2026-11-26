@@ -56,9 +56,6 @@ export default async function AccountPage() {
           >
             <div className="lg:col-span-4 space-y-1">
               <h2 className="text-base font-semibold text-[var(--neutral-900)]">Profile</h2>
-              <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
-                Your name, verified email address, and quick link to credits.
-              </p>
             </div>
 
             <div className="lg:col-span-8 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] divide-y divide-[var(--neutral-200)]">

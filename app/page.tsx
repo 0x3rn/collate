@@ -42,11 +42,10 @@ export default async function HomePage() {
                     Check your topic against real sources, then write verified academic work
                   </h1>
                 </div>
-                <p className="text-lg text-[var(--neutral-600)] max-w-[54ch] leading-relaxed">
-                  Collate searches research databases and credible publications before any writing
-                  starts. If evidence is missing, it tells you why instead of guessing. When a topic
-                  passes, it drafts cited chapters or assignment answers and exports print-ready PDF
-                  and Word files.
+                <p className="text-lg text-[var(--neutral-600)] max-w-[52ch] leading-relaxed">
+                  Collate researches real academic databases first, then writes your project, paper,
+                  thesis, or assignment with every claim grounded in verified sources, formatted
+                  citations, and zero fabricated references.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">

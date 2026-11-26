@@ -6,10 +6,10 @@
 
 - **Topic Feasibility Verification:** Searches scholarly databases before drafting starts. If credible evidence is missing, Collate explains which subtopics lack support and asks the user to refine instead of guessing.
 - **Four Supported Academic Work Types:**
-  - **Project** (50 to 80 pages): Final-year undergraduate and HND capstone projects, including standard five-chapter layouts and software engineering chapters.
-  - **Research Paper** (12 to 25 pages): Focused journal-style studies, technical reports, and policy papers.
+  - **Project** (40 to 70 pages): Final-year undergraduate and HND capstone projects, including standard five-chapter layouts and software engineering chapters.
+  - **Research Paper** (15 to 40 pages): Focused journal-style studies, technical reports, and policy papers.
   - **Thesis / Dissertation** (50 to 300 pages): Bachelor's (50 to 80 pages), Master's (80 to 150 pages), and PhD (150 to 300 pages) theses with front matter, table of contents, and cross-chapter memory.
-  - **Assignment** (2 to 5 pages per question): Single or multi-question coursework and seminar sets checked and cited per question.
+  - **Assignment** (2 to 6 pages per question): Single or multi-question coursework and seminar sets checked and cited per question.
 - **Verified Citations Only:** Builds inline citations and reference lists strictly from retrieved publisher and journal records in APA 7, Harvard, MLA 9, Chicago, IEEE, and Vancouver formats. Never fabricates authors, titles, DOIs, or URLs.
 - **Empirical Results Integrity:** Computes descriptive statistical tables automatically from user-uploaded CSV datasets, uses cited public datasets or literature benchmark ranges when selected, or outputs clearly labelled `[ADD]` placeholders. Never fabricates survey counts, interviews, or lab numbers.
 - **Originality & Transparency:** Runs layered overlap and cross-user uniqueness checks on drafts and provides a similarity summary, writing log, and AI-use disclosure draft.

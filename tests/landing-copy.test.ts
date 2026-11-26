@@ -90,6 +90,25 @@ describe("Landing page copy quality, pricing & credit calculation", () => {
 
     const est = calculateProjectCreditEstimate({ workType: "project", targetPages: 55 });
     expect(est.baseCredits).toBe(55);
+    expect(est.recommendedTotalCredits).toBe(64);
     expect(est.recommendedPack.id).toBe("pack_project_60");
+
+    // 100-page project needs 100 base credits + revision headroom (115 total) -> recommends Thesis (200 credits)
+    const hundredPage = calculateProjectCreditEstimate({ workType: "project", targetPages: 100 });
+    expect(hundredPage.baseCredits).toBe(100);
+    expect(hundredPage.recommendedTotalCredits).toBe(115);
+    expect(hundredPage.recommendedPack.id).toBe("pack_thesis_150");
+
+    // Short 15-page assignment (15 + 3 = 18 credits) fits Starter (25 credits)
+    const shortAssignment = calculateProjectCreditEstimate({
+      workType: "assignment",
+      targetPages: 15,
+    });
+    expect(shortAssignment.recommendedPack.id).toBe("pack_starter_25");
+
+    // 25-page research paper needs revision headroom (25 + 4 = 29 credits) -> recommends Project (100 credits)
+    const research25 = calculateProjectCreditEstimate({ workType: "research", targetPages: 25 });
+    expect(research25.recommendedTotalCredits).toBe(29);
+    expect(research25.recommendedPack.id).toBe("pack_project_60");
   });
 });

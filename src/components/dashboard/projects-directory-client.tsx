@@ -54,7 +54,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
 
   const tabs: Array<{ id: TabFilter; label: string; count: number }> = [
     { id: "all", label: "All", count: counts.all },
-    { id: "active", label: "Active", count: counts.active },
+    { id: "active", label: "Ongoing", count: counts.active },
     { id: "completed", label: "Completed", count: counts.completed },
     { id: "archived", label: "Archived", count: counts.archived },
   ];

@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Overview | Collate",
-  description: "Start a topic check, continue active drafts, and access recent exports.",
+  description: "Start a topic check, continue ongoing drafts, and access recent exports.",
   robots: { index: false, follow: false },
 };
 
@@ -58,7 +58,7 @@ export default async function DashboardOverviewPage() {
               Welcome back, {firstName}
             </h1>
             <p className="text-sm text-[var(--neutral-600)]">
-              Check new topics against credible sources or pick up an active draft.
+              Check new topics against credible sources or pick up an ongoing draft.
             </p>
           </div>
 

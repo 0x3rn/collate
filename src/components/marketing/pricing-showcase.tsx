@@ -51,8 +51,8 @@ export function PricingShowcase({
               Credit calculator
             </p>
             <p className="text-sm text-[var(--neutral-700)]">
-              Estimate how many credits your project needs (1 credit per page, held one chapter at a
-              time).
+              Estimate how many credits your work needs (1 credit per page, plus headroom for
+              revisions).
             </p>
           </div>
 

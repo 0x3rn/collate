@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Button, LinkButton } from "@/components/ui/button";
 import { formatCredits } from "@/lib/ui/formatters";
@@ -29,6 +29,11 @@ export function ModalCard({
   footer?: ReactNode;
 }) {
   const titleId = useId();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -41,7 +46,7 @@ export function ModalCard({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  if (!open || typeof document === "undefined") {
+  if (!open || !mounted) {
     return null;
   }
 

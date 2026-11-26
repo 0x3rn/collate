@@ -181,7 +181,7 @@ export function OverviewLedgerClient({
                           </span>
                           {index === 0 && project.lifecycleTab === "active" ? (
                             <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-600)]">
-                              Active
+                              Ongoing
                             </span>
                           ) : null}
                         </div>

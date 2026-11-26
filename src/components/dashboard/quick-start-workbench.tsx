@@ -12,31 +12,50 @@ const WORKBENCH_TYPES: Array<{
   type: ProjectType;
   label: string;
   pageHint: string;
+  subtitle: string;
+  inputLabel: string;
   placeholder: string;
+  footerNote: string;
 }> = [
   {
     type: "project",
     label: "Project",
     pageHint: "40–70 pages",
+    subtitle:
+      "Enter your project title to jump straight into setup, or leave it blank to refine it next.",
+    inputLabel: "Project title",
     placeholder: "e.g. Solar microgrid reliability in rural clinics",
+    footerNote: "Sources are verified against research indexes before any chapter drafting starts.",
   },
   {
     type: "research",
     label: "Research paper",
     pageHint: "15–40 pages",
+    subtitle:
+      "Enter your research paper title to jump straight into setup, or leave it blank to refine it next.",
+    inputLabel: "Research paper title",
     placeholder: "e.g. Mobile money and smallholder farm incomes",
+    footerNote: "Sources are verified against research indexes before any chapter drafting starts.",
   },
   {
     type: "thesis",
     label: "Thesis",
     pageHint: "50–300 pages",
+    subtitle:
+      "Enter your thesis title to jump straight into setup, or leave it blank to refine it next.",
+    inputLabel: "Thesis title",
     placeholder: "e.g. Urban flood resilience in coastal cities",
+    footerNote: "Sources are verified against research indexes before any chapter drafting starts.",
   },
   {
     type: "assignment",
     label: "Assignment",
     pageHint: "2–6 pages / question",
-    placeholder: "e.g. Inflation and exchange rate policy seminar",
+    subtitle:
+      "Enter your assignment or course title to begin, then add your questions on the next screen.",
+    inputLabel: "Assignment or course title",
+    placeholder: "e.g. Public Economics Seminar Assignment 2",
+    footerNote: "Sources are verified for each question before any answer drafting starts.",
   },
 ];
 
@@ -73,8 +92,9 @@ export function QuickStartWorkbench({ initialType = "project" }: { initialType?:
       };
       if (!res.ok || !data.ok || !data.wizard) {
         toast.error(
-          data.error ?? "Could not start your project right now. Please try again.",
-          "Could not start project"
+          data.error ??
+            `Could not start your ${activeSpec.label.toLowerCase()} right now. Please try again.`,
+          `Could not start ${activeSpec.label.toLowerCase()}`
         );
         setSubmitting(false);
         return;
@@ -136,14 +156,12 @@ export function QuickStartWorkbench({ initialType = "project" }: { initialType?:
           <h2 className="text-xl sm:text-[1.375rem] font-medium text-[var(--neutral-900)]">
             Start a new {activeSpec.label.toLowerCase()}
           </h2>
-          <p className="text-sm text-[var(--neutral-600)]">
-            Enter a working title to jump straight into setup, or leave it blank to refine it next.
-          </p>
+          <p className="text-sm text-[var(--neutral-600)]">{activeSpec.subtitle}</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-1.5 rounded-[var(--radius-md)] border border-[var(--neutral-300)] bg-white focus-within:border-[var(--accent-600)] focus-within:ring-2 focus-within:ring-[var(--accent-100)] transition-all">
           <label htmlFor="workbench-topic-input" className="sr-only">
-            Working title or topic
+            {activeSpec.inputLabel}
           </label>
           <input
             id="workbench-topic-input"
@@ -168,9 +186,7 @@ export function QuickStartWorkbench({ initialType = "project" }: { initialType?:
 
         {/* Quiet editorial reassurance strip */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs text-[var(--neutral-500)]">
-          <span>
-            Sources are verified against research indexes before any chapter drafting starts.
-          </span>
+          <span>{activeSpec.footerNote}</span>
 
           <Link
             href="/projects/new"
