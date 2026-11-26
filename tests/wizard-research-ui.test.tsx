@@ -116,9 +116,10 @@ describe("page length step", () => {
 });
 
 describe("FormAlert label", () => {
-  it("keeps the tone prefix by default, and can replace or hide it", () => {
-    expect(text(renderToStaticMarkup(<FormAlert tone="success">Saved.</FormAlert>))).toContain(
-      "Confirmed: Saved."
+  it("shows no prefix on success, keeps it for errors, and can replace or hide it", () => {
+    expect(text(renderToStaticMarkup(<FormAlert tone="success">Saved.</FormAlert>))).toBe("Saved.");
+    expect(text(renderToStaticMarkup(<FormAlert tone="error">Failed.</FormAlert>))).toBe(
+      "Error: Failed."
     );
     expect(
       text(

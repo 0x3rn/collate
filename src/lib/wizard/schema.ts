@@ -5,6 +5,7 @@ import {
   EXPERIMENTAL_DATA_MODES,
   LINE_SPACINGS,
   PAGE_SIZES,
+  HEADING_COLORS,
   PROJECT_TYPES,
   SPELLING_VARIANTS,
   type ProjectType,
@@ -19,6 +20,7 @@ export const ALLOWED_FONTS = [
 ] as const;
 
 export const ACADEMIC_LEVELS = [
+  "High school / Secondary",
   "Undergraduate",
   "Masters",
   "PhD",
@@ -142,6 +144,7 @@ export const WizardStep7FormattingSchema = z.object({
   marginsMm: z.number().int().min(15).max(40),
   pageSize: z.enum(PAGE_SIZES).optional().default("a4"),
   pageNumbering: z.boolean(),
+  headingColor: z.enum(HEADING_COLORS).optional().default("black"),
   spelling: z.enum(SPELLING_VARIANTS),
   cover: CoverDetailsSchema,
 });

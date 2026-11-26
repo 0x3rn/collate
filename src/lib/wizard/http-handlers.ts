@@ -38,6 +38,7 @@ export interface SerializedWizardState {
     marginsMm: number;
     pageSize: HydratedWizardState["settings"]["pageSize"];
     pageNumbering: boolean;
+    headingColor: HydratedWizardState["settings"]["headingColor"];
     spelling: HydratedWizardState["settings"]["spelling"];
     isExperimental: boolean;
     experimentalDataMode: HydratedWizardState["settings"]["experimentalDataMode"];
@@ -111,6 +112,7 @@ export function serializeWizardState(state: HydratedWizardState): SerializedWiza
       marginsMm: state.settings.marginsMm,
       pageSize: state.settings.pageSize,
       pageNumbering: state.settings.pageNumbering,
+      headingColor: state.settings.headingColor,
       spelling: state.settings.spelling,
       isExperimental: state.settings.isExperimental,
       experimentalDataMode: state.settings.experimentalDataMode,

@@ -17,6 +17,14 @@ export const AUTH_RATE_LIMITS = {
   exportGenerate: { maxAttempts: 30, windowMs: 60 * 60 * 1000 },
   figureSearch: { maxAttempts: 40, windowMs: 60 * 60 * 1000 },
   accountDelete: { maxAttempts: 5, windowMs: 60 * 60 * 1000 },
+  // Typing a code: per IP + email (each code also dies after 5 wrong tries).
+  verifyCode: { maxAttempts: 15, windowMs: 15 * 60 * 1000 },
+  // Sending a code to an email address (sign-up, reset, account changes).
+  sendCode: { maxAttempts: 5, windowMs: 15 * 60 * 1000 },
+  accountChange: { maxAttempts: 10, windowMs: 15 * 60 * 1000 },
+  googleSignIn: { maxAttempts: 20, windowMs: 15 * 60 * 1000 },
+  projectDelete: { maxAttempts: 20, windowMs: 60 * 60 * 1000 },
+  dataExport: { maxAttempts: 5, windowMs: 60 * 60 * 1000 },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 export type AuthRateLimitAction = keyof typeof AUTH_RATE_LIMITS;

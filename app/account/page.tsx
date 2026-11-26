@@ -2,10 +2,18 @@ import { env } from "cloudflare:workers";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DeleteAccountPanel } from "@/components/account/delete-account-panel";
+import { ExportDataButton } from "@/components/account/export-data-button";
 import { NotificationPrefsForm } from "@/components/account/notification-prefs-form";
-import { SignOutButton } from "@/components/auth/sign-out-button";
+import {
+  ActiveSessions,
+  ChangeEmailButton,
+  ChangePasswordButton,
+  NameRow,
+} from "@/components/account/account-security";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
+import { and, eq } from "drizzle-orm";
 import { createDb } from "@/db/client";
+import { accounts } from "@/db/schema";
 import { requireUser } from "@/lib/auth/server";
 import { getUserNotificationPrefs } from "@/lib/email/notifications";
 import { formatCredits, formatShortDate } from "@/lib/ui/formatters";
@@ -21,6 +29,12 @@ export default async function AccountPage() {
   const user = await requireUser("/account");
   const db = createDb(env.DB);
   const notificationPrefs = await getUserNotificationPrefs(db, user.id);
+  const [credential] = await db
+    .select({ password: accounts.password })
+    .from(accounts)
+    .where(and(eq(accounts.userId, user.id), eq(accounts.providerId, "credential")))
+    .limit(1);
+  const hasPassword = Boolean(credential?.password);
 
   return (
     <WorkspaceShell user={user} maxWidthClassName="max-w-[980px]">
@@ -28,7 +42,8 @@ export default async function AccountPage() {
         <header className="pb-6 border-b border-[var(--neutral-200)] space-y-1">
           <h1 className="text-[1.75rem] sm:text-[2rem] font-medium leading-tight">Account</h1>
           <p className="text-sm text-[var(--neutral-600)]">
-            Manage your profile, email updates, and account settings.
+            Manage your profile, email updates, and account settings. Member since{" "}
+            {formatShortDate(user.createdAt)}.
           </p>
         </header>
 
@@ -46,24 +61,31 @@ export default async function AccountPage() {
             </div>
 
             <div className="lg:col-span-8 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] divide-y divide-[var(--neutral-200)]">
-              <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <p className="text-xs font-medium text-[var(--neutral-500)]">Full name</p>
-                  <p className="text-sm font-medium text-[var(--neutral-900)] mt-1">{user.name}</p>
-                </div>
-                <p className="text-xs text-[var(--neutral-500)] tabular-nums">
-                  Joined {formatShortDate(user.createdAt)}
-                </p>
+              <div className="px-5 py-4">
+                <NameRow initialName={user.name} />
               </div>
-
+              <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[var(--neutral-500)]">Email address</p>
+                  <p className="text-sm text-[var(--neutral-900)] mt-1 break-all">{user.email}</p>
+                </div>
+                <ChangeEmailButton currentEmail={user.email} />
+              </div>
               <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-medium text-[var(--neutral-500)]">Email address</p>
-                  <p className="text-sm text-[var(--neutral-900)] mt-1">{user.email}</p>
+                  <p className="text-xs font-medium text-[var(--neutral-500)]">Password</p>
+                  {hasPassword ? (
+                    <p
+                      className="text-sm text-[var(--neutral-900)] mt-1 tracking-[0.2em]"
+                      aria-label="Password saved"
+                    >
+                      ••••••••••
+                    </p>
+                  ) : (
+                    <p className="text-sm text-[var(--neutral-500)] mt-1">Not set</p>
+                  )}
                 </div>
-                <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-[4px] border bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)] w-fit">
-                  Verified
-                </span>
+                <ChangePasswordButton email={user.email} hasPassword={hasPassword} />
               </div>
 
               <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -100,27 +122,41 @@ export default async function AccountPage() {
             </div>
           </section>
 
-          {/* 3. Sign out */}
+          {/* 3. Active sessions */}
           <section
-            aria-label="Sign out"
+            aria-label="Active sessions"
             className="py-7 grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start"
           >
             <div className="lg:col-span-4 space-y-1">
-              <h2 className="text-base font-semibold text-[var(--neutral-900)]">Sign out</h2>
+              <h2 className="text-base font-semibold text-[var(--neutral-900)]">Active sessions</h2>
               <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
-                End your session on this device.
+                The devices where you are signed in to Collate. Sign out of any you do not
+                recognise.
               </p>
             </div>
-
-            <div className="lg:col-span-8 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <p className="text-sm text-[var(--neutral-700)]">
-                Sign out of Collate on this device.
-              </p>
-              <SignOutButton variant="secondary" />
+            <div className="lg:col-span-8">
+              <ActiveSessions />
             </div>
           </section>
 
-          {/* 4. Delete account */}
+          {/* 4. Export my data */}
+          <section
+            aria-label="Export my data"
+            className="py-7 grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start"
+          >
+            <div className="lg:col-span-4 space-y-1">
+              <h2 className="text-base font-semibold text-[var(--neutral-900)]">Export my data</h2>
+              <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
+                Download a PDF of your account, payments, credit history, projects, downloads, and
+                sign-ins.
+              </p>
+            </div>
+            <div className="lg:col-span-8">
+              <ExportDataButton />
+            </div>
+          </section>
+
+          {/* 5. Delete account */}
           <section
             aria-label="Delete account"
             className="py-7 grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start"
@@ -133,7 +169,7 @@ export default async function AccountPage() {
             </div>
 
             <div className="lg:col-span-8">
-              <DeleteAccountPanel />
+              <DeleteAccountPanel hasPassword={hasPassword} />
             </div>
           </section>
         </div>

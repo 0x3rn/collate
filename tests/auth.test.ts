@@ -3,6 +3,7 @@ import { createDb, type AppDb } from "@/db/client";
 import { hashPassword, validatePasswordStrength, verifyPassword } from "@/lib/auth/password";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import {
+  exchangeResetCodeForToken,
   getSessionFromToken,
   requestPasswordReset,
   resetPasswordWithToken,
@@ -27,6 +28,14 @@ function createTestMailer() {
     },
   };
   return { sent, mailer };
+}
+
+function extractCodeFromEmail(text: string): string {
+  const match = text.match(/\b(\d{6})\b/);
+  if (!match?.[1]) {
+    throw new Error(`No code found in email text: ${text}`);
+  }
+  return match[1];
 }
 
 function extractTokenFromEmail(text: string): string {
@@ -151,10 +160,10 @@ describe("End-to-end Auth Service + D1 Rate Limiting", () => {
     const password = "warm archival library paper";
 
     const signupRes = await signUpUser(
-      { name: "Chidi Okafor", email: "Chidi@Uni.edu.ng", password },
+      { name: "Chidi Okafor", email: "Chidi@Uni.edu.ng", password, acceptTerms: true },
       ctx
     );
-    expect(signupRes.message).toContain("verification link");
+    expect(signupRes.message).toContain("6-digit code");
     expect(sent).toHaveLength(1);
     expect(sent[0]?.to).toBe("chidi@uni.edu.ng");
 
@@ -198,11 +207,21 @@ describe("End-to-end Auth Service + D1 Rate Limiting", () => {
     const ctx = makeCtx(mailer);
 
     const first = await signUpUser(
-      { name: "Ngozi Ade", email: "ngozi@example.com", password: "solid timber reading bench" },
+      {
+        name: "Ngozi Ade",
+        email: "ngozi@example.com",
+        password: "solid timber reading bench",
+        acceptTerms: true,
+      },
       ctx
     );
     const second = await signUpUser(
-      { name: "Attacker", email: "ngozi@example.com", password: "another long passphrase here" },
+      {
+        name: "Attacker",
+        email: "ngozi@example.com",
+        password: "another long passphrase here",
+        acceptTerms: true,
+      },
       ctx
     );
     expect(second.message).toBe(first.message);
@@ -219,7 +238,12 @@ describe("End-to-end Auth Service + D1 Rate Limiting", () => {
     const ctx = makeCtx(mailer);
 
     await signUpUser(
-      { name: "Tunde Bello", email: "tunde@example.com", password: "first long research phrase" },
+      {
+        name: "Tunde Bello",
+        email: "tunde@example.com",
+        password: "first long research phrase",
+        acceptTerms: true,
+      },
       ctx
     );
     await verifyEmailToken(extractTokenFromEmail(sent[0]!.text), ctx);
@@ -229,7 +253,10 @@ describe("End-to-end Auth Service + D1 Rate Limiting", () => {
     );
 
     await requestPasswordReset("tunde@example.com", ctx);
-    const resetToken = extractTokenFromEmail(sent[1]!.text);
+    const { resetToken } = await exchangeResetCodeForToken(
+      { email: "tunde@example.com", code: extractCodeFromEmail(sent[1]!.text) },
+      ctx
+    );
 
     await resetPasswordWithToken(
       { token: resetToken, newPassword: "second stronger archive phrase" },

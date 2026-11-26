@@ -26,6 +26,11 @@ const PREF_ROWS: Array<{ key: keyof NotificationPrefs; label: string; descriptio
     label: "Receipts and refunds",
     description: "Send me a receipt when I buy credits or receive an automatic refund.",
   },
+  {
+    key: "emailMarketing",
+    label: "News and offers",
+    description: "Occasional emails about new features and special offers. Unsubscribe any time.",
+  },
 ];
 
 export function NotificationPrefsForm({ initialPrefs }: { initialPrefs: NotificationPrefs }) {

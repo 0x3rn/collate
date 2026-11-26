@@ -197,8 +197,8 @@ export const TERMS_POLICY: LegalDocumentData = {
           ],
           rows: [
             ["Starter", "25 credits", "$10 USD", "NGN 10,000"],
-            ["Project (Popular)", "80 credits", "$25 USD", "NGN 30,000"],
-            ["Thesis", "180 credits", "$50 USD", "NGN 60,000"],
+            ["Project (Popular)", "100 credits", "$30 USD", "NGN 35,000"],
+            ["Thesis", "200 credits", "$50 USD", "NGN 60,000"],
           ],
         },
         {
@@ -343,7 +343,7 @@ export const TERMS_POLICY: LegalDocumentData = {
           title: "Summary of Cash and Credit Refund Eligibility",
           runs: [
             t(
-              "Collate refunds payments fairly whenever the platform cannot support your topic or experiences a verified Collate technical error: (1) Full cash refund if we are unable to work on your topic; (2) Full cash refund for verified Collate technical errors if no chapters have been made; (3) Partial cash refund for verified Collate technical errors if one or more chapters have already been made (proportional to remaining unused credits or undelivered chapters); and (4) Automatic 100% credit restoration to your balance if any individual chapter run fails due to a system or upstream error."
+              "Collate refunds payments fairly whenever the platform cannot support your topic or experiences a verified Collate technical error: (1) Full cash refund if we are unable to work on your topic; (2) Full cash refund for verified Collate technical errors if no chapters have been made; (3) Partial cash refund for verified Collate technical errors if one or more chapters have already been made (proportional to remaining unused credits or undelivered chapters); (4) Full cash refund for an accidental or duplicate purchase if no credits have been used since the accidental charge; and (5) Automatic 100% credit restoration to your balance if any individual chapter run fails due to a system or upstream error."
             ),
           ],
         },
@@ -414,7 +414,25 @@ export const TERMS_POLICY: LegalDocumentData = {
         },
         {
           type: "subheading",
-          title: "5.4 Non-Refundable Circumstances",
+          title: "5.4 Accidental or Duplicate Purchases (Full Cash Refund)",
+        },
+        {
+          type: "paragraph",
+          runs: [
+            t(
+              "If you purchase a credit pack by mistake, or are charged more than once for the same purchase, you qualify for a "
+            ),
+            b("full cash refund"),
+            t(" of the accidental charge, provided "),
+            b("no credits have been used since the accidental charge"),
+            t(
+              ". Once credits are spent on chapter drafts, targeted revisions, or paid topic feasibility checks after the accidental charge, the purchase is treated as used and is not eligible for a cash refund under this section."
+            ),
+          ],
+        },
+        {
+          type: "subheading",
+          title: "5.5 Non-Refundable Circumstances",
         },
         {
           type: "paragraph",
@@ -469,12 +487,12 @@ export const TERMS_POLICY: LegalDocumentData = {
         },
         {
           type: "subheading",
-          title: "5.5 How to Request a Refund and Processing Timelines",
+          title: "5.6 How to Request a Refund and Processing Timelines",
         },
         {
           type: "paragraph",
           runs: [
-            t("To request an eligible cash refund under Sections 5.2 or 5.3, email "),
+            t("To request an eligible cash refund under Sections 5.2, 5.3, or 5.4, email "),
             supportMail,
             t(" within "),
             b("14 days"),
@@ -530,7 +548,7 @@ export const TERMS_POLICY: LegalDocumentData = {
         },
         {
           type: "subheading",
-          title: "5.6 Chargebacks and Payment Disputes",
+          title: "5.7 Chargebacks and Payment Disputes",
         },
         {
           type: "paragraph",
@@ -763,7 +781,7 @@ export const TERMS_POLICY: LegalDocumentData = {
           runs: [
             b("Termination: "),
             t(
-              "You may stop using Collate and delete your account at any time. We may suspend or terminate your access immediately if you materially breach these Terms or our Acceptable Use Policy, engage in payment fraud or chargeback abuse, or if required by law. Sections that by their nature should survive termination (including Sections 5.4 through 5.6, 6, 7, 10, 11, 13, and 14) shall survive any termination."
+              "You may stop using Collate and delete your account at any time. We may suspend or terminate your access immediately if you materially breach these Terms or our Acceptable Use Policy, engage in payment fraud or chargeback abuse, or if required by law. Sections that by their nature should survive termination (including Sections 5.5 through 5.7, 6, 7, 10, 11, 13, and 14) shall survive any termination."
             ),
           ],
         },

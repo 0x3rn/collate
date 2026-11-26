@@ -33,7 +33,7 @@ export default async function HomePage() {
               <div className="lg:col-span-6 space-y-6">
                 <div className="space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent-600)]">
-                    For university students and academic researchers
+                    For students and researchers
                   </p>
                   <h1 className="text-[2.25rem] sm:text-[2.875rem] font-medium leading-[1.13] text-[var(--neutral-900)]">
                     Check your topic against real sources, then write one verified chapter at a time
@@ -271,8 +271,8 @@ export default async function HomePage() {
                 </h2>
                 <p className="text-[var(--neutral-600)] leading-relaxed">
                   Start with {pricing.freeSweeps} free topic checks. Credits are deducted one
-                  chapter at a time and refunded automatically if any chapter fails. Pay in Naira or
-                  US dollars.
+                  chapter at a time and refunded automatically if any chapter fails. Pay in US
+                  dollars or Naira.
                 </p>
               </div>
             </Reveal>

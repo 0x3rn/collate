@@ -13,7 +13,6 @@ import {
   formatCredits,
   formatExportFormat,
   formatExportScope,
-  formatNumber,
   formatShortDate,
 } from "@/lib/ui/formatters";
 
@@ -58,12 +57,12 @@ export default async function DashboardOverviewPage() {
 
           <dl className="flex items-center gap-x-3.5 text-xs text-[var(--neutral-600)] tabular-nums whitespace-nowrap shrink-0">
             <div className="flex items-center gap-1.5">
-              <dt className="sr-only">Active projects</dt>
+              <dt className="sr-only">Ongoing projects</dt>
               <dd>
                 <strong className="font-semibold text-[var(--neutral-900)]">
                   {stats.activeProjects}
                 </strong>{" "}
-                active
+                ongoing
               </dd>
             </div>
             <span aria-hidden="true" className="text-[var(--neutral-300)]">
@@ -82,18 +81,6 @@ export default async function DashboardOverviewPage() {
                   {stats.chaptersReadyForReview}
                 </strong>{" "}
                 to review
-              </dd>
-            </div>
-            <span aria-hidden="true" className="text-[var(--neutral-300)]">
-              |
-            </span>
-            <div className="flex items-center gap-1.5">
-              <dt className="sr-only">Verified sources</dt>
-              <dd>
-                <strong className="font-semibold text-[var(--neutral-900)]">
-                  {formatNumber(stats.verifiedSourcesTotal)}
-                </strong>{" "}
-                sources
               </dd>
             </div>
           </dl>

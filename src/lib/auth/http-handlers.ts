@@ -3,6 +3,7 @@ import type { AppDb } from "@/db/client";
 import { getProjectForUser, listProjectsForUser } from "@/db/queries/projects";
 import type { ProjectRecord } from "@/db/schema";
 import type { EmailSender } from "@/lib/email/mailer";
+import type { AdminNotifier } from "@/lib/notify/admin-alerts";
 import { logEvent } from "@/lib/observability/logger";
 import {
   buildClearSessionCookieHeader,
@@ -25,6 +26,8 @@ import {
   verifyEmailToken,
   type AuthServiceContext,
   type PublicUser,
+  exchangeResetCodeForToken,
+  verifyEmailWithCode,
 } from "./service";
 
 export interface HttpAuthDeps {
@@ -33,6 +36,8 @@ export interface HttpAuthDeps {
   appUrl: string;
   appEnv: string;
   turnstileSecretKey?: string;
+  /** Telegram alerts for the site owner; null or missing when the bot is not configured. */
+  adminNotifier?: AdminNotifier | null;
   nowFn?: () => Date;
   fetchFn?: typeof fetch;
 }
@@ -73,12 +78,23 @@ function buildServiceCtx(request: Request, deps: HttpAuthDeps): AuthServiceConte
     userAgent: request.headers.get("user-agent") ?? undefined,
     turnstileSecretKey: deps.turnstileSecretKey,
     appEnv: deps.appEnv,
+    adminNotifier: deps.adminNotifier,
+    geo: readRequestGeo(request),
     nowFn: deps.nowFn,
     fetchFn: deps.fetchFn,
   };
 }
 
-async function readJsonBody(
+/** Approximate city and country Cloudflare attaches to each request (absent locally). */
+export function readRequestGeo(request: Request): { city: string | null; country: string | null } {
+  const cf = (request as Request & { cf?: { city?: unknown; country?: unknown } }).cf;
+  return {
+    city: typeof cf?.city === "string" ? cf.city : null,
+    country: typeof cf?.country === "string" ? cf.country : null,
+  };
+}
+
+export async function readJsonBody(
   request: Request
 ): Promise<{ ok: true; data: unknown } | { ok: false }> {
   try {
@@ -89,7 +105,7 @@ async function readJsonBody(
   }
 }
 
-function handleRouteError(err: unknown, routeName: string): Response {
+export function handleRouteError(err: unknown, routeName: string): Response {
   if (err instanceof AuthError) {
     const headers: Record<string, string> = {};
     if (err.retryAfterSeconds) {
@@ -104,7 +120,7 @@ function handleRouteError(err: unknown, routeName: string): Response {
   return jsonNoStore({ ok: false, error: "An unexpected error occurred. Please try again." }, 500);
 }
 
-function checkCsrfOrigin(request: Request, deps: HttpAuthDeps): Response | null {
+export function checkCsrfOrigin(request: Request, deps: HttpAuthDeps): Response | null {
   if (!isAllowedOrigin(request, deps.appUrl)) {
     return jsonNoStore({ ok: false, error: "Forbidden cross-origin request." }, 403);
   }
@@ -336,5 +352,58 @@ export async function handleGetProjectById(
     return jsonNoStore({ ok: true, project: serializeProject(project) }, 200);
   } catch (err) {
     return handleRouteError(err, "get_project");
+  }
+}
+
+const EmailCodeBodySchema = z.object({
+  email: z.string().trim().min(1, "Enter your email address."),
+  code: z.string().trim().min(1, "Enter the 6-digit code."),
+});
+
+/** POST /api/auth/verify-code: confirms a new account with the emailed code. */
+export async function handleVerifyCode(request: Request, deps: HttpAuthDeps): Promise<Response> {
+  const csrfErr = checkCsrfOrigin(request, deps);
+  if (csrfErr) return csrfErr;
+  const parsed = await readJsonBody(request);
+  if (!parsed.ok) return jsonNoStore({ ok: false, error: "Invalid JSON request body." }, 400);
+  const body = EmailCodeBodySchema.safeParse(parsed.data);
+  if (!body.success) {
+    return jsonNoStore(
+      { ok: false, error: body.error.issues[0]?.message ?? "Enter the code." },
+      400
+    );
+  }
+  try {
+    await verifyEmailWithCode(body.data, buildServiceCtx(request, deps));
+    return jsonNoStore({ ok: true, message: "Your email is verified. You can sign in now." }, 200);
+  } catch (err) {
+    return handleRouteError(err, "verify_code");
+  }
+}
+
+/** POST /api/auth/reset-password/verify-code: swaps a reset code for a one-time reset token. */
+export async function handleResetCodeExchange(
+  request: Request,
+  deps: HttpAuthDeps
+): Promise<Response> {
+  const csrfErr = checkCsrfOrigin(request, deps);
+  if (csrfErr) return csrfErr;
+  const parsed = await readJsonBody(request);
+  if (!parsed.ok) return jsonNoStore({ ok: false, error: "Invalid JSON request body." }, 400);
+  const body = EmailCodeBodySchema.safeParse(parsed.data);
+  if (!body.success) {
+    return jsonNoStore(
+      { ok: false, error: body.error.issues[0]?.message ?? "Enter the code." },
+      400
+    );
+  }
+  try {
+    const { resetToken } = await exchangeResetCodeForToken(
+      body.data,
+      buildServiceCtx(request, deps)
+    );
+    return jsonNoStore({ ok: true, resetToken }, 200);
+  } catch (err) {
+    return handleRouteError(err, "reset_code");
   }
 }

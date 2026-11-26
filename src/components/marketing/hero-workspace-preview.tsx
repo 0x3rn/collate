@@ -87,7 +87,7 @@ export function HeroWorkspacePreview() {
           </p>
         </div>
         <span className="shrink-0 inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-[var(--radius-sm)] border bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]">
-          Feasible · 86/100
+          Topic is doable
         </span>
       </div>
 
@@ -140,7 +140,8 @@ export function HeroWorkspacePreview() {
               <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
                 <p className="text-[11px] text-[var(--neutral-600)]">Sources verified</p>
                 <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums">
-                  38 of 30 min
+                  38{" "}
+                  <span className="text-xs font-normal text-[var(--neutral-500)]">/ 30 needed</span>
                 </p>
               </div>
               <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
@@ -207,7 +208,7 @@ export function HeroWorkspacePreview() {
                   Chapter 2 · Section 2.1
                 </span>
                 <span className="text-[11px] font-medium text-[var(--success-text)]">
-                  Claims verified · Similarity passed
+                  Every claim sourced · Original wording
                 </span>
               </div>
               <p className="text-sm text-[var(--neutral-800)] leading-relaxed">
@@ -253,7 +254,7 @@ export function HeroWorkspacePreview() {
                 <span className="text-[var(--neutral-600)]">
                   <strong className="mr-1.5">Ch. 3</strong> Methodology
                 </span>
-                <span className="text-[var(--neutral-500)]">Starts when you click</span>
+                <span className="text-[var(--neutral-500)]">Not started yet</span>
               </li>
             </ul>
           </div>
@@ -275,9 +276,7 @@ export function HeroWorkspacePreview() {
                 >
                   Table of Contents
                 </p>
-                <span className="text-xs text-[var(--neutral-600)] tabular-nums">
-                  Measured · 82 pages
-                </span>
+                <span className="text-xs text-[var(--neutral-600)] tabular-nums">82 pages</span>
               </div>
 
               <div className="space-y-2 text-xs text-[var(--neutral-700)] tabular-nums">

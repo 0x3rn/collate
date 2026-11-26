@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { SignUpForm } from "@/components/auth/sign-up-form";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
+import { FormAlert } from "@/components/ui/alert";
+import { isGoogleSignInEnabled } from "@/lib/auth/route-deps";
 import { getCurrentUser } from "@/lib/auth/server";
 import { resolveTurnstileSiteKey } from "@/lib/security/turnstile";
 
@@ -15,7 +17,12 @@ export const metadata: Metadata = {
   description: "Create a Collate account to start checking topics and drafting chapters.",
 };
 
-export default async function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ google?: string }>;
+}) {
+  const { google } = await searchParams;
   const user = await getCurrentUser();
   if (user) {
     redirect("/dashboard");
@@ -29,16 +36,23 @@ export default async function SignUpPage() {
   return (
     <>
       <SiteHeader user={null} />
-      <main className="flex-1 mx-auto w-full max-w-[460px] px-4 sm:px-6 py-12 sm:py-16">
-        <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-8 shadow-[var(--shadow-subtle)] space-y-6">
+      <main className="flex-1 mx-auto w-full max-w-[420px] px-4 sm:px-0 py-14 sm:py-20">
+        <div className="space-y-7">
           <div className="space-y-1.5">
-            <h1 className="text-[1.75rem] font-medium">Create your account</h1>
+            <h1 className="text-[2rem] font-medium leading-tight">Create your account</h1>
             <p className="text-sm text-[var(--neutral-600)]">
               Verify your email to save projects, receive chapter alerts, and export PDFs.
             </p>
           </div>
 
-          <SignUpForm turnstileSiteKey={turnstileSiteKey} />
+          {google === "terms" ? (
+            <FormAlert tone="info">
+              There is no Collate account for that Google address yet. Tick the box below to agree
+              to the Terms, then choose Sign up with Google.
+            </FormAlert>
+          ) : null}
+
+          <SignUpForm turnstileSiteKey={turnstileSiteKey} googleEnabled={isGoogleSignInEnabled()} />
 
           <p className="text-sm text-[var(--neutral-600)] border-t border-[var(--neutral-200)] pt-4">
             Already have an account?{" "}

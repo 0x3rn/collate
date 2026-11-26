@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import type {
   CitationInlineMode,
   CitationStyle,
+  HeadingColor,
   LineSpacing,
   PageSize,
   SpellingVariant,
@@ -362,6 +363,7 @@ export function StepFormattingForm({
   const [marginsMm, setMarginsMm] = useState(wizard.settings.marginsMm);
   const [pageSize, setPageSize] = useState<PageSize>(wizard.settings.pageSize);
   const [pageNumbering, setPageNumbering] = useState(wizard.settings.pageNumbering);
+  const [headingColor, setHeadingColor] = useState<HeadingColor>(wizard.settings.headingColor);
   const [spelling, setSpelling] = useState<SpellingVariant>(wizard.settings.spelling);
   const [authorName, setAuthorName] = useState(wizard.settings.cover.authorName);
   const [institution, setInstitution] = useState(
@@ -381,6 +383,7 @@ export function StepFormattingForm({
       marginsMm,
       pageSize,
       pageNumbering,
+      headingColor,
       spelling,
       cover: {
         authorName: authorName.trim(),
@@ -480,6 +483,25 @@ export function StepFormattingForm({
             value={String(marginsMm)}
             onChange={(val) => setMarginsMm(Number(val))}
             options={[20, 25, 30, 35].map((mm) => ({ value: String(mm), label: `${mm} mm` }))}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label
+            htmlFor="fmt-heading-color"
+            className="block text-sm font-medium text-[var(--neutral-800)]"
+          >
+            Heading colour
+          </label>
+          <CustomSelect<HeadingColor>
+            id="fmt-heading-color"
+            ariaLabel="Heading colour"
+            value={headingColor}
+            onChange={setHeadingColor}
+            options={[
+              { value: "black", label: "Black (standard)" },
+              { value: "blue", label: "Dark blue" },
+            ]}
           />
         </div>
 

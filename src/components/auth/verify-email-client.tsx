@@ -6,6 +6,7 @@ import { FormAlert } from "@/components/ui/alert";
 import { Button, LinkButton } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
+import { VerifyCodePanel } from "./verify-code-panel";
 
 export function VerifyEmailClient({ token }: { token: string | null }) {
   const toast = useToast();
@@ -15,6 +16,7 @@ export function VerifyEmailClient({ token }: { token: string | null }) {
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [email, setEmail] = useState("");
   const [resending, setResending] = useState(false);
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
   const didSubmitRef = useRef(false);
 
   useEffect(() => {
@@ -72,10 +74,7 @@ export function VerifyEmailClient({ token }: { token: string | null }) {
         );
         return;
       }
-      toast.success(
-        data.message ?? "If that email belongs to an unverified account, we sent a new link.",
-        "Verification link sent"
-      );
+      setCodeSentTo(email.trim().toLowerCase());
     } catch {
       toast.error("Network error. Check your connection and try again.", "Connection error");
     } finally {
@@ -98,11 +97,24 @@ export function VerifyEmailClient({ token }: { token: string | null }) {
     );
   }
 
+  if (codeSentTo) {
+    return (
+      <VerifyCodePanel
+        email={codeSentTo}
+        intro="We sent a new verification email. Enter the 6-digit code we sent to"
+        onVerified={() => {
+          setStatus("verified");
+          setStatusMessage("Your email is verified. You can sign in now.");
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <form onSubmit={handleResend} noValidate className="space-y-4">
         <p className="text-sm text-[var(--neutral-600)]">
-          Need a fresh link? Enter the email you used when creating your account.
+          Need a new code? Enter the email you used when creating your account.
         </p>
 
         <FormField
@@ -115,8 +127,8 @@ export function VerifyEmailClient({ token }: { token: string | null }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <Button type="submit" fullWidth loading={resending} loadingLabel="Sending link...">
-          Send verification link
+        <Button type="submit" fullWidth loading={resending} loadingLabel="Sending...">
+          Send verification code
         </Button>
       </form>
 

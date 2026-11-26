@@ -269,7 +269,7 @@ export function AppShell({
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[var(--neutral-50)]">
       {/* Desktop persistent left sidebar */}
-      <aside className="hidden lg:block lg:w-[244px] lg:shrink-0 border-r border-[var(--neutral-200)] bg-white">
+      <aside className="hidden lg:block print:!hidden lg:w-[244px] lg:shrink-0 border-r border-[var(--neutral-200)] bg-white">
         <div className="sticky top-0 h-screen">
           <SidebarContent
             user={user}
@@ -282,7 +282,7 @@ export function AppShell({
       </aside>
 
       {/* Mobile compact sticky header */}
-      <header className="lg:hidden sticky top-0 z-30 h-14 px-3 sm:px-4 bg-white border-b border-[var(--neutral-200)] flex items-center justify-between gap-2">
+      <header className="lg:hidden print:hidden sticky top-0 z-30 h-14 px-3 sm:px-4 bg-white border-b border-[var(--neutral-200)] flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <button
             type="button"

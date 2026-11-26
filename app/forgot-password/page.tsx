@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Reset password | Collate",
-  description: "Request a single-use password reset link for your Collate account.",
+  description: "Reset the password for your Collate account with an emailed code.",
 };
 
 export default async function ForgotPasswordPage() {
@@ -17,12 +17,12 @@ export default async function ForgotPasswordPage() {
   return (
     <>
       <SiteHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-[460px] px-4 sm:px-6 py-12 sm:py-16">
-        <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-8 shadow-[var(--shadow-subtle)] space-y-6">
+      <main className="flex-1 mx-auto w-full max-w-[420px] px-4 sm:px-0 py-14 sm:py-20">
+        <div className="space-y-7">
           <div className="space-y-1.5">
-            <h1 className="text-[1.75rem] font-medium">Reset your password</h1>
+            <h1 className="text-[2rem] font-medium leading-tight">Reset your password</h1>
             <p className="text-sm text-[var(--neutral-600)]">
-              Enter the email linked to your account and we will send a single-use reset link.
+              Enter the email on your account and we will send you a 6-digit code.
             </p>
           </div>
 

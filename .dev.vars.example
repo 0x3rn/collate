@@ -24,7 +24,8 @@ TURNSTILE_SECRET_KEY=
 # Email Delivery
 EMAIL_PROVIDER=
 EMAIL_FROM=
-RESEND_API_KEY=
+# Email is sent through the Cloudflare Email Sending binding (EMAIL in wrangler.jsonc).
+# Use "console" locally to print emails instead of sending them.
 
 # Web Search & Scholarly Source APIs
 TAVILY_API_KEY=
@@ -47,3 +48,10 @@ LLM_MODEL_CLASSIFY=
 # Internal Smoke Routes & Observability
 INTERNAL_SMOKE_TOKEN=
 SENTRY_DSN=
+
+# Owner alerts on Telegram (payments, new sign-ups, daily AI spend). Leave empty to turn off.
+# Setup: scripts/telegram-setup.ts
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+# Optional daily AI spend alert thresholds in USD (default 5,10,25,50,100,200)
+AI_SPEND_ALERT_THRESHOLDS_USD=

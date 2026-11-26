@@ -321,3 +321,21 @@ body *::-webkit-scrollbar-thumb:hover {
     scrollbar-color: rgba(87, 82, 73, 0.34) transparent;
   }
 }
+
+/* Soft fade for content that swaps in place (homepage feature panels). */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[fadeIn_200ms_ease-out\] {
+    animation: none;
+  }
+}

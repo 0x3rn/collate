@@ -224,6 +224,14 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             ],
             [
               b(
+                "Payment Disputes (Legitimate Interests / Establishing or Defending Legal Claims): "
+              ),
+              t(
+                "Recording when you sign up, sign in, accept our Terms at checkout, and download files (with the IP address, device type, and approximate location of each), and, only if a payment is refunded or disputed, sharing those records with Polar.sh or Paystack, and through them with the card network or bank handling the dispute, to show that the purchase was authorized and the service was delivered."
+              ),
+            ],
+            [
+              b(
                 "Compliance with Legal Obligations (Article 6(1)(c) GDPR / Section 25(1)(b)(ii) NDPA): "
               ),
               t(
@@ -330,9 +338,19 @@ export const PRIVACY_POLICY: LegalDocumentData = {
               "System prompts, relevant source excerpts, and structured task inputs (no model training on API data)",
             ],
             [
-              "Resend",
-              "Transactional email delivery (verification links, password resets, workflow notifications, and payment receipts)",
-              "Recipient email address, display name, and transactional email body",
+              "Cloudflare, Inc. (Email Service)",
+              "Sending account email (verification and reset codes, notifications, receipts, replies, and announcements) and receiving email sent to our addresses",
+              "Recipient email address, display name, email content, and any attachments you send us",
+            ],
+            [
+              "Google LLC (Sign in with Google, optional)",
+              "Signing in with a Google account when you choose to",
+              "Your Google account email address, name, and whether Google has verified that email",
+            ],
+            [
+              "Telegram (internal alerts)",
+              "Instant alerts to the Collate operator about payments, failures, and new support email",
+              "Account email, payment amount, and the first lines of emails you send us",
             ],
             [
               "Research index and open-media providers (academic metadata and DOI registries, open-access repositories, and openly licensed image libraries)",

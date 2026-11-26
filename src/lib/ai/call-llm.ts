@@ -10,6 +10,12 @@ import {
 } from "@/config/ai-models";
 import type { AppDb } from "@/db/client";
 import { recordJobLog, sumWorkflowCostUsd } from "@/db/queries/jobs-log";
+import {
+  type AdminAlertEnv,
+  alertOnAiSpendThresholds,
+  createTelegramNotifier,
+  parseSpendThresholds,
+} from "@/lib/notify/admin-alerts";
 import { LLMError, sanitizeErrorMessage } from "./errors";
 import {
   isCloudflareAiGatewayEnabled,
@@ -69,7 +75,8 @@ export interface AIGatewayEnv
     CloudflareGatewayEnv,
     GoogleProviderEnv,
     OpenAIProviderEnv,
-    DeepSeekProviderEnv {
+    DeepSeekProviderEnv,
+    AdminAlertEnv {
   ANTHROPIC_API_KEY?: string;
   APP_ENV?: string;
   ALLOW_DIRECT_ANTHROPIC?: string;
@@ -535,6 +542,12 @@ export async function callLLM(rawInput: CallLLMInput, ctx: CallLLMContext): Prom
       latencyMs,
       error: null,
     });
+
+    if (costEstimateUsd > 0) {
+      await alertOnAiSpendThresholds(ctx.db, createTelegramNotifier(ctx.env, fetchFn), {
+        thresholdsUsd: parseSpendThresholds(ctx.env.AI_SPEND_ALERT_THRESHOLDS_USD),
+      });
+    }
 
     return {
       text: parsedResponse.text,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { STATUS_BADGE_CLASSES } from "@/components/dashboard/project-card";
+import { ProjectRowMenu } from "@/components/dashboard/project-row-menu";
 import { ArrowRightIcon, SearchIcon } from "@/components/layout/workspace-icons";
 import { Button, LinkButton } from "@/components/ui/button";
 import { CustomSelect } from "@/components/ui/custom-select";
@@ -298,7 +299,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                   </div>
 
                   {/* Next step action */}
-                  <div className="md:col-span-2 flex items-center md:justify-end gap-3">
+                  <div className="md:col-span-2 flex items-center justify-between md:justify-end gap-2">
                     <Link
                       href={project.nextAction.href}
                       className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)]"
@@ -306,6 +307,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                       <span>{project.nextAction.label}</span>
                       <ArrowRightIcon className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5 shrink-0" />
                     </Link>
+                    <ProjectRowMenu projectId={project.id} projectTitle={project.title} />
                   </div>
                 </li>
               );

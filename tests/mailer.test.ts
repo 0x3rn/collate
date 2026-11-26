@@ -1,143 +1,151 @@
 import { describe, expect, it, vi } from "vitest";
-import { createEmailSender } from "@/lib/email/mailer";
+import { emailAssetRoot, wrapEmailHtml } from "@/lib/email/layout";
+import {
+  buildPasswordResetEmail,
+  buildVerificationEmail,
+  type CloudflareEmailBinding,
+  createEmailSender,
+  parseAddress,
+} from "@/lib/email/mailer";
 
-describe("createEmailSender", () => {
-  const sampleMessage = {
-    to: "student@example.edu",
-    subject: "Verify your Collate email address",
-    text: "Click https://collate.corstack.dev/verify-email?token=abc",
-    html: "<p>Verify</p>",
+const sampleMessage = {
+  to: "student@example.edu",
+  subject: "Verify your Collate email address",
+  text: "Your code is 123456",
+  html: "<p>Verify</p>",
+};
+
+function fakeBinding() {
+  const calls: Array<Parameters<CloudflareEmailBinding["send"]>[0]> = [];
+  const binding: CloudflareEmailBinding = {
+    async send(message) {
+      calls.push(message);
+      return { messageId: "cf_msg_1" };
+    },
   };
+  return { binding, calls };
+}
 
-  it("auto-selects Resend when EMAIL_PROVIDER is unset and RESEND_API_KEY is present", async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(JSON.stringify({ id: "email_123" }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })
-    );
-
+describe("createEmailSender (Cloudflare Email Sending)", () => {
+  it("sends through the binding with a parsed sender, reply-to and branded HTML", async () => {
+    const { binding, calls } = fakeBinding();
     const sender = createEmailSender({
-      EMAIL_FROM: "Collate <collate@corstack.dev>",
-      RESEND_API_KEY: "re_test_key_12345",
-      fetchFn,
+      EMAIL_PROVIDER: "cloudflare",
+      EMAIL_FROM: "Collate <noreply@collateresearch.app>",
+      EMAIL_REPLY_TO: "support@collateresearch.app",
+      APP_URL: "https://collateresearch.app",
+      binding,
     });
-
     const result = await sender.send(sampleMessage);
-
-    expect(result).toEqual({ ok: true, provider: "resend", messageId: "email_123" });
-    expect(fetchFn).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchFn.mock.calls[0]!;
-    expect(url).toBe("https://api.resend.com/emails");
-    expect((init?.headers as Record<string, string>).authorization).toBe(
-      "Bearer re_test_key_12345"
-    );
-    expect(JSON.parse(String(init?.body))).toMatchObject({
-      from: "Collate <collate@corstack.dev>",
-      to: ["student@example.edu"],
+    expect(result).toEqual({ ok: true, provider: "cloudflare", messageId: "cf_msg_1" });
+    expect(calls[0]).toMatchObject({
+      from: { email: "noreply@collateresearch.app", name: "Collate" },
+      to: "student@example.edu",
       subject: sampleMessage.subject,
+      text: sampleMessage.text,
+      replyTo: "support@collateresearch.app",
+    });
+    expect(calls[0]!.html).toContain('<img src="https://collateresearch.app/email/logo.png"');
+    expect(calls[0]!.html).toContain("<p>Verify</p>");
+  });
+
+  it("uses the binding when EMAIL_PROVIDER is unset, and passes per-message sender and attachments", async () => {
+    const { binding, calls } = fakeBinding();
+    const sender = createEmailSender({ binding });
+    await sender.send({
+      ...sampleMessage,
+      from: "Collate Support <support@collateresearch.app>",
+      headers: { "In-Reply-To": "<abc@mail>" },
+      attachments: [{ filename: "a.txt", content: "aGk=", type: "text/plain" }],
+    });
+    expect(calls[0]).toMatchObject({
+      from: { email: "support@collateresearch.app", name: "Collate Support" },
+      headers: { "In-Reply-To": "<abc@mail>" },
+      attachments: [
+        { filename: "a.txt", content: "aGk=", type: "text/plain", disposition: "attachment" },
+      ],
     });
   });
 
-  it("honors explicit EMAIL_PROVIDER=console even when RESEND_API_KEY is set", async () => {
-    const fetchFn = vi.fn<typeof fetch>();
+  it("reports a failed send without throwing", async () => {
+    const sender = createEmailSender({
+      binding: {
+        async send() {
+          throw Object.assign(new Error("Sender domain not verified"), {
+            code: "E_SENDER_NOT_VERIFIED",
+          });
+        },
+      },
+    });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await sender.send(sampleMessage);
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("E_SENDER_NOT_VERIFIED: Sender domain not verified");
+    errSpy.mockRestore();
+  });
+
+  it("prints instead of sending with EMAIL_PROVIDER=console, even when a binding exists", async () => {
+    const { binding, calls } = fakeBinding();
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-
-    try {
-      const sender = createEmailSender({
-        EMAIL_PROVIDER: "console",
-        EMAIL_FROM: "Collate <collate@corstack.dev>",
-        RESEND_API_KEY: "re_test_key_12345",
-        fetchFn,
-      });
-
-      const result = await sender.send(sampleMessage);
-
-      expect(result.ok).toBe(true);
-      expect(result.provider).toBe("console");
-      expect(fetchFn).not.toHaveBeenCalled();
-      expect(logSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      logSpy.mockRestore();
-    }
-  });
-
-  it("accepts case-insensitive EMAIL_PROVIDER=Resend and surfaces Resend rejection details without leaking the key", async () => {
-    const secretKey = "re_super_secret_key_999";
-    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          name: "validation_error",
-          message: `Domain is not verified (echo ${secretKey})`,
-        }),
-        { status: 403, headers: { "content-type": "application/json" } }
-      )
+    const result = await createEmailSender({ EMAIL_PROVIDER: "console", binding }).send(
+      sampleMessage
     );
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    try {
-      const sender = createEmailSender({
-        EMAIL_PROVIDER: "Resend",
-        EMAIL_FROM: "collate@corstack.dev",
-        RESEND_API_KEY: secretKey,
-        fetchFn,
-      });
-
-      const result = await sender.send(sampleMessage);
-
-      expect(result.ok).toBe(false);
-      expect(result.provider).toBe("resend");
-      expect(result.error).toContain("HTTP 403");
-      expect(result.error).toContain("validation_error");
-      expect(result.error).not.toContain(secretKey);
-      expect(errSpy).toHaveBeenCalledTimes(1);
-      expect(String(errSpy.mock.calls[0]?.[0])).not.toContain(secretKey);
-    } finally {
-      errSpy.mockRestore();
-    }
+    expect(result.provider).toBe("console");
+    expect(calls).toHaveLength(0);
+    logSpy.mockRestore();
   });
 
-  it("handles network failures cleanly without throwing", async () => {
-    const fetchFn = vi.fn<typeof fetch>().mockRejectedValue(new Error("Connection reset"));
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    try {
-      const sender = createEmailSender({
-        EMAIL_PROVIDER: "resend",
-        RESEND_API_KEY: "re_test_key_12345",
-        fetchFn,
-      });
-
-      const result = await sender.send(sampleMessage);
-
-      expect(result.ok).toBe(false);
-      expect(result.provider).toBe("resend");
-      expect(result.error).toContain("Connection reset");
-      expect(errSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      errSpy.mockRestore();
-    }
-  });
-
-  it("warns and falls back to console when EMAIL_PROVIDER=resend but RESEND_API_KEY is missing", async () => {
+  it("falls back to printing when the binding is missing", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const result = await createEmailSender({ EMAIL_PROVIDER: "cloudflare" }).send(sampleMessage);
+    expect(result.provider).toBe("console");
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+});
 
-    try {
-      const sender = createEmailSender({
-        EMAIL_PROVIDER: "resend",
-        RESEND_API_KEY: "",
-      });
+describe("email content", () => {
+  it("parses sender addresses", () => {
+    expect(parseAddress("Collate <noreply@x.app>")).toEqual({
+      email: "noreply@x.app",
+      name: "Collate",
+    });
+    expect(parseAddress("noreply@x.app")).toEqual({ email: "noreply@x.app" });
+  });
 
-      const result = await sender.send(sampleMessage);
+  it("puts the code in the subject and body, and escapes the user's name", () => {
+    const email = buildVerificationEmail({
+      name: "<script>x</script>",
+      verifyUrl: "https://collateresearch.app/verify-email?token=t",
+      code: "042913",
+    });
+    expect(email.subject).toBe("042913 is your Collate verification code");
+    expect(email.text).toContain("042913");
+    expect(email.html).toContain("042913");
+    expect(email.html).not.toContain("<script>");
+    expect(buildPasswordResetEmail({ name: "Ada", code: "111222" }).text).toContain(
+      "expires in 10 minutes"
+    );
+  });
 
-      expect(result.ok).toBe(true);
-      expect(result.provider).toBe("console");
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(logSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      warnSpy.mockRestore();
-      logSpy.mockRestore();
-    }
+  it("wraps HTML once, with the logo as a PNG", () => {
+    const once = wrapEmailHtml("<p>Hi</p>", { appUrl: "https://collateresearch.app/" });
+    expect(once).toContain("https://collateresearch.app/email/logo.png");
+    expect(once).not.toContain(".svg");
+    expect(wrapEmailHtml(once)).toBe(once);
+  });
+
+  it("loads the logo from the public site when sent from a local server", () => {
+    expect(emailAssetRoot("http://localhost:5173")).toBe("https://collateresearch.app");
+    expect(emailAssetRoot("https://app.localhost")).toBe("https://collateresearch.app");
+    expect(emailAssetRoot("http://collateresearch.app")).toBe("https://collateresearch.app");
+    expect(emailAssetRoot("https://staging.collateresearch.app/")).toBe(
+      "https://staging.collateresearch.app"
+    );
+    const local = wrapEmailHtml("<p>Hi</p>", { appUrl: "http://localhost:5173" });
+    expect(local).toContain('<img src="https://collateresearch.app/email/logo.png"');
+    expect(local).toContain('href="http://localhost:5173"'); // links still go to the app
   });
 });

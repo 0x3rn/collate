@@ -136,7 +136,7 @@ function renderParagraphWithCitations(
             onMouseEnter={() => onInspect(cards)}
             onFocus={() => onInspect(cards)}
             onClick={() => onInspect(cards)}
-            className="inline px-1 py-[1px] text-[0.94em] font-normal rounded-[4px] bg-[var(--accent-100)]/75 hover:bg-[var(--accent-100)] text-[var(--accent-700)] transition-colors cursor-pointer"
+            className="inline px-1 py-[1px] text-[0.94em] font-normal rounded-[4px] bg-[var(--accent-100)]/75 hover:bg-[var(--accent-100)] text-[var(--accent-700)] transition-colors cursor-pointer [overflow-wrap:anywhere]"
           >
             {displayLabel}
           </button>
@@ -894,7 +894,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                     <span className="self-start inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-700)]">
                       Verified source
                     </span>
-                    <p className="text-[0.9375rem] font-medium text-[var(--neutral-900)] leading-snug">
+                    <p className="text-[0.9375rem] font-medium text-[var(--neutral-900)] leading-snug [overflow-wrap:anywhere]">
                       {citation.title}
                     </p>
                     <div className="pt-2.5 border-t border-[var(--neutral-100)] flex flex-col gap-1.5 text-xs text-[var(--neutral-600)]">

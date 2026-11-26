@@ -68,7 +68,7 @@ describe("Landing page copy quality, pricing & credit calculation", () => {
     expect(allText, "Avoid em-dashes in public marketing copy").not.toContain("\u2014");
   });
 
-  it("matches exact $10/10k, $25/30k, $50/60k credit packs and calculates project credits accurately", () => {
+  it("matches exact $10/10k, $30/35k, $50/60k credit packs and calculates project credits accurately", () => {
     const summary = getPublicPricingSummary();
     expect(summary.packs).toHaveLength(CREDIT_PACKS.length);
     expect(summary.packs[0]).toMatchObject({
@@ -77,13 +77,13 @@ describe("Landing page copy quality, pricing & credit calculation", () => {
       usdFormatted: "$10",
     });
     expect(summary.packs[1]).toMatchObject({
-      credits: 80,
+      credits: 100,
       featured: true,
-      ngnFormatted: "₦30,000",
-      usdFormatted: "$25",
+      ngnFormatted: "₦35,000",
+      usdFormatted: "$30",
     });
     expect(summary.packs[2]).toMatchObject({
-      credits: 180,
+      credits: 200,
       ngnFormatted: "₦60,000",
       usdFormatted: "$50",
     });

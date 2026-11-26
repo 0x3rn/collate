@@ -21,7 +21,7 @@ export function keepWordsTogether(text: string): string {
       // "Smith et al." — name, "et" and "al." stay together.
       .replace(/(\S) et al\./g, `$1${NBSP}et${NBSP}al.`)
       // Citation years: ", 2024", ", 2024a", ", n.d." and "Smith 2024)" / "Smith 2024;".
-      .replace(/, (?=(?:\d{4}[a-z]?|n\.d\.)(?=[\s),;:.]|$))/g, `,${NBSP}`)
+      .replace(/, (?=(?:\d{4}[a-z]?|n\.d\.)(?=[\s),;:.‑]|$))/g, `,${NBSP}`)
       .replace(/([A-Za-z.]) (?=\d{4}[a-z]?[);,])/g, `$1${NBSP}`)
       // Page references: "p. 12", "pp. 12–15".
       .replace(/\b(pp?\.) (?=\d)/g, `$1${NBSP}`)

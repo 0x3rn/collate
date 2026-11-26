@@ -49,6 +49,9 @@ export type SpellingVariant = (typeof SPELLING_VARIANTS)[number];
 export const PAGE_SIZES = ["a4", "letter"] as const;
 export type PageSize = (typeof PAGE_SIZES)[number];
 
+export const HEADING_COLORS = ["black", "blue"] as const;
+export type HeadingColor = (typeof HEADING_COLORS)[number];
+
 export const EXPERIMENTAL_DATA_MODES = ["user_provided", "published_benchmarks"] as const;
 export type ExperimentalDataMode = (typeof EXPERIMENTAL_DATA_MODES)[number];
 
@@ -152,6 +155,13 @@ export const users = sqliteTable(
     name: text("name").notNull(),
     image: text("image"),
     creditsBalance: integer("credits_balance").notNull().default(0),
+    /**
+     * Set while a payment dispute is open, or after a refund the user had already spent credits
+     * from. While set, the account cannot buy or spend credits. Cleared by an admin, or
+     * automatically when a dispute is won.
+     */
+    billingHoldReason: text("billing_hold_reason"),
+    billingHoldAt: integer("billing_hold_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
@@ -172,6 +182,10 @@ export const sessions = sqliteTable(
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
+    /** Approximate location from Cloudflare at sign-in (city and two-letter country code). */
+    city: text("city"),
+    country: text("country"),
+    lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
@@ -204,6 +218,28 @@ export const accounts = sqliteTable(
     uniqueIndex("accounts_provider_account_unique").on(table.providerId, table.accountId),
     index("accounts_user_id_idx").on(table.userId),
   ]
+);
+
+/**
+ * Six-digit one-time codes (email verification, password reset, email change). Stored hashed,
+ * one live code per user and purpose, deleted when used, expired or guessed wrong too often.
+ */
+export const authCodes = sqliteTable(
+  "auth_codes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(),
+    codeHash: text("code_hash").notNull(),
+    /** Extra data the code confirms, such as the new address for an email change. */
+    target: text("target"),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("auth_codes_user_purpose_idx").on(table.userId, table.purpose)]
 );
 
 export const verifications = sqliteTable(
@@ -276,6 +312,7 @@ export const projectSettings = sqliteTable(
     marginsMm: integer("margins_mm").notNull().default(25),
     pageSize: text("page_size", { enum: PAGE_SIZES }).notNull().default("a4"),
     pageNumbering: integer("page_numbering", { mode: "boolean" }).notNull().default(true),
+    headingColor: text("heading_color", { enum: HEADING_COLORS }).notNull().default("black"),
     spelling: text("spelling", { enum: SPELLING_VARIANTS }).notNull().default("uk"),
     isExperimental: integer("is_experimental", { mode: "boolean" }).notNull().default(false),
     experimentalDataMode: text("experimental_data_mode", { enum: EXPERIMENTAL_DATA_MODES })
@@ -389,6 +426,7 @@ export const jobsLog = sqliteTable(
   (table) => [
     index("jobs_log_workflow_idx").on(table.workflowId),
     index("jobs_log_project_idx").on(table.projectId),
+    index("jobs_log_created_at_idx").on(table.createdAt),
     check(
       "jobs_log_status_valid",
       sql`${table.status} IN ('started', 'succeeded', 'failed', 'retrying')`
@@ -797,6 +835,8 @@ export const notificationPreferences = sqliteTable("notification_preferences", {
     .notNull()
     .default(true),
   emailReceipts: integer("email_receipts", { mode: "boolean" }).notNull().default(true),
+  /** Promotions and offers. Off unless the user opts in. */
+  emailMarketing: integer("email_marketing", { mode: "boolean" }).notNull().default(false),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 
@@ -809,6 +849,8 @@ export const payments = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     provider: text("provider", { enum: PAYMENT_PROVIDERS }).notNull(),
     providerReference: text("provider_reference").notNull(),
+    /** Polar order id (refunds and disputes point at the order, not the checkout). */
+    providerOrderId: text("provider_order_id"),
     currency: text("currency").notNull(),
     amountMinor: integer("amount_minor").notNull(),
     creditsGranted: integer("credits_granted").notNull(),
@@ -819,10 +861,63 @@ export const payments = sqliteTable(
   },
   (table) => [
     uniqueIndex("payments_provider_ref_unique").on(table.provider, table.providerReference),
+    index("payments_provider_order_idx").on(table.provider, table.providerOrderId),
     index("payments_user_idx").on(table.userId, table.createdAt),
     check(
       "payments_amount_positive",
       sql`${table.amountMinor} > 0 AND ${table.creditsGranted} > 0`
+    ),
+  ]
+);
+
+export const REVERSAL_KINDS = ["refund", "dispute"] as const;
+export type ReversalKind = (typeof REVERSAL_KINDS)[number];
+
+/**
+ * Money going back to a customer after a payment: a refund, or a dispute (chargeback) opened
+ * with their bank. Each one takes back the matching share of the credits that payment bought.
+ */
+export const paymentReversals = sqliteTable(
+  "payment_reversals",
+  {
+    id: text("id").primaryKey(),
+    paymentId: text("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: PAYMENT_PROVIDERS }).notNull(),
+    kind: text("kind", { enum: REVERSAL_KINDS }).notNull(),
+    providerReversalId: text("provider_reversal_id").notNull(),
+    /** Provider status, e.g. succeeded, needs_response, won, lost, awaiting-merchant-feedback. */
+    status: text("status").notNull(),
+    reason: text("reason"),
+    amountMinor: integer("amount_minor").notNull(),
+    currency: text("currency").notNull(),
+    /** Credits this reversal accounts for (its share of the payment). */
+    creditsTarget: integer("credits_target").notNull().default(0),
+    /** Credits actually taken back (can be less if they were already spent). */
+    creditsRemoved: integer("credits_removed").notNull().default(0),
+    /** Credits that were already spent and could not be taken back. */
+    creditsShort: integer("credits_short").notNull().default(0),
+    dueAt: integer("due_at", { mode: "timestamp_ms" }),
+    resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("payment_reversals_provider_unique").on(
+      table.provider,
+      table.kind,
+      table.providerReversalId
+    ),
+    index("payment_reversals_payment_idx").on(table.paymentId),
+    index("payment_reversals_user_idx").on(table.userId, table.createdAt),
+    check("payment_reversals_kind_valid", sql`${table.kind} IN ('refund', 'dispute')`),
+    check(
+      "payment_reversals_credits_non_negative",
+      sql`${table.creditsTarget} >= 0 AND ${table.creditsRemoved} >= 0 AND ${table.creditsShort} >= 0`
     ),
   ]
 );
@@ -881,6 +976,12 @@ export const systemControls = sqliteTable("system_controls", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 
+/** One row per admin alert already sent (for example "ai_spend:2026-11-25:10"), so each fires once. */
+export const adminAlerts = sqliteTable("admin_alerts", {
+  key: text("key").primaryKey(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export const projectFigures = sqliteTable(
   "project_figures",
   {
@@ -933,6 +1034,108 @@ export type NewUserRecord = typeof users.$inferInsert;
 export type ProjectRecord = typeof projects.$inferSelect;
 export type NewProjectRecord = typeof projects.$inferInsert;
 export type ProjectSettingsRecord = typeof projectSettings.$inferSelect;
+// ── Admin email inbox ───────────────────────────────────────────────────────
+
+export const INBOX_MAILBOXES = ["support", "billing", "general"] as const;
+export type InboxMailbox = (typeof INBOX_MAILBOXES)[number];
+
+/** One conversation with one person in one mailbox (Support, Billing or General). */
+export const emailThreads = sqliteTable(
+  "email_threads",
+  {
+    id: text("id").primaryKey(),
+    mailbox: text("mailbox", { enum: INBOX_MAILBOXES }).notNull(),
+    subject: text("subject").notNull(),
+    contactEmail: text("contact_email").notNull(),
+    contactName: text("contact_name"),
+    /** The Collate account with that email, when there is one. */
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    status: text("status", { enum: ["open", "closed"] })
+      .notNull()
+      .default("open"),
+    unread: integer("unread", { mode: "boolean" }).notNull().default(true),
+    lastMessageAt: integer("last_message_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("email_threads_mailbox_idx").on(table.mailbox, table.lastMessageAt),
+    index("email_threads_contact_idx").on(table.contactEmail),
+  ]
+);
+
+export const emailMessages = sqliteTable(
+  "email_messages",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id")
+      .notNull()
+      .references(() => emailThreads.id, { onDelete: "cascade" }),
+    direction: text("direction", { enum: ["inbound", "outbound"] }).notNull(),
+    fromAddress: text("from_address").notNull(),
+    toAddress: text("to_address").notNull(),
+    subject: text("subject").notNull(),
+    textBody: text("text_body").notNull(),
+    /** RFC Message-ID, used to thread replies. */
+    messageIdHeader: text("message_id_header"),
+    /**
+     * False when the From header names a different domain than the sending server used, which
+     * is how forged "From" lines usually look. Shown as a warning in the inbox.
+     */
+    senderVerified: integer("sender_verified", { mode: "boolean" }).notNull().default(true),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    index("email_messages_thread_idx").on(table.threadId, table.createdAt),
+    index("email_messages_message_id_idx").on(table.messageIdHeader),
+  ]
+);
+
+export const emailAttachments = sqliteTable(
+  "email_attachments",
+  {
+    id: text("id").primaryKey(),
+    messageId: text("message_id")
+      .notNull()
+      .references(() => emailMessages.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    r2Key: text("r2_key").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("email_attachments_message_idx").on(table.messageId)]
+);
+
+export const BROADCAST_KINDS = ["announcement", "promotion"] as const;
+export type BroadcastKind = (typeof BROADCAST_KINDS)[number];
+
+/** An announcement or promotion sent to many users. */
+export const emailBroadcasts = sqliteTable("email_broadcasts", {
+  id: text("id").primaryKey(),
+  kind: text("kind", { enum: BROADCAST_KINDS }).notNull(),
+  subject: text("subject").notNull(),
+  /** Body in the composer's simple formatting (rendered to safe HTML when sent). */
+  body: text("body").notNull(),
+  status: text("status", { enum: ["sending", "sent", "failed"] })
+    .notNull()
+    .default("sending"),
+  recipientCount: integer("recipient_count").notNull().default(0),
+  sentCount: integer("sent_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+});
+
+/** Images uploaded for announcements and promotions, served publicly by id. */
+export const emailAssets = sqliteTable("email_assets", {
+  id: text("id").primaryKey(),
+  r2Key: text("r2_key").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+});
+
 export type QuestionRecord = typeof questions.$inferSelect;
 export type ChapterRecord = typeof chapters.$inferSelect;
 export type FeasibilityReportRecord = typeof feasibilityReports.$inferSelect;

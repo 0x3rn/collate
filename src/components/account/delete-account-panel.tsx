@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 
-export function DeleteAccountPanel() {
+export function DeleteAccountPanel({ hasPassword = true }: { hasPassword?: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [password, setPassword] = useState("");
@@ -55,15 +55,17 @@ export function DeleteAccountPanel() {
       </p>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-4 max-w-[440px]">
-        <FormField
-          id="delete-password"
-          label="Your password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        {hasPassword ? (
+          <FormField
+            id="delete-password"
+            label="Your password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        ) : null}
         <FormField
           id="delete-confirm-phrase"
           label='Type "DELETE MY ACCOUNT" to confirm'

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ReversalEvent } from "./reversals";
 import { BILLING_POLICY, findCreditPack } from "@/config/pricing";
 import type { PaymentProvider } from "@/db/schema";
 import { timingSafeEqualString } from "@/lib/security/internal-auth";
@@ -83,6 +84,8 @@ export async function computeHmacBase64(
 export interface NormalizedPaymentWebhook {
   provider: PaymentProvider;
   providerReference: string;
+  /** Polar order id, which later refunds and disputes point at. */
+  providerOrderId?: string;
   userId: string;
   currency: string;
   amountMinor: number;
@@ -114,7 +117,7 @@ export async function verifyPaystackWebhook(params: {
   secretKey: string;
 }): Promise<
   | { valid: false; reason: string }
-  | { valid: true; ignored?: true; payment?: NormalizedPaymentWebhook }
+  | { valid: true; ignored?: true; payment?: NormalizedPaymentWebhook; rawEvent?: unknown }
 > {
   const sig = params.signatureHeader?.trim();
   if (!sig) {
@@ -131,6 +134,12 @@ export async function verifyPaystackWebhook(params: {
     parsedJson = JSON.parse(params.rawBody);
   } catch {
     return { valid: false, reason: "Malformed Paystack webhook JSON." };
+  }
+
+  // Signature checked: other events (refunds, disputes) go back to the caller as they are.
+  const eventName = (parsedJson as { event?: unknown } | null)?.event;
+  if (eventName !== "charge.success") {
+    return { valid: true, ignored: true, rawEvent: parsedJson };
   }
 
   const parsed = PaystackEventSchema.safeParse(parsedJson);
@@ -372,7 +381,7 @@ export async function verifyPolarWebhook(params: {
   nowMs?: number;
 }): Promise<
   | { valid: false; reason: string }
-  | { valid: true; ignored?: true; payment?: NormalizedPaymentWebhook }
+  | { valid: true; ignored?: true; payment?: NormalizedPaymentWebhook; rawEvent?: unknown }
 > {
   const webhookId = params.webhookId?.trim();
   const timestampRaw = params.webhookTimestamp?.trim();
@@ -427,7 +436,7 @@ export async function verifyPolarWebhook(params: {
   }
 
   if (envelope.data.type !== "order.paid") {
-    return { valid: true, ignored: true };
+    return { valid: true, ignored: true, rawEvent: envelope.data };
   }
 
   const orderParsed = PolarOrderPaidDataSchema.safeParse(envelope.data.data);
@@ -502,6 +511,7 @@ export async function verifyPolarWebhook(params: {
     payment: {
       provider: "polar",
       providerReference: order.checkout_id?.trim() || order.id,
+      providerOrderId: order.id,
       userId,
       currency: (order.currency ?? "usd").toUpperCase(),
       amountMinor,
@@ -509,6 +519,121 @@ export async function verifyPolarWebhook(params: {
       ...(order.product_id ? { productId: order.product_id } : {}),
       creditsGranted: rawCredits,
       eventType: envelope.data.type,
+    },
+  };
+}
+
+// ── Refunds and disputes ────────────────────────────────────────────────────
+
+export type ParsedReversal =
+  | { type: "reversal"; event: ReversalEvent }
+  | {
+      type: "dispute_resolved";
+      provider: PaymentProvider;
+      disputeId: string;
+      result: "won" | "lost";
+      status: string;
+      /** Used to record the dispute first if its "opened" event was missed. */
+      event: ReversalEvent;
+    };
+
+const toMinor = (v: unknown): number | null => {
+  const n = typeof v === "string" ? Number(v) : typeof v === "number" ? v : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+};
+const str = (v: unknown): string | null =>
+  typeof v === "string" && v.trim() ? v.trim() : typeof v === "number" ? String(v) : null;
+const date = (v: unknown): Date | null => {
+  if (typeof v !== "string") return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+/**
+ * Paystack refund.processed and charge.dispute.* events (already signature-checked).
+ * Dispute resolutions: "declined" means the customer's claim was turned down (we won); any
+ * other resolution (merchant-accepted, auto-accepted) means the money went back to them.
+ */
+export function parsePaystackReversal(raw: unknown): ParsedReversal | null {
+  const ev = raw as { event?: unknown; data?: Record<string, unknown> } | null;
+  const name = typeof ev?.event === "string" ? ev.event : "";
+  const data = ev?.data ?? {};
+  if (name === "refund.processed") {
+    const ref = str(data.transaction_reference);
+    const amount = toMinor(data.amount);
+    if (!ref || !amount) return null;
+    return {
+      type: "reversal",
+      event: {
+        provider: "paystack",
+        kind: "refund",
+        providerReversalId: str(data.refund_reference) ?? str(data.id) ?? `${ref}:${amount}`,
+        payment: { providerReference: ref },
+        amountMinor: amount,
+        currency: str(data.currency) ?? "NGN",
+        status: str(data.status) ?? "processed",
+      },
+    };
+  }
+  if (name.startsWith("charge.dispute.")) {
+    const tx = (data.transaction ?? {}) as Record<string, unknown>;
+    const ref = str(tx.reference) ?? str(data.transaction_reference);
+    const id = str(data.id);
+    const amount = toMinor(data.refund_amount) ?? toMinor(tx.amount);
+    if (!ref || !id || !amount) return null;
+    const messages = Array.isArray(data.messages)
+      ? (data.messages as Array<{ body?: unknown }>)
+      : [];
+    const event: ReversalEvent = {
+      provider: "paystack",
+      kind: "dispute",
+      providerReversalId: id,
+      payment: { providerReference: ref },
+      amountMinor: amount,
+      currency: str(data.currency) ?? str(tx.currency) ?? "NGN",
+      status: str(data.status) ?? "open",
+      reason:
+        [str(data.category), str(messages[0]?.body)].filter(Boolean).join(": ").slice(0, 300) ||
+        null,
+      dueAt: date(data.dueAt) ?? date(data.due_at),
+    };
+    if (name === "charge.dispute.resolve") {
+      const resolution = (str(data.resolution) ?? "").toLowerCase();
+      return {
+        type: "dispute_resolved",
+        provider: "paystack",
+        disputeId: id,
+        result: resolution === "declined" || resolution === "auto-declined" ? "won" : "lost",
+        status: resolution || "resolved",
+        event,
+      };
+    }
+    return { type: "reversal", event };
+  }
+  return null;
+}
+
+/** Polar refund.created / refund.updated, once the refund has succeeded. */
+export function parsePolarReversal(rawEnvelope: unknown): ParsedReversal | null {
+  const env = rawEnvelope as { type?: unknown; data?: Record<string, unknown> } | null;
+  if (env?.type !== "refund.created" && env?.type !== "refund.updated") return null;
+  const data = env.data ?? {};
+  if (str(data.status) !== "succeeded") return null;
+  const id = str(data.id);
+  const orderId = str(data.order_id);
+  const amount = toMinor((toMinor(data.amount) ?? 0) + (toMinor(data.tax_amount) ?? 0));
+  if (!id || !orderId || !amount) return null;
+  return {
+    type: "reversal",
+    event: {
+      provider: "polar",
+      kind: "refund",
+      providerReversalId: id,
+      payment: { providerOrderId: orderId },
+      amountMinor: amount,
+      currency: str(data.currency) ?? "usd",
+      status: "succeeded",
+      reason: str(data.reason),
     },
   };
 }

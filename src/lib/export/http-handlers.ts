@@ -1,8 +1,10 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { loadProjectCitationMap } from "@/db/queries/citations";
+import { withYearSuffixesForText } from "@/lib/citations/source-title";
 import { getWizardStateForUser } from "@/db/queries/wizard";
 import {
+  auditLog,
   chapters,
   chapterVersions,
   EXPORT_FORMATS,
@@ -20,6 +22,7 @@ import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
 import { renderDraftWithCitations } from "@/lib/citations/formatter";
+import { evidenceFromRequest } from "@/lib/billing/evidence";
 import { logEvent } from "@/lib/observability/logger";
 import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pdf";
 import { formatProjectType } from "@/lib/ui/formatters";
@@ -179,6 +182,7 @@ export async function handleCreateExport(
   const citationMap = await loadProjectCitationMap(deps.db, projectId, { excludeRejected: true });
   const exportChapters: ExportChapterContent[] = [];
   const allCombinedRawMarkdown: string[] = [];
+  const loadedChapters: Array<{ number: number; title: string; rawMd: string }> = [];
   // "chapterId:version" for every chapter in the file; identifies what was exported.
   const sourceParts: string[] = [];
   let singleChapterVersion: number | null = null;
@@ -199,15 +203,22 @@ export async function handleCreateExport(
     allCombinedRawMarkdown.push(rawMd);
     sourceParts.push(`${ch.id}:${latestVer.version}`);
     if (scope === "chapter") singleChapterVersion = latestVer.version;
+    loadedChapters.push({ number: ch.number, title: ch.title, rawMd });
+  }
+
+  // Same-author-year letters (n.d.-a, n.d.-b) are counted over this file's own citations, so
+  // every chapter and the reference list agree.
+  const letteredCitations = withYearSuffixesForText(citationMap, ...allCombinedRawMarkdown);
+  for (const loaded of loadedChapters) {
     const formatted = renderDraftWithCitations({
-      draftText: rawMd,
-      registry: citationMap,
+      draftText: loaded.rawMd,
+      registry: letteredCitations,
       style: wizard.settings.citationStyle,
       inlineMode: wizard.settings.inlineMode,
     });
     exportChapters.push({
-      number: ch.number,
-      title: ch.title,
+      number: loaded.number,
+      title: loaded.title,
       markdown: formatted.renderedText,
     });
   }
@@ -221,7 +232,7 @@ export async function handleCreateExport(
 
   const combinedCitations = renderDraftWithCitations({
     draftText: allCombinedRawMarkdown.join("\n\n"),
-    registry: citationMap,
+    registry: letteredCitations,
     style: wizard.settings.citationStyle,
     inlineMode: wizard.settings.inlineMode,
   });
@@ -258,6 +269,7 @@ export async function handleCreateExport(
       marginsMm: wizard.settings.marginsMm,
       pageSize: wizard.settings.pageSize,
       pageNumbering: wizard.settings.pageNumbering,
+      headingColor: wizard.settings.headingColor,
       frontMatter: wizard.settings.frontMatter,
       cover: wizard.settings.cover,
     },
@@ -498,6 +510,24 @@ export async function handleDownloadExport(
       ? "application/pdf"
       : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   const filename = sanitizeDownloadFilename(wizard.project.title, expRow.scope, expRow.format);
+
+  // Proof of delivery for payment disputes: who downloaded which file, when, and from where.
+  await deps.db.insert(auditLog).values({
+    id: `aud_${crypto.randomUUID()}`,
+    actorUserId: session.user.id,
+    action: "export.downloaded",
+    entityType: "export",
+    entityId: expRow.id,
+    metadataJson: JSON.stringify({
+      projectId,
+      format: expRow.format,
+      scope: expRow.scope,
+      pageCount: expRow.pageCount,
+      bytes: fileBytes.byteLength,
+      ...evidenceFromRequest(request),
+    }),
+    createdAt: (deps.nowFn ?? (() => new Date()))(),
+  });
 
   return new Response(fileBytes, {
     status: 200,

@@ -30,7 +30,7 @@ export function PricingShowcase({
   packs: PublicPackCard[];
   signedIn: boolean;
 }) {
-  const [currency, setCurrency] = useState<"ngn" | "usd">("ngn");
+  const [currency, setCurrency] = useState<"ngn" | "usd">("usd");
   const [workType, setWorkType] = useState<ProjectType>("project");
   const [pages, setPages] = useState<number>(55);
 
@@ -118,17 +118,6 @@ export function PricingShowcase({
       <div className="inline-flex items-center p-1 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-white">
         <button
           type="button"
-          onClick={() => setCurrency("ngn")}
-          className={`min-h-[38px] px-4 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
-            currency === "ngn"
-              ? "bg-[var(--accent-600)] text-white"
-              : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
-          }`}
-        >
-          Nigerian Naira (₦)
-        </button>
-        <button
-          type="button"
           onClick={() => setCurrency("usd")}
           className={`min-h-[38px] px-4 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
             currency === "usd"
@@ -137,6 +126,17 @@ export function PricingShowcase({
           }`}
         >
           US Dollars ($)
+        </button>
+        <button
+          type="button"
+          onClick={() => setCurrency("ngn")}
+          className={`min-h-[38px] px-4 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
+            currency === "ngn"
+              ? "bg-[var(--accent-600)] text-white"
+              : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
+          }`}
+        >
+          Nigerian Naira (₦)
         </button>
       </div>
 

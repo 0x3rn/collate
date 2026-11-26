@@ -1,7 +1,7 @@
-import { asc } from "drizzle-orm";
+import { and, asc, eq, lt } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type AppDb } from "@/db/client";
-import { users } from "@/db/schema";
+import { auditLog, creditLedger, users } from "@/db/schema";
 import {
   handleSignIn,
   handleSignUp,
@@ -45,6 +45,7 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
   let db: AppDb;
   let sent: EmailMessage[];
   let authDeps: HttpAuthDeps;
+  let adminAlerts: string[];
   const now = new Date("2026-11-23T13:00:00.000Z");
 
   beforeEach(() => {
@@ -53,12 +54,19 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
     db = createDb(d1Ctx.d1);
     const mail = createTestMailer();
     sent = mail.sent;
+    adminAlerts = [];
     authDeps = {
       db,
       mailer: mail.mailer,
       appUrl: "https://collate.app",
       appEnv: "prod",
       turnstileSecretKey: "test-secret",
+      adminNotifier: {
+        send: async (text) => {
+          adminAlerts.push(text);
+          return true;
+        },
+      },
       nowFn: () => now,
       fetchFn: async () => Response.json({ success: true }),
     };
@@ -73,7 +81,7 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
       new Request("https://collate.app/api/auth/signup", {
         method: "POST",
         headers: { "content-type": "application/json", origin: "https://collate.app" },
-        body: JSON.stringify({ name, email, password, turnstileToken: "ok" }),
+        body: JSON.stringify({ name, email, password, turnstileToken: "ok", acceptTerms: true }),
       }),
       authDeps
     );
@@ -132,7 +140,11 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
           origin: "https://collate.app",
           cookie: student.cookie,
         },
-        body: JSON.stringify({ provider: "paystack", packId: "pack_starter_25" }),
+        body: JSON.stringify({
+          provider: "paystack",
+          packId: "pack_starter_25",
+          acceptTerms: true,
+        }),
       }),
       deps
     );
@@ -146,7 +158,7 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
           origin: "https://collate.app",
           cookie: student.cookie,
         },
-        body: JSON.stringify({ provider: "stripe", packId: "pack_project_60" }),
+        body: JSON.stringify({ provider: "stripe", packId: "pack_project_60", acceptTerms: true }),
       }),
       deps
     );
@@ -200,17 +212,17 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
       newBalance: 25,
     });
 
-    // Stripe webhook adds 80 credits once (matching pack_project_60) -> total 105
+    // Stripe webhook adds 100 credits once (matching pack_project_60) -> total 125
     const strBody = JSON.stringify({
       id: "evt_s1",
       type: "checkout.session.completed",
       data: {
         object: {
           id: "cs_test_001",
-          amount_total: 2500,
+          amount_total: 3000,
           currency: "usd",
           payment_status: "paid",
-          metadata: { userId: student.userId, credits: "80" },
+          metadata: { userId: student.userId, credits: "100" },
         },
       },
     });
@@ -227,7 +239,7 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
     expect(okStr.status).toBe(200);
     expect((await okStr.json()) as Record<string, unknown>).toMatchObject({
       alreadyProcessed: false,
-      newBalance: 105,
+      newBalance: 125,
     });
   });
 
@@ -271,7 +283,7 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
           origin: "https://collate.app",
           cookie: student.cookie,
         },
-        body: JSON.stringify({ provider: "polar", packId: "pack_thesis_150" }),
+        body: JSON.stringify({ provider: "polar", packId: "pack_thesis_150", acceptTerms: true }),
       }),
       deps
     );
@@ -289,7 +301,7 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
           origin: "https://collate.app",
           cookie: student.cookie,
         },
-        body: JSON.stringify({ provider: "polar", packId: "pack_project_60" }),
+        body: JSON.stringify({ provider: "polar", packId: "pack_project_60", acceptTerms: true }),
       }),
       deps
     );
@@ -308,7 +320,7 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
       external_customer_id: student.userId,
       metadata: {
         userId: student.userId,
-        credits: 80,
+        credits: 100,
         packId: "pack_project_60",
       },
     });
@@ -321,10 +333,10 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
         id: "ord_polar_live_001",
         checkout_id: "chk_polar_live_001",
         paid: true,
-        total_amount: 2500,
+        total_amount: 3000,
         currency: "usd",
         customer: { external_id: student.userId, email: "ngozi.polar@uni.edu.ng" },
-        metadata: { userId: student.userId, credits: 80, packId: "pack_project_60" },
+        metadata: { userId: student.userId, credits: 100, packId: "pack_project_60" },
       },
     });
     const badSigRes = await handlePolarWebhook(
@@ -341,7 +353,7 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
     );
     expect(badSigRes.status).toBe(401);
 
-    // Valid order.paid grants 80 credits and dispatches 1 receipt email
+    // Valid order.paid grants 100 credits and dispatches 1 receipt email
     const emailsBefore = sent.length;
     const validSig = await computeHmacBase64("SHA-256", rawSecretBytes, `wh_1.${ts}.${paidBody}`);
     const okPolar1 = await handlePolarWebhook(
@@ -360,9 +372,16 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
     expect((await okPolar1.json()) as Record<string, unknown>).toMatchObject({
       ok: true,
       alreadyProcessed: false,
-      newBalance: 80,
+      newBalance: 100,
     });
     expect(sent.length).toBe(emailsBefore + 1);
+    // The owner gets one Telegram alert, with the customer's email masked.
+    const paymentAlerts = adminAlerts.filter((a) => a.includes("Payment received"));
+    expect(paymentAlerts).toHaveLength(1);
+    expect(paymentAlerts[0]).toContain("USD 30.00");
+    expect(paymentAlerts[0]).toContain("100 credits via Polar");
+    expect(paymentAlerts[0]).toContain("Ngozi (ng***@uni.edu.ng)");
+    expect(paymentAlerts[0]).not.toContain("ngozi.polar@");
 
     // Replay does NOT double-credit or send another receipt
     const okPolar2 = await handlePolarWebhook(
@@ -381,9 +400,21 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
     expect((await okPolar2.json()) as Record<string, unknown>).toMatchObject({
       ok: true,
       alreadyProcessed: true,
-      newBalance: 80,
+      newBalance: 100,
     });
     expect(sent.length).toBe(emailsBefore + 1);
+    expect(adminAlerts.filter((a) => a.includes("Payment received"))).toHaveLength(1);
+  });
+
+  it("alerts the owner once per new sign-up, with a masked email and the account total", async () => {
+    await signUpUser("Ada Obi", "ada.obi@uni.edu.ng", "quiet library oak shelf");
+    await signUpUser("Tunde", "tunde@uni.edu.ng", "warm archival cedar wood");
+    const signups = adminAlerts.filter((a) => a.includes("New sign-up"));
+    expect(signups).toHaveLength(2);
+    expect(signups[0]).toContain("Ada Obi (ad***@uni.edu.ng)");
+    expect(signups[0]).toContain("Total accounts: 1");
+    expect(signups[1]).toContain("Total accounts: 2");
+    expect(signups.join("\n")).not.toContain("ada.obi@");
   });
 
   it("enforces admin role boundary (403 for normal users, 200 for allowlisted admin)", async () => {
@@ -441,6 +472,83 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
     );
     expect(okRefund.status).toBe(200);
     expect((await okRefund.json()) as Record<string, unknown>).toMatchObject({ balanceAfter: 15 });
+
+    // Deducting: partial, then clamped at zero, then nothing left. Idempotent by key.
+    const adjust = (cookie: string, body: Record<string, unknown>) =>
+      handleAdminManualRefund(
+        new Request("https://collate.app/api/admin/refund", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "https://collate.app",
+            cookie,
+          },
+          body: JSON.stringify({ targetUserId: regular.userId, ...body }),
+        }),
+        deps
+      );
+    const deniedDeduct = await adjust(regular.cookie, {
+      mode: "deduct",
+      credits: 5,
+      reason: "Self deduct attempt",
+    });
+    expect(deniedDeduct.status).toBe(403);
+
+    const partial = await adjust(admin.cookie, {
+      mode: "deduct",
+      credits: 5,
+      reason: "Polar refund for order 123",
+      idempotencyKey: "ded_test_1",
+    });
+    expect(partial.status).toBe(200);
+    expect(await partial.json()).toMatchObject({ deducted: 5, balanceAfter: 10 });
+
+    const replay = await adjust(admin.cookie, {
+      mode: "deduct",
+      credits: 5,
+      reason: "Polar refund for order 123",
+      idempotencyKey: "ded_test_1",
+    });
+    expect(await replay.json()).toMatchObject({ alreadyProcessed: true, balanceAfter: 10 });
+
+    const clamped = await adjust(admin.cookie, {
+      mode: "deduct",
+      credits: 50,
+      reason: "Chargeback on Paystack",
+    });
+    expect(await clamped.json()).toMatchObject({ deducted: 10, balanceAfter: 0 });
+
+    const empty = await adjust(admin.cookie, {
+      mode: "deduct",
+      credits: 1,
+      reason: "Nothing left to take",
+    });
+    expect(empty.status).toBe(409);
+
+    const tooMuchGrant = await adjust(admin.cookie, {
+      credits: 5000,
+      reason: "Grant above the cap",
+    });
+    expect(tooMuchGrant.status).toBe(400);
+
+    const [regularRow] = await db
+      .select({ creditsBalance: users.creditsBalance })
+      .from(users)
+      .where(eq(users.id, regular.userId));
+    expect(regularRow?.creditsBalance).toBe(0);
+    const deductions = await db
+      .select()
+      .from(creditLedger)
+      .where(and(eq(creditLedger.userId, regular.userId), lt(creditLedger.creditsDelta, 0)));
+    expect(deductions.map((d) => d.creditsDelta).sort()).toEqual([-10, -5]);
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, "admin.manual_credit_deduction"));
+    expect(audits).toHaveLength(2);
+
+    // Put the balance back for the rest of this test.
+    await adjust(admin.cookie, { credits: 15, reason: "Restore after deduction checks" });
 
     const okPause = await handleAdminCircuitBreaker(
       new Request("https://collate.app/api/admin/circuit-breaker", {

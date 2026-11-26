@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { desc, eq } from "drizzle-orm";
 import { CreditsPanel } from "@/components/account/credits-panel";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
-import { FormAlert } from "@/components/ui/alert";
+import { PaymentStatusToast } from "@/components/account/payment-status-toast";
 import { BILLING_POLICY } from "@/config/pricing";
 import { createDb } from "@/db/client";
 import { creditLedger } from "@/db/schema";
@@ -56,23 +56,7 @@ export default async function BillingPage({
           </p>
         </header>
 
-        {payment === "success" || payment === "polar_success" || payment === "stripe_success" ? (
-          <FormAlert tone="success">
-            Payment received. Your new credits will appear in your balance within a few seconds.
-            Refresh if they have not updated yet.
-          </FormAlert>
-        ) : payment === "pending" || payment === "paystack_pending" ? (
-          <FormAlert tone="info">
-            Payment submitted. Your credits are added automatically as soon as your payment is
-            confirmed.
-          </FormAlert>
-        ) : payment === "cancelled" ||
-          payment === "polar_cancelled" ||
-          payment === "stripe_cancelled" ? (
-          <FormAlert tone="warning">
-            Checkout was cancelled. No charge was made to your payment method.
-          </FormAlert>
-        ) : null}
+        <PaymentStatusToast payment={payment} />
 
         {/* Unified horizontal allowance bar (no separate KPI boxes) */}
         <section
@@ -85,9 +69,7 @@ export default async function BillingPage({
               <p className="text-2xl font-semibold text-[var(--neutral-900)] tabular-nums">
                 {formatCredits(user.creditsBalance)}
               </p>
-              <p className="text-xs text-[var(--neutral-500)]">
-                Minimum {BILLING_POLICY.minCreditsPerChapter} credits per chapter · Never expire
-              </p>
+              <p className="text-xs text-[var(--neutral-500)]">Credits never expire</p>
             </div>
           </div>
 
@@ -113,7 +95,6 @@ export default async function BillingPage({
         </section>
 
         <CreditsPanel
-          balance={user.creditsBalance}
           recentLedger={ledgerRows.map((row) => ({
             id: row.id,
             entryType: row.entryType,

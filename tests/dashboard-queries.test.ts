@@ -72,7 +72,6 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
       chaptersReadyForReview: 0,
       chaptersCompleted: 0,
       chaptersTotal: 0,
-      verifiedSourcesTotal: 0,
       exportsTotal: 0,
       freeSweepsUsed: 0,
       freeSweepsRemaining: 3,
@@ -334,7 +333,6 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
       chaptersReadyForReview: 2, // ch_2 (ready) + ch_3 (needs_attention)
       chaptersCompleted: 2, // ch_1 (approved) + ch_2 (ready)
       chaptersTotal: 3, // excludes auto-references chapter
-      verifiedSourcesTotal: 2,
       exportsTotal: 1,
       freeSweepsUsed: 1,
       freeSweepsRemaining: 2,

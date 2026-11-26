@@ -23,16 +23,16 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
   },
   {
     id: "pack_project_60",
-    label: "Project (80 credits)",
-    credits: 80,
-    amountNgnKobo: 3_000_000, // NGN 30,000
-    amountUsdCents: 2500, // $25.00
-    description: "Covers a 40–70 page project or bachelor's thesis plus revision headroom.",
+    label: "Project (100 credits)",
+    credits: 100,
+    amountNgnKobo: 3_500_000, // NGN 35,000
+    amountUsdCents: 3000, // $30.00
+    description: "Covers a 40–80 page project or bachelor's thesis plus revision headroom.",
   },
   {
     id: "pack_thesis_150",
-    label: "Thesis (180 credits)",
-    credits: 180,
+    label: "Thesis (200 credits)",
+    credits: 200,
     amountNgnKobo: 6_000_000, // NGN 60,000
     amountUsdCents: 5000, // $50.00
     description: "Covers a full master's or doctoral thesis with generous revision capacity.",

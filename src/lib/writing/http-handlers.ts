@@ -405,6 +405,9 @@ export async function handleStartChapter(
     reservationId = reserved.reservationId;
   } catch (err) {
     if (err instanceof BillingError) {
+      if (err.code === "ACCOUNT_ON_HOLD") {
+        return jsonNoStore({ ok: false, code: err.code, error: err.message }, err.status);
+      }
       return jsonNoStore(
         {
           ok: false,
@@ -682,6 +685,9 @@ export async function handleRequestChapterChanges(
     reservationId = reserved.reservationId;
   } catch (err) {
     if (err instanceof BillingError) {
+      if (err.code === "ACCOUNT_ON_HOLD") {
+        return jsonNoStore({ ok: false, code: err.code, error: err.message }, err.status);
+      }
       return jsonNoStore(
         {
           ok: false,
@@ -970,6 +976,9 @@ export async function handleStartAssignment(
       await deps.db.delete(chapters).where(eq(chapters.id, chapterId));
     }
     if (err instanceof BillingError) {
+      if (err.code === "ACCOUNT_ON_HOLD") {
+        return jsonNoStore({ ok: false, code: err.code, error: err.message }, err.status);
+      }
       return jsonNoStore(
         {
           ok: false,

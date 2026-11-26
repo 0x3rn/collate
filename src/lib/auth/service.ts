@@ -1,4 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { evidenceFromValues, TERMS_VERSION } from "@/lib/billing/evidence";
 import { z } from "zod";
 import type { AppDb } from "@/db/client";
 import { accounts, auditLog, sessions, users, verifications } from "@/db/schema";
@@ -7,6 +8,7 @@ import {
   buildVerificationEmail,
   type EmailSender,
 } from "@/lib/email/mailer";
+import { type AdminNotifier, buildSignupAlert } from "@/lib/notify/admin-alerts";
 import { logEvent } from "@/lib/observability/logger";
 import { verifyTurnstileToken } from "@/lib/security/turnstile";
 import {
@@ -15,12 +17,13 @@ import {
   validatePasswordStrength,
   verifyPassword,
 } from "./password";
+import { checkCode, clearCodes, codeErrorMessage, issueCode } from "./codes";
 import { consumeAuthRateLimit } from "./rate-limit";
 import { generateSecureToken, hashTokenSha256 } from "./tokens";
 
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const EMAIL_VERIFY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
+export const PASSWORD_RESET_TTL_MS = 10 * 60 * 1000; // 10 minutes (issued after a reset code is confirmed)
 
 export const EmailSchema = z.string().trim().toLowerCase().email("Enter a valid email address.");
 
@@ -29,6 +32,10 @@ export const SignUpInputSchema = z.object({
   email: EmailSchema,
   password: z.string().min(1, "Enter a password."),
   turnstileToken: z.string().optional(),
+  /** The sign-up form's required tick box; no account is created without it. */
+  acceptTerms: z.literal(true, {
+    message: "Tick the box to agree to the Terms of Service before creating your account.",
+  }),
 });
 
 export const SignInInputSchema = z.object({
@@ -59,6 +66,9 @@ export interface AuthServiceContext {
   userAgent?: string;
   turnstileSecretKey?: string;
   appEnv?: string;
+  adminNotifier?: AdminNotifier | null;
+  /** Approximate location of the request (from Cloudflare), stored on new sessions. */
+  geo?: { city?: string | null; country?: string | null };
   nowFn?: () => Date;
   fetchFn?: typeof fetch;
 }
@@ -94,6 +104,15 @@ function toPublicUser(row: typeof users.$inferSelect): PublicUser {
     creditsBalance: row.creditsBalance,
     createdAt: row.createdAt,
   };
+}
+
+function ctxEvidence(ctx: AuthServiceContext) {
+  return evidenceFromValues({
+    ip: ctx.clientIp,
+    userAgent: ctx.userAgent,
+    country: ctx.geo?.country,
+    city: ctx.geo?.city,
+  });
 }
 
 async function writeAudit(
@@ -183,7 +202,7 @@ export async function signUpUser(
       now,
     });
     return {
-      message: "Check your inbox for a verification link to activate your account.",
+      message: "We sent a 6-digit code to your email. Enter it below to activate your account.",
     };
   }
 
@@ -226,11 +245,20 @@ export async function signUpUser(
     action: "auth.signup",
     entityType: "user",
     entityId: userId,
+    metadata: { ...ctxEvidence(ctx), termsVersion: TERMS_VERSION, termsAccepted: true },
     now,
   });
 
+  if (ctx.adminNotifier) {
+    const [countRow] = await ctx.db.select({ total: sql<number>`count(*)` }).from(users);
+    await ctx.adminNotifier.send(
+      buildSignupAlert({ name, email, totalUsers: Number(countRow?.total ?? 0) })
+    );
+  }
+
   const verifyUrl = `${normalizeBaseUrl(ctx.appUrl)}/verify-email?token=${encodeURIComponent(rawToken)}`;
-  const emailContent = buildVerificationEmail({ name, verifyUrl });
+  const code = await issueCode(ctx.db, { userId, purpose: "verify_email", now });
+  const emailContent = buildVerificationEmail({ name, verifyUrl, code });
   const delivery = await ctx.mailer.send({ to: email, ...emailContent });
   if (!delivery.ok) {
     logEvent("error", "auth_email_delivery_failed", {
@@ -239,7 +267,7 @@ export async function signUpUser(
   }
 
   return {
-    message: "Check your inbox for a verification link to activate your account.",
+    message: "We sent a 6-digit code to your email. Enter it below to activate your account.",
   };
 }
 
@@ -278,6 +306,7 @@ export async function verifyEmailToken(
 
   // Single-use: remove all pending verification tokens for this user
   await ctx.db.delete(verifications).where(eq(verifications.identifier, record.identifier));
+  await clearCodes(ctx.db, { userId, purposes: ["verify_email"] });
 
   await writeAudit(ctx.db, {
     actorUserId: userId,
@@ -333,7 +362,8 @@ export async function resendVerificationEmail(
     });
 
     const verifyUrl = `${normalizeBaseUrl(ctx.appUrl)}/verify-email?token=${encodeURIComponent(rawToken)}`;
-    const emailContent = buildVerificationEmail({ name: user.name, verifyUrl });
+    const code = await issueCode(ctx.db, { userId: user.id, purpose: "verify_email", now });
+    const emailContent = buildVerificationEmail({ name: user.name, verifyUrl, code });
     const delivery = await ctx.mailer.send({ to: user.email, ...emailContent });
     if (!delivery.ok) {
       logEvent("error", "auth_email_delivery_failed", {
@@ -348,7 +378,7 @@ export async function resendVerificationEmail(
   }
 
   return {
-    message: "If that email belongs to an unverified account, we sent a fresh verification link.",
+    message: "We sent a new verification email.",
   };
 }
 
@@ -442,6 +472,9 @@ export async function signInUser(
     expiresAt,
     ipAddress: ctx.clientIp,
     userAgent: ctx.userAgent?.slice(0, 300) ?? null,
+    city: ctx.geo?.city?.slice(0, 80) ?? null,
+    country: ctx.geo?.country?.slice(0, 2) ?? null,
+    lastSeenAt: now,
     createdAt: now,
     updatedAt: now,
   });
@@ -451,6 +484,7 @@ export async function signInUser(
     action: "auth.signin",
     entityType: "user",
     entityId: user.id,
+    metadata: { ...ctxEvidence(ctx) },
     now,
   });
 
@@ -483,6 +517,11 @@ export async function getSessionFromToken(
   const [user] = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
   if (!user || !user.emailVerified) {
     return null;
+  }
+
+  // "Last active" for the Active sessions list, written at most every 5 minutes.
+  if (!session.lastSeenAt || now.getTime() - session.lastSeenAt.getTime() > 5 * 60 * 1000) {
+    await db.update(sessions).set({ lastSeenAt: now }).where(eq(sessions.id, session.id));
   }
 
   return {
@@ -542,19 +581,9 @@ export async function requestPasswordReset(
 
   const [user] = await ctx.db.select().from(users).where(eq(users.email, email)).limit(1);
   if (user) {
-    const identifier = `reset:${user.id}`;
-    await ctx.db.delete(verifications).where(eq(verifications.identifier, identifier));
-
-    const rawToken = generateSecureToken(32);
-    const tokenHash = await hashTokenSha256(rawToken);
-    await ctx.db.insert(verifications).values({
-      id: `ver_${crypto.randomUUID()}`,
-      identifier,
-      value: tokenHash,
-      expiresAt: new Date(now.getTime() + PASSWORD_RESET_TTL_MS),
-      createdAt: now,
-      updatedAt: now,
-    });
+    // A new code replaces any earlier code or reset link.
+    await ctx.db.delete(verifications).where(eq(verifications.identifier, `reset:${user.id}`));
+    const code = await issueCode(ctx.db, { userId: user.id, purpose: "reset_password", now });
 
     await writeAudit(ctx.db, {
       actorUserId: user.id,
@@ -564,8 +593,7 @@ export async function requestPasswordReset(
       now,
     });
 
-    const resetUrl = `${normalizeBaseUrl(ctx.appUrl)}/reset-password?token=${encodeURIComponent(rawToken)}`;
-    const emailContent = buildPasswordResetEmail({ name: user.name, resetUrl });
+    const emailContent = buildPasswordResetEmail({ name: user.name, code });
     const delivery = await ctx.mailer.send({ to: user.email, ...emailContent });
     if (!delivery.ok) {
       logEvent("error", "auth_email_delivery_failed", {
@@ -581,7 +609,7 @@ export async function requestPasswordReset(
 
   // Anti-enumeration: always return the same neutral message
   return {
-    message: "If an account exists for that email, we sent a password reset link.",
+    message: "If an account exists for that email, we sent a 6-digit reset code.",
   };
 }
 
@@ -627,13 +655,27 @@ export async function resetPasswordWithToken(
 
   const newHash = await hashPassword(parsed.data.newPassword);
 
-  await ctx.db
+  const updated = await ctx.db
     .update(accounts)
     .set({ password: newHash, updatedAt: now })
-    .where(and(eq(accounts.userId, userId), eq(accounts.providerId, "credential")));
+    .where(and(eq(accounts.userId, userId), eq(accounts.providerId, "credential")))
+    .returning({ id: accounts.id });
+  if (updated.length === 0) {
+    // Accounts created with Google have no password yet: this sets one.
+    await ctx.db.insert(accounts).values({
+      id: `acc_${crypto.randomUUID()}`,
+      userId,
+      accountId: userId,
+      providerId: "credential",
+      password: newHash,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 
   // Single-use token cleanup + revoke all existing sessions on password change
   await ctx.db.delete(verifications).where(eq(verifications.identifier, record.identifier));
+  await clearCodes(ctx.db, { userId, purposes: ["reset_password"] });
   await ctx.db.delete(sessions).where(eq(sessions.userId, userId));
 
   await writeAudit(ctx.db, {
@@ -645,4 +687,117 @@ export async function resetPasswordWithToken(
   });
 
   return { reset: true };
+}
+
+/** Confirms a new account with the 6-digit code from the sign-up email. */
+export async function verifyEmailWithCode(
+  rawInput: { email?: unknown; code?: unknown },
+  ctx: Pick<AuthServiceContext, "db" | "nowFn" | "clientIp">
+): Promise<{ verified: true; userId: string }> {
+  const parsed = EmailSchema.safeParse(rawInput.email);
+  if (!parsed.success) {
+    throw new AuthError("VALIDATION_ERROR", "Enter a valid email address.", 400);
+  }
+  const email = parsed.data;
+  const now = (ctx.nowFn ?? (() => new Date()))();
+  const rl = await consumeAuthRateLimit(
+    ctx.db,
+    "verifyCode",
+    `${ctx.clientIp}:${email}`,
+    now.getTime()
+  );
+  if (!rl.allowed) {
+    throw new AuthError(
+      "RATE_LIMITED",
+      "Too many attempts. Please wait a few minutes and try again.",
+      429,
+      rl.retryAfterSeconds
+    );
+  }
+
+  const [user] = await ctx.db.select().from(users).where(eq(users.email, email)).limit(1);
+  if (!user || user.emailVerified) {
+    throw new AuthError("INVALID_TOKEN", codeErrorMessage("invalid"), 400);
+  }
+  const result = await checkCode(ctx.db, {
+    userId: user.id,
+    purpose: "verify_email",
+    code: rawInput.code,
+    now,
+  });
+  if (!result.ok) {
+    throw new AuthError("INVALID_TOKEN", codeErrorMessage(result.reason), 400);
+  }
+
+  await ctx.db
+    .update(users)
+    .set({ emailVerified: true, updatedAt: now })
+    .where(eq(users.id, user.id));
+  await ctx.db.delete(verifications).where(eq(verifications.identifier, `verify:${user.id}`));
+  await writeAudit(ctx.db, {
+    actorUserId: user.id,
+    action: "auth.email_verified",
+    entityType: "user",
+    entityId: user.id,
+    metadata: { method: "code" },
+    now,
+  });
+  return { verified: true, userId: user.id };
+}
+
+/**
+ * Step 2 of "forgot password": swaps a correct reset code for a short-lived, single-use reset
+ * token, which the final step (choose a new password) sends with the new password.
+ */
+export async function exchangeResetCodeForToken(
+  rawInput: { email?: unknown; code?: unknown },
+  ctx: Pick<AuthServiceContext, "db" | "nowFn" | "clientIp">
+): Promise<{ resetToken: string }> {
+  const parsed = EmailSchema.safeParse(rawInput.email);
+  if (!parsed.success) {
+    throw new AuthError("VALIDATION_ERROR", "Enter a valid email address.", 400);
+  }
+  const email = parsed.data;
+  const now = (ctx.nowFn ?? (() => new Date()))();
+  const rl = await consumeAuthRateLimit(
+    ctx.db,
+    "verifyCode",
+    `${ctx.clientIp}:${email}`,
+    now.getTime()
+  );
+  if (!rl.allowed) {
+    throw new AuthError(
+      "RATE_LIMITED",
+      "Too many attempts. Please wait a few minutes and try again.",
+      429,
+      rl.retryAfterSeconds
+    );
+  }
+
+  const [user] = await ctx.db.select().from(users).where(eq(users.email, email)).limit(1);
+  if (!user) {
+    throw new AuthError("INVALID_TOKEN", codeErrorMessage("invalid"), 400);
+  }
+  const result = await checkCode(ctx.db, {
+    userId: user.id,
+    purpose: "reset_password",
+    code: rawInput.code,
+    now,
+  });
+  if (!result.ok) {
+    throw new AuthError("INVALID_TOKEN", codeErrorMessage(result.reason), 400);
+  }
+
+  const identifier = `reset:${user.id}`;
+  await ctx.db.delete(verifications).where(eq(verifications.identifier, identifier));
+  const resetToken = generateSecureToken(32);
+  await ctx.db.insert(verifications).values({
+    id: `ver_${crypto.randomUUID()}`,
+    identifier,
+    value: await hashTokenSha256(resetToken),
+    expiresAt: new Date(now.getTime() + PASSWORD_RESET_TTL_MS),
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { resetToken };
 }

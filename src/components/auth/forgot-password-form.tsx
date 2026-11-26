@@ -1,81 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import { FormAlert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { FormField } from "@/components/ui/field";
-import { useToast } from "@/components/ui/toast";
+import { useRouter } from "next/navigation";
+import { ForgotPasswordFlow } from "./forgot-password-flow";
 
+/** The /forgot-password page: the same code-based flow as the sign-in pop-up. */
 export function ForgotPasswordForm() {
-  const toast = useToast();
-  const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setSuccessMessage(null);
-
-    if (!email.includes("@")) {
-      toast.error("Enter a valid email address.", "Invalid email");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-      const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
-      if (!res.ok || !data.ok) {
-        toast.error(
-          data.error ?? "We could not process that request. Try again shortly.",
-          "Request failed"
-        );
-        return;
-      }
-      setSuccessMessage(
-        data.message ?? "If an account exists for that email, we sent a password reset link."
-      );
-    } catch {
-      toast.error("Network error while reaching the server. Try again.", "Connection error");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-4">
-      {successMessage ? <FormAlert tone="success">{successMessage}</FormAlert> : null}
-
-      <FormField
-        id="forgot-email"
-        label="Email address"
-        type="email"
-        name="email"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        helpText="We will email a single-use reset link valid for 1 hour."
-      />
-
-      <Button type="submit" fullWidth loading={submitting} loadingLabel="Sending reset link...">
-        Send reset link
-      </Button>
-
-      <p className="text-sm text-[var(--neutral-600)]">
-        Remembered your password?{" "}
-        <Link
-          href="/sign-in"
-          className="text-[var(--accent-600)] font-medium underline underline-offset-4"
-        >
-          Back to sign in
-        </Link>
-      </p>
-    </form>
-  );
+  const router = useRouter();
+  return <ForgotPasswordFlow onDone={() => router.push("/sign-in")} doneLabel="Sign in" />;
 }

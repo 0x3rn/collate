@@ -276,7 +276,8 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
       webhookSecret: b64Secret,
       nowMs: now.getTime() + 5_000,
     });
-    expect(ignored).toEqual({ valid: true, ignored: true });
+    expect(ignored).toMatchObject({ valid: true, ignored: true });
+    expect(ignored).not.toHaveProperty("payment");
   });
 
   it("reserves credits on start, refunds 100% on failed chapter, and captures on success", async () => {

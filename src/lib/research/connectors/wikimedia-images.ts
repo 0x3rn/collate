@@ -114,7 +114,7 @@ export async function searchWikimediaAcademicImages(params: {
       method: "GET",
       headers: {
         accept: "application/json",
-        "user-agent": "CollateAcademicResearch/1.0 (https://collate.corstack.dev)",
+        "user-agent": "CollateAcademicResearch/1.0 (https://collateresearch.app)",
       },
       signal: controller.signal,
     });

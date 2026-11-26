@@ -40,10 +40,10 @@ const WORKBENCH_TYPES: Array<{
   },
 ];
 
-export function QuickStartWorkbench() {
+export function QuickStartWorkbench({ initialType = "project" }: { initialType?: ProjectType }) {
   const router = useRouter();
   const toast = useToast();
-  const [selectedType, setSelectedType] = useState<ProjectType>("project");
+  const [selectedType, setSelectedType] = useState<ProjectType>(initialType);
   const [topic, setTopic] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -161,7 +161,7 @@ export function QuickStartWorkbench() {
             loadingLabel="Creating draft..."
             className="shrink-0 sm:px-5"
           >
-            <span>Start project</span>
+            <span>{`Start ${activeSpec.label.toLowerCase()}`}</span>
             <ArrowRightIcon className="w-4 h-4" />
           </Button>
         </div>

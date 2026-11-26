@@ -213,7 +213,6 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
   it("renders plain-language billing and account panels without developer jargon", () => {
     const billingHtml = renderToStaticMarkup(
       <CreditsPanel
-        balance={80}
         recentLedger={[
           {
             id: "led_1",
@@ -229,10 +228,11 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(billingHtml).toContain("Credit history");
     expect(billingHtml).toContain("Topic source check");
     expect(billingHtml).toContain("Buy 25 credits");
-    expect(billingHtml).toContain("Buy 80 credits");
-    expect(billingHtml).toContain("Buy 180 credits");
-    expect(billingHtml).toContain('href="/terms#refund-policy"');
-    expect(billingHtml).toContain("Refund policy");
+    expect(billingHtml).toContain("Buy 100 credits");
+    expect(billingHtml).toContain("Buy 200 credits");
+    expect(billingHtml).toContain("$10");
+    expect(billingHtml).toContain("$30");
+    expect(billingHtml).toContain("$50");
     expect(billingHtml).not.toMatch(/paystack|polar|stripe/i);
     expect(billingHtml).not.toContain("Recent ledger");
     expect(billingHtml).not.toContain("sweep_fee");
@@ -244,6 +244,7 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
           emailNeedsAttention: true,
           emailProjectComplete: true,
           emailReceipts: true,
+          emailMarketing: false,
         }}
       />
     );
@@ -264,6 +265,17 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(workbenchHtml).toContain("Thesis");
     expect(workbenchHtml).toContain("Assignment");
     expect(workbenchHtml).toContain("Start project");
+
+    // The start button names whichever work type tab is active.
+    for (const [type, button] of [
+      ["research", "Start research paper"],
+      ["thesis", "Start thesis"],
+      ["assignment", "Start assignment"],
+    ] as const) {
+      const html = renderToStaticMarkup(<QuickStartWorkbench initialType={type} />);
+      expect(html).toContain(`<span>${button}</span>`);
+      expect(html).not.toContain("Start project");
+    }
 
     const overviewHtml = renderToStaticMarkup(
       <OverviewLedgerClient

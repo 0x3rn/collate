@@ -5,7 +5,7 @@ import { createDb } from "@/db/client";
 import { projects, users } from "@/db/schema";
 import type { AIGatewayEnv } from "@/lib/ai/call-llm";
 import { LLMError } from "@/lib/ai/errors";
-import { createEmailSender } from "@/lib/email/mailer";
+import { type CloudflareEmailBinding, createEmailSender } from "@/lib/email/mailer";
 import {
   buildChapterNeedsAttentionEmail,
   buildChapterReadyEmail,
@@ -45,7 +45,9 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
     const mailer = createEmailSender({
       EMAIL_PROVIDER: runtimeEnv.EMAIL_PROVIDER as string | undefined,
       EMAIL_FROM: runtimeEnv.EMAIL_FROM as string | undefined,
-      RESEND_API_KEY: runtimeEnv.RESEND_API_KEY as string | undefined,
+      EMAIL_REPLY_TO: runtimeEnv.EMAIL_REPLY_TO as string | undefined,
+      APP_URL: appUrl,
+      binding: (runtimeEnv.EMAIL as CloudflareEmailBinding | undefined) ?? null,
     });
 
     const sharedDeps: WriteChapterDeps = {

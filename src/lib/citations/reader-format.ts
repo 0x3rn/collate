@@ -1,5 +1,6 @@
 import type { CslItem } from "./csl";
 import { getCitationFormatter } from "./formatter";
+import { withYearSuffixesForText } from "./source-title";
 
 export interface FormattedCitationCluster {
   label: string;
@@ -21,6 +22,7 @@ export function buildReaderCitationLabels(params: {
   singleKeyLabels: Record<string, string>;
 } {
   const formatter = getCitationFormatter(params.style);
+  const registry = withYearSuffixesForText(params.registry, params.markdown);
   const citedOrder: string[] = [];
   const numberByKey = new Map<string, number>();
   const clusters: Record<string, FormattedCitationCluster> = {};
@@ -52,7 +54,7 @@ export function buildReaderCitationLabels(params: {
 
       if (!/^[a-zA-Z0-9_:-]+$/.test(key)) continue;
 
-      const item = params.registry.get(key);
+      const item = registry.get(key);
       if (!item) continue;
 
       if (!numberByKey.has(key)) {

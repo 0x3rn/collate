@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, like, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, like, ne, sql } from "drizzle-orm";
 import { BILLING_POLICY } from "@/config/pricing";
 import type { AppDb } from "@/db/client";
 import {
@@ -16,29 +16,26 @@ import {
 } from "@/db/schema";
 import type { NormalizedPaymentWebhook } from "./webhooks";
 
+export const BILLING_HOLD_MESSAGE =
+  "Your account is on hold because of a payment refund or dispute. Email support@collateresearch.app and we will sort it out.";
+
+export type BillingErrorCode =
+  | "INSUFFICIENT_CREDITS"
+  | "USER_NOT_FOUND"
+  | "RESERVATION_NOT_FOUND"
+  | "CIRCUIT_BREAKER_OPEN"
+  | "PAYMENT_MISMATCH"
+  | "INVALID_AMOUNT"
+  | "NOTHING_TO_DEDUCT"
+  | "BALANCE_CHANGED"
+  | "ACCOUNT_ON_HOLD";
+
 export class BillingError extends Error {
-  public readonly code:
-    | "INSUFFICIENT_CREDITS"
-    | "USER_NOT_FOUND"
-    | "RESERVATION_NOT_FOUND"
-    | "CIRCUIT_BREAKER_OPEN"
-    | "PAYMENT_MISMATCH"
-    | "INVALID_AMOUNT";
+  public readonly code: BillingErrorCode;
   public readonly status: number;
   public readonly availableCredits?: number;
 
-  constructor(
-    code:
-      | "INSUFFICIENT_CREDITS"
-      | "USER_NOT_FOUND"
-      | "RESERVATION_NOT_FOUND"
-      | "CIRCUIT_BREAKER_OPEN"
-      | "PAYMENT_MISMATCH"
-      | "INVALID_AMOUNT",
-    message: string,
-    status: number,
-    availableCredits?: number
-  ) {
+  constructor(code: BillingErrorCode, message: string, status: number, availableCredits?: number) {
     super(message);
     this.name = "BillingError";
     this.code = code;
@@ -137,6 +134,7 @@ export async function grantPaymentCreditsIdempotent(
       .set({
         status: "succeeded",
         rawEventJson: rawEventJson.slice(0, 8000),
+        ...(payment.providerOrderId ? { providerOrderId: payment.providerOrderId } : {}),
         updatedAt: now,
       })
       .where(and(eq(payments.id, paymentId), eq(payments.status, "pending")))
@@ -162,6 +160,7 @@ export async function grantPaymentCreditsIdempotent(
         userId: payment.userId,
         provider: payment.provider,
         providerReference: payment.providerReference,
+        providerOrderId: payment.providerOrderId ?? null,
         currency: payment.currency,
         amountMinor: payment.amountMinor,
         creditsGranted: creditsToGrant,
@@ -290,17 +289,34 @@ export async function reserveChapterCredits(
     };
   }
 
+  if (user.billingHoldReason) {
+    throw new BillingError("ACCOUNT_ON_HOLD", BILLING_HOLD_MESSAGE, 403);
+  }
+
   const updatedRows = await db
     .update(users)
     .set({
       creditsBalance: sql`${users.creditsBalance} - ${params.credits}`,
       updatedAt: now,
     })
-    .where(and(eq(users.id, user.id), gte(users.creditsBalance, params.credits)))
+    .where(
+      and(
+        eq(users.id, user.id),
+        gte(users.creditsBalance, params.credits),
+        // A hold placed a moment ago (dispute webhook) still blocks this spend.
+        isNull(users.billingHoldReason)
+      )
+    )
     .returning({ creditsBalance: users.creditsBalance });
 
   const updatedUser = updatedRows[0];
   if (!updatedUser) {
+    const [latest] = await db
+      .select({ hold: users.billingHoldReason })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+    if (latest?.hold) throw new BillingError("ACCOUNT_ON_HOLD", BILLING_HOLD_MESSAGE, 403);
     throw new BillingError(
       "INSUFFICIENT_CREDITS",
       `Insufficient credits: need ${params.credits}, available ${user.creditsBalance}.`,
@@ -742,6 +758,90 @@ export async function issueAdminManualRefund(
   });
 
   return { alreadyProcessed: false, balanceAfter: newBalance };
+}
+
+/**
+ * Takes credits back from a user, for example after a refund or chargeback through Polar or
+ * Paystack, or a grant made by mistake. Never takes the balance below zero: if the user has
+ * already spent some, only what is left is removed, and the result says how much that was.
+ */
+export async function issueAdminCreditDeduction(
+  db: AppDb,
+  params: {
+    adminUserId: string;
+    targetUserId: string;
+    credits: number;
+    reason: string;
+    idempotencyKey: string;
+    now?: Date;
+  }
+): Promise<{ alreadyProcessed: boolean; deducted: number; balanceAfter: number }> {
+  if (!Number.isInteger(params.credits) || params.credits <= 0) {
+    throw new BillingError("INVALID_AMOUNT", "Credits to deduct must be a positive integer.", 400);
+  }
+  const now = params.now ?? new Date();
+
+  const [previous] = await db
+    .select({ creditsDelta: creditLedger.creditsDelta, balanceAfter: creditLedger.balanceAfter })
+    .from(creditLedger)
+    .where(eq(creditLedger.idempotencyKey, params.idempotencyKey))
+    .limit(1);
+  if (previous) {
+    return {
+      alreadyProcessed: true,
+      deducted: Math.abs(previous.creditsDelta),
+      balanceAfter: previous.balanceAfter,
+    };
+  }
+
+  // Up to 3 tries: the balance can change between reading it and updating it (a chapter
+  // reserving credits at the same moment); the update only applies if it is unchanged.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const [target] = await db
+      .select({ id: users.id, creditsBalance: users.creditsBalance })
+      .from(users)
+      .where(eq(users.id, params.targetUserId))
+      .limit(1);
+    if (!target) throw new BillingError("USER_NOT_FOUND", "Target user not found.", 404);
+    if (target.creditsBalance <= 0) {
+      throw new BillingError("NOTHING_TO_DEDUCT", "This user has no credits to deduct.", 409);
+    }
+
+    const deducted = Math.min(params.credits, target.creditsBalance);
+    const updated = await db
+      .update(users)
+      .set({ creditsBalance: target.creditsBalance - deducted, updatedAt: now })
+      .where(and(eq(users.id, target.id), eq(users.creditsBalance, target.creditsBalance)))
+      .returning({ creditsBalance: users.creditsBalance });
+    if (updated.length === 0) continue;
+
+    const balanceAfter = updated[0]!.creditsBalance;
+    await db.insert(creditLedger).values({
+      id: `led_${crypto.randomUUID()}`,
+      userId: target.id,
+      idempotencyKey: params.idempotencyKey,
+      entryType: "manual_adjustment",
+      creditsDelta: -deducted,
+      balanceAfter,
+      note: `Admin deduction: ${params.reason}`,
+      createdAt: now,
+    });
+    await db.insert(auditLog).values({
+      id: `aud_${crypto.randomUUID()}`,
+      actorUserId: params.adminUserId,
+      action: "admin.manual_credit_deduction",
+      entityType: "user",
+      entityId: target.id,
+      metadataJson: JSON.stringify({
+        requested: params.credits,
+        deducted,
+        reason: params.reason,
+      }),
+      createdAt: now,
+    });
+    return { alreadyProcessed: false, deducted, balanceAfter };
+  }
+  throw new BillingError("BALANCE_CHANGED", "The balance changed while deducting. Try again.", 409);
 }
 
 export interface AdminBatchCreditParams {

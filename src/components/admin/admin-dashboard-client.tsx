@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { CustomSelect } from "@/components/ui/custom-select";
 import { FormField } from "@/components/ui/field";
@@ -26,10 +26,18 @@ export interface AdminOverviewProps {
     costEstimateUsd: number;
     error: string | null;
     createdAt: string;
+    projectId: string | null;
+    projectTopic: string;
+    userId: string | null;
+    userEmail: string | null;
   }>;
   recentPayments: Array<{
     id: string;
     userId: string;
+    userEmail: string | null;
+    userName: string | null;
+    createdAt: string;
+    openDispute: boolean;
     provider: string;
     providerReference: string;
     currency: string;
@@ -60,6 +68,8 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
   const [targetUserId, setTargetUserId] = useState(initial.users[0]?.id ?? "");
   const [refundCredits, setRefundCredits] = useState("10");
   const [refundReason, setRefundReason] = useState("");
+  const [adjustMode, setAdjustMode] = useState<"grant" | "deduct">("grant");
+  const [confirmDeductOpen, setConfirmDeductOpen] = useState(false);
   const [breakerReason, setBreakerReason] = useState("Manual operational pause");
   const [busy, setBusy] = useState(false);
 
@@ -264,11 +274,17 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
     });
   }
 
-  async function handleManualRefund(e: FormEvent<HTMLFormElement>) {
+  const adjustTarget = initial.users.find((u) => u.id === targetUserId);
+
+  function handleManualRefund(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const creditsNum = Number(refundCredits);
-    if (!targetUserId || !Number.isInteger(creditsNum) || creditsNum < 1) {
-      toast.error("Choose a user and enter a valid positive credit amount.", "Invalid amount");
+    const max = adjustMode === "deduct" ? 10000 : 1000;
+    if (!targetUserId || !Number.isInteger(creditsNum) || creditsNum < 1 || creditsNum > max) {
+      toast.error(
+        `Choose a user and enter a whole number of credits from 1 to ${max.toLocaleString("en-US")}.`,
+        "Invalid amount"
+      );
       return;
     }
     if (refundReason.trim().length < 5) {
@@ -278,7 +294,15 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
       );
       return;
     }
+    if (adjustMode === "deduct") {
+      setConfirmDeductOpen(true);
+      return;
+    }
+    void submitAdjustment();
+  }
 
+  async function submitAdjustment() {
+    const creditsNum = Number(refundCredits);
     setBusy(true);
     try {
       const res = await fetch("/api/admin/refund", {
@@ -286,25 +310,45 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           targetUserId,
+          mode: adjustMode,
           credits: creditsNum,
           reason: refundReason.trim(),
         }),
       });
-      const json = (await res.json()) as { ok: boolean; balanceAfter?: number; error?: string };
+      const json = (await res.json()) as {
+        ok: boolean;
+        balanceAfter?: number;
+        deducted?: number;
+        error?: string;
+      };
       if (!res.ok || !json.ok) {
-        toast.error(json.error ?? "Manual refund failed.", "Refund failed");
+        toast.error(
+          json.error ?? "The credit change failed.",
+          adjustMode === "deduct" ? "Deduction failed" : "Grant failed"
+        );
         return;
       }
       setRefundReason("");
-      toast.success(
-        `Granted ${creditsNum.toLocaleString("en-US")} credits. Updated balance: ${
-          typeof json.balanceAfter === "number" ? json.balanceAfter.toLocaleString("en-US") : "—"
-        }.`,
-        "Credits granted"
-      );
+      setConfirmDeductOpen(false);
+      const balance =
+        typeof json.balanceAfter === "number" ? json.balanceAfter.toLocaleString("en-US") : "—";
+      if (adjustMode === "deduct") {
+        const taken = json.deducted ?? creditsNum;
+        toast.success(
+          `Took back ${taken.toLocaleString("en-US")} credits${
+            taken < creditsNum ? " (all they had left)" : ""
+          }. New balance: ${balance}.`,
+          "Credits deducted"
+        );
+      } else {
+        toast.success(
+          `Granted ${creditsNum.toLocaleString("en-US")} credits. New balance: ${balance}.`,
+          "Credits granted"
+        );
+      }
       router.refresh();
     } catch {
-      toast.error("Network error while issuing manual refund.", "Connection error");
+      toast.error("Network error. The credits were not changed.", "Connection error");
     } finally {
       setBusy(false);
     }
@@ -575,7 +619,31 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
       </ModalCard>
 
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
-        <h2 className="text-xl font-medium">Manual credit refund / adjustment</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-medium">Adjust credits</h2>
+          <div
+            role="radiogroup"
+            aria-label="Add or take back credits"
+            className="inline-flex rounded-[var(--radius-sm)] border border-[var(--neutral-300)] p-0.5 bg-[var(--neutral-100)]"
+          >
+            {(["grant", "deduct"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={adjustMode === m}
+                onClick={() => setAdjustMode(m)}
+                className={`min-h-[34px] px-4 text-sm rounded-[calc(var(--radius-sm)-2px)] transition-colors ${
+                  adjustMode === m
+                    ? "bg-[var(--neutral-900)] text-white font-medium shadow-sm"
+                    : "text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"
+                }`}
+              >
+                {m === "grant" ? "Grant" : "Deduct"}
+              </button>
+            ))}
+          </div>
+        </div>
         <form onSubmit={handleManualRefund} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -599,10 +667,10 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
             </div>
             <FormField
               id="refund-credits"
-              label="Credits to grant"
+              label={adjustMode === "deduct" ? "Credits to take back" : "Credits to grant"}
               type="number"
               min={1}
-              max={1000}
+              max={adjustMode === "deduct" ? 10000 : 1000}
               value={refundCredits}
               onChange={(e) => setRefundCredits(e.target.value)}
             />
@@ -611,58 +679,298 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
             id="refund-reason"
             label="Audit reason"
             type="text"
-            placeholder="e.g. Refund for failed chapter run"
+            placeholder={
+              adjustMode === "deduct"
+                ? "e.g. Refunded Polar order on 26 Nov"
+                : "e.g. Refund for failed chapter run"
+            }
             value={refundReason}
             onChange={(e) => setRefundReason(e.target.value)}
           />
-          <Button type="submit" loading={busy} loadingLabel="Applying refund...">
-            Issue manual refund
+          <Button type="submit" loading={busy && !confirmDeductOpen} loadingLabel="Granting...">
+            {adjustMode === "deduct" ? "Deduct credits" : "Grant credits"}
           </Button>
         </form>
       </section>
 
-      <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-3">
-        <h2 className="text-xl font-medium">Recent drafting jobs ({initial.recentJobs.length})</h2>
-        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 text-xs tabular-nums">
-          {initial.recentJobs.map((j) => (
-            <li
-              key={j.id}
-              className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1"
+      <ModalCard
+        open={confirmDeductOpen}
+        onClose={() => !busy && setConfirmDeductOpen(false)}
+        eyebrow="Adjust credits"
+        title="Take back credits?"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirmDeductOpen(false)} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void submitAdjustment()}
+              loading={busy}
+              loadingLabel="Deducting..."
             >
-              <span>
-                <strong>{j.step}</strong> ({j.model}) ·{" "}
-                <span
-                  className={
-                    j.status === "failed"
-                      ? "text-[var(--error-text)] font-semibold"
-                      : "text-[var(--neutral-700)]"
-                  }
-                >
-                  {j.status}
-                </span>
-                {j.error ? `: ${j.error.slice(0, 90)}` : ""}
-              </span>
-              <span className="text-[var(--neutral-600)]">${j.costEstimateUsd.toFixed(5)}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+              Deduct credits
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-[var(--neutral-700)] [overflow-wrap:anywhere]">
+          Take up to {Number(refundCredits || 0).toLocaleString("en-US")} credits from{" "}
+          <strong className="text-[var(--neutral-900)]">
+            {adjustTarget?.email ?? "this user"}
+          </strong>
+          {adjustTarget
+            ? `, who has ${adjustTarget.creditsBalance.toLocaleString("en-US")} now`
+            : ""}
+          . If they have fewer, their balance goes to zero. This is recorded in the audit log.
+        </p>
+      </ModalCard>
 
-      <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-3">
-        <h2 className="text-xl font-medium">Recent payments ({initial.recentPayments.length})</h2>
-        <ul className="divide-y divide-[var(--neutral-200)] list-none p-0 text-xs tabular-nums">
-          {initial.recentPayments.map((p) => (
-            <li key={p.id} className="py-2.5 flex flex-wrap items-center justify-between gap-2">
-              <span>
-                <strong>{p.provider.toUpperCase()}</strong> {p.providerReference} · {p.status}
-              </span>
-              <span>
-                {p.currency} {(p.amountMinor / 100).toFixed(2)} ({p.creditsGranted} credits)
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <RecentJobs jobs={initial.recentJobs} />
+      <RecentPayments payments={initial.recentPayments} />
     </div>
+  );
+}
+
+function formatAdminTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+const STATUS_STYLES: Record<string, string> = {
+  failed: "bg-[var(--error-bg)] text-[var(--error-text)] border-[var(--error-border)]",
+  succeeded: "bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]",
+  retrying: "bg-[var(--info-bg)] text-[var(--info-text)] border-[var(--info-border)]",
+  started: "bg-[var(--neutral-100)] text-[var(--neutral-700)] border-[var(--neutral-200)]",
+};
+
+function RecentJobs({ jobs }: { jobs: AdminOverviewProps["recentJobs"] }) {
+  const [query, setQuery] = useState("");
+  const [failedOnly, setFailedOnly] = useState(false);
+  const q = query.trim().toLowerCase();
+  const shown = jobs.filter(
+    (j) =>
+      (!failedOnly || j.status === "failed") &&
+      (!q ||
+        (j.userEmail ?? "").toLowerCase().includes(q) ||
+        j.projectTopic.toLowerCase().includes(q) ||
+        (j.projectId ?? "").toLowerCase().includes(q) ||
+        j.step.toLowerCase().includes(q))
+  );
+  const failedCount = jobs.filter((j) => j.status === "failed").length;
+
+  return (
+    <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-medium">Recent drafting jobs</h2>
+          <p className="text-xs text-[var(--neutral-500)] mt-1">
+            Latest {jobs.length} · {failedCount} failed
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <label htmlFor="job-search" className="sr-only">
+            Search by email or topic
+          </label>
+          <input
+            id="job-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search email or topic"
+            className="min-h-[36px] flex-1 sm:flex-none sm:w-[240px] rounded-[var(--radius-sm)] border border-[var(--neutral-300)] px-3 text-sm focus:outline-none focus:border-[var(--accent-600)]"
+          />
+          <button
+            type="button"
+            aria-pressed={failedOnly}
+            onClick={() => setFailedOnly((v) => !v)}
+            className={`min-h-[36px] px-3 text-sm rounded-[var(--radius-sm)] border ${
+              failedOnly
+                ? "bg-[var(--neutral-900)] text-white border-[var(--neutral-900)]"
+                : "border-[var(--neutral-300)] text-[var(--neutral-700)] hover:bg-[var(--neutral-100)]"
+            }`}
+          >
+            Failed only
+          </button>
+        </div>
+      </div>
+      <ul className="max-h-[520px] overflow-y-auto divide-y divide-[var(--neutral-200)] border-y border-[var(--neutral-200)] list-none p-0 pr-2">
+        {shown.length === 0 && (
+          <li className="py-6 text-sm text-[var(--neutral-500)]">No jobs match.</li>
+        )}
+        {shown.map((j) => (
+          <li key={j.id} className="py-3 space-y-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-sm font-medium text-[var(--neutral-900)] [overflow-wrap:anywhere]">
+                {j.step}
+              </span>
+              <span
+                className={`text-[11px] leading-5 px-2 rounded-full border ${STATUS_STYLES[j.status] ?? STATUS_STYLES.started}`}
+              >
+                {j.status}
+              </span>
+              <span className="ml-auto text-xs text-[var(--neutral-500)] tabular-nums">
+                {formatAdminTime(j.createdAt)}
+              </span>
+            </div>
+            <p className="text-xs text-[var(--neutral-600)] [overflow-wrap:anywhere]">
+              {j.userEmail ?? "Deleted user"}
+              {j.projectTopic ? (
+                <>
+                  {" · "}
+                  <span title={j.projectTopic}>{j.projectTopic}</span>
+                </>
+              ) : null}
+            </p>
+            <p className="text-[11px] text-[var(--neutral-500)] tabular-nums [overflow-wrap:anywhere]">
+              {j.model} · ${j.costEstimateUsd.toFixed(5)}
+              {j.projectId ? ` · ${j.projectId}` : ""}
+            </p>
+            {j.error && (
+              <p
+                className="text-xs text-[var(--error-text)] line-clamp-2 [overflow-wrap:anywhere]"
+                title={j.error}
+              >
+                {j.error}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function RecentPayments({ payments: latest }: { payments: AdminOverviewProps["recentPayments"] }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<AdminOverviewProps["recentPayments"] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const q = query.trim();
+
+  // Searches every payment in the database (not just the latest), so older payments can be found.
+  useEffect(() => {
+    if (q.length < 2) {
+      setResults(null);
+      setSearchError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearching(true);
+      setSearchError(null);
+      try {
+        const res = await fetch(`/api/admin/payments?q=${encodeURIComponent(q)}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          payments?: AdminOverviewProps["recentPayments"];
+          error?: string;
+        };
+        if (!res.ok || !data.ok) {
+          setSearchError(data.error ?? "Search failed.");
+          setResults([]);
+          return;
+        }
+        setResults(data.payments ?? []);
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setSearchError("Network error. Try again.");
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [q]);
+
+  const payments = results ?? latest;
+
+  return (
+    <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-medium">Recent payments</h2>
+          <p className="text-xs text-[var(--neutral-500)] mt-1">
+            {results
+              ? `${results.length} match${results.length === 1 ? "" : "es"} in all payments`
+              : `Latest ${latest.length} · search to find older ones`}
+          </p>
+        </div>
+        <div className="w-full sm:w-auto">
+          <label htmlFor="payment-search" className="sr-only">
+            Search all payments
+          </label>
+          <input
+            id="payment-search"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Email, name or payment reference"
+            className="min-h-[36px] w-full sm:w-[280px] rounded-[var(--radius-sm)] border border-[var(--neutral-300)] px-3 text-sm focus:outline-none focus:border-[var(--accent-600)]"
+          />
+        </div>
+      </div>
+      {searchError && <p className="text-sm text-[var(--error-text)]">{searchError}</p>}
+      <ul
+        aria-busy={searching}
+        className={`max-h-[520px] overflow-y-auto divide-y divide-[var(--neutral-200)] border-y border-[var(--neutral-200)] list-none p-0 pr-2 transition-opacity ${searching ? "opacity-60" : ""}`}
+      >
+        {payments.length === 0 && (
+          <li className="py-6 text-sm text-[var(--neutral-500)]">
+            {results ? "No payments match." : "No payments yet."}
+          </li>
+        )}
+        {payments.map((p) => (
+          <li key={p.id} className="py-3 space-y-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-sm font-medium text-[var(--neutral-900)] [overflow-wrap:anywhere]">
+                {p.userName ? `${p.userName} · ` : ""}
+                {p.userEmail ?? "Deleted user"}
+              </span>
+              <span
+                className={`text-[11px] leading-5 px-2 rounded-full border ${
+                  p.status === "succeeded"
+                    ? STATUS_STYLES.succeeded
+                    : p.status === "failed"
+                      ? STATUS_STYLES.failed
+                      : STATUS_STYLES.started
+                }`}
+              >
+                {p.status}
+              </span>
+              {p.openDispute && (
+                <span
+                  className={`text-[11px] leading-5 px-2 rounded-full border ${STATUS_STYLES.failed}`}
+                >
+                  dispute open
+                </span>
+              )}
+              <span className="ml-auto text-sm tabular-nums text-[var(--neutral-900)]">
+                {p.currency} {(p.amountMinor / 100).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] text-[var(--neutral-500)] tabular-nums [overflow-wrap:anywhere]">
+                {p.provider.toUpperCase()} · {p.providerReference} · {p.creditsGranted} credits ·{" "}
+                {formatAdminTime(p.createdAt)}
+              </p>
+              <a
+                href={`/admin/payments/${encodeURIComponent(p.id)}`}
+                className="text-xs text-[var(--accent-700)] underline underline-offset-2 hover:text-[var(--accent-600)]"
+              >
+                Record
+              </a>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

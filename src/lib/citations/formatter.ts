@@ -1,5 +1,6 @@
 import type { CitationInlineMode, CitationStyle } from "@/db/schema";
 import type { CslAuthor, CslItem } from "./csl";
+import { shortTitleForCitation } from "./source-title";
 
 export interface CitationStyleFormatter {
   readonly id: string;
@@ -10,9 +11,16 @@ export interface CitationStyleFormatter {
   formatBibliographyEntry(item: CslItem, numericIndex: number): string;
 }
 
-function getYearString(item: CslItem): string {
+/**
+ * The year shown in a citation. Author-date styles add the item's year-suffix letter so two
+ * works by the same author in the same year stay distinct ("2020a", "n.d.-b").
+ */
+function getYearString(item: CslItem, withSuffix = true): string {
   const y = item.issued?.["date-parts"]?.[0]?.[0];
-  return typeof y === "number" ? String(y) : "n.d.";
+  const suffix = withSuffix ? (item["year-suffix"] ?? "") : "";
+  if (typeof y === "number") return `${y}${suffix}`;
+  // Non-breaking hyphen (U+2011) so a line never ends on "n.d.-" with the letter on the next.
+  return suffix ? `n.d.‑${suffix}` : "n.d.";
 }
 
 function getAuthorSurname(author: CslAuthor): string {
@@ -32,7 +40,7 @@ function getInitials(given: string | undefined, withPeriods: boolean): string {
 function formatInTextAuthors(item: CslItem, conjunction: "&" | "and", etAlPeriod: boolean): string {
   const authors = item.author;
   if (authors.length === 0) {
-    return item.publisher?.trim() || item.title.split(/\s+/).slice(0, 3).join(" ");
+    return item.publisher?.trim() || shortTitleForCitation(item.title);
   }
   if (authors.length === 1) {
     return getAuthorSurname(authors[0]!);
@@ -130,11 +138,15 @@ const BUILTIN_FORMATTERS: Record<CitationStyle, CitationStyleFormatter> = {
       return `(${parts.join("; ")})`;
     },
     formatBibliographyEntry(item) {
-      const authors = formatAuthorsApa(item.author) || item.publisher || "Unknown author";
+      const authors = formatAuthorsApa(item.author) || item.publisher;
       const year = getYearString(item);
       const container = item["container-title"] ? ` ${item["container-title"]}.` : "";
       const pub = !item["container-title"] && item.publisher ? ` ${item.publisher}.` : "";
       const ref = getDoiOrUrl(item, "https");
+      // APA: with no author, the title moves to the author position.
+      if (!authors) {
+        return `${item.title}. (${year}).${container}${ref ? ` ${ref}` : ""}`.trim();
+      }
       return `${authors} (${year}). ${item.title}.${container}${pub}${ref ? ` ${ref}` : ""}`.trim();
     },
   },
@@ -151,11 +163,15 @@ const BUILTIN_FORMATTERS: Record<CitationStyle, CitationStyleFormatter> = {
       return `(${parts.join("; ")})`;
     },
     formatBibliographyEntry(item) {
-      const authors = formatAuthorsHarvard(item.author) || item.publisher || "Unknown author";
+      const authors = formatAuthorsHarvard(item.author) || item.publisher;
       const year = getYearString(item);
       const container = item["container-title"] ? `, ${item["container-title"]}` : "";
       const pub = !item["container-title"] && item.publisher ? `, ${item.publisher}` : "";
       const ref = item.DOI ? ` doi:${item.DOI}.` : item.URL ? ` Available at: ${item.URL}.` : "";
+      // Harvard: with no author, the title leads the entry.
+      if (!authors) {
+        return `${item.title} (${year})${container}.${ref}`.replace("..", ".").trim();
+      }
       return `${authors} (${year}) '${item.title}'${container}${pub}.${ref}`
         .replace("..", ".")
         .trim();
@@ -175,7 +191,7 @@ const BUILTIN_FORMATTERS: Record<CitationStyle, CitationStyleFormatter> = {
     },
     formatBibliographyEntry(item) {
       const authors = formatAuthorsMlaOrChicago(item.author);
-      const year = getYearString(item);
+      const year = getYearString(item, false);
       const container = item["container-title"] ? `${item["container-title"]}, ` : "";
       const ref = getDoiOrUrl(item, "https");
       const prefix = authors ? `${authors}. ` : "";
@@ -217,7 +233,7 @@ const BUILTIN_FORMATTERS: Record<CitationStyle, CitationStyleFormatter> = {
     },
     formatBibliographyEntry(item, numericIndex) {
       const authors = formatAuthorsIeee(item.author) || item.publisher || "Unknown author";
-      const year = getYearString(item);
+      const year = getYearString(item, false);
       const container = item["container-title"] ? `, ${item["container-title"]}` : "";
       const ref = item.DOI ? `, doi: ${item.DOI}` : item.URL ? `, ${item.URL}` : "";
       return `[${numericIndex}] ${authors}, "${item.title}"${container}, ${year}${ref}.`.trim();
@@ -232,7 +248,7 @@ const BUILTIN_FORMATTERS: Record<CitationStyle, CitationStyleFormatter> = {
     },
     formatBibliographyEntry(item, numericIndex) {
       const authors = formatAuthorsVancouver(item.author) || item.publisher || "Unknown author";
-      const year = getYearString(item);
+      const year = getYearString(item, false);
       const container = item["container-title"] ? ` ${item["container-title"]}.` : "";
       const ref = item.DOI ? ` doi:${item.DOI}.` : item.URL ? ` Available from: ${item.URL}.` : "";
       return `${numericIndex}. ${authors}. ${item.title}.${container} ${year}.${ref}`

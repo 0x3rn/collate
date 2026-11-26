@@ -11,7 +11,7 @@ const TONE_STYLES: Record<AlertTone, string> = {
 
 const TONE_LABELS: Record<AlertTone, string> = {
   error: "Error",
-  success: "Confirmed",
+  success: "",
   warning: "Notice",
   info: "Note",
 };

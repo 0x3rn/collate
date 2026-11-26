@@ -13,6 +13,7 @@ import {
   verifySourceUrlRecord,
 } from "@/lib/citations/verifier";
 import { normalizeDoi } from "@/lib/research/dedupe";
+import { normalizeCslItemForDisplay } from "@/lib/citations/source-title";
 
 /**
  * Authoritative scholarly APIs already queried directly during Collate's research sweep.
@@ -141,7 +142,7 @@ export async function loadProjectCitationMap(
       continue;
     }
     try {
-      const item = CslItemSchema.parse(JSON.parse(row.cslJson));
+      const item = normalizeCslItemForDisplay(CslItemSchema.parse(JSON.parse(row.cslJson)));
       map.set(row.citeKey, item);
     } catch {
       // Skip malformed entry

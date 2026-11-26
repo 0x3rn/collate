@@ -1,21 +1,43 @@
 import { desc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { findCreditPack } from "@/config/pricing";
-import { creditLedger, jobsLog, payments, users } from "@/db/schema";
+import { auditLog, creditLedger, jobsLog, payments, users } from "@/db/schema";
 import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { getSessionFromToken } from "@/lib/auth/service";
 import { buildPaymentReceiptEmail, dispatchUserNotification } from "@/lib/email/notifications";
+import { buildPaymentAlert } from "@/lib/notify/admin-alerts";
 import { logEvent } from "@/lib/observability/logger";
 import {
   BillingError,
   checkSpendCircuitBreaker,
   grantPaymentCreditsIdempotent,
   issueAdminBatchCredits,
+  issueAdminCreditDeduction,
   issueAdminManualRefund,
   setGlobalCircuitBreaker,
 } from "./ledger";
-import { verifyPaystackWebhook, verifyPolarWebhook, verifyStripeWebhook } from "./webhooks";
+import { evidenceFromRequest, TERMS_VERSION } from "./evidence";
+import { loadAdminPayments } from "./admin-payments";
+import { renderEvidenceHtml } from "./evidence-pdf";
+import { buildDisputeEvidence } from "./evidence-report";
+import { brandFooter } from "@/lib/pdf/brand-document";
+import { type BrowserRunPdfBinding, renderHtmlToPdfBytes } from "@/lib/pdf/render-pdf";
+import {
+  applyPaymentReversal,
+  BILLING_HOLD_MESSAGE,
+  getBillingHold,
+  liftBillingHold,
+  resolveDispute,
+} from "./reversals";
+import {
+  type ParsedReversal,
+  parsePaystackReversal,
+  parsePolarReversal,
+  verifyPaystackWebhook,
+  verifyPolarWebhook,
+  verifyStripeWebhook,
+} from "./webhooks";
 
 export interface PolarProductIdMap {
   pack_starter_25?: string;
@@ -83,6 +105,18 @@ export async function handleCreateCheckout(
     return jsonNoStore({ ok: false, error: "Invalid JSON request body." }, 400);
   }
 
+  // The billing page's required tick box: no checkout starts without agreeing to the Terms.
+  if ((rawBody as { acceptTerms?: unknown } | null)?.acceptTerms !== true) {
+    return jsonNoStore(
+      {
+        ok: false,
+        code: "TERMS_NOT_ACCEPTED",
+        error: "Tick the box to agree to the Terms of Service and Refund Policy before buying.",
+      },
+      400
+    );
+  }
+
   const parsed = CheckoutBodySchema.safeParse(rawBody);
   if (!parsed.success) {
     return jsonNoStore({ ok: false, error: "Select a valid credit pack and try again." }, 400);
@@ -92,9 +126,38 @@ export async function handleCreateCheckout(
   if (!pack) {
     return jsonNoStore({ ok: false, error: "Selected credit pack was not found." }, 400);
   }
+  if (await getBillingHold(deps.db, session.user.id)) {
+    return jsonNoStore({ ok: false, code: "ACCOUNT_ON_HOLD", error: BILLING_HOLD_MESSAGE }, 403);
+  }
 
   const fetchFn = deps.fetchFn ?? globalThis.fetch;
   const now = (deps.nowFn ?? (() => new Date()))();
+  // Evidence for disputes: the buyer agreed to the Terms (shown next to the buy buttons) when
+  // starting this payment, from this device and network.
+  const recordCheckout = (
+    provider: string,
+    reference: string,
+    currency: string,
+    amountMinor: number
+  ) =>
+    deps.db.insert(auditLog).values({
+      id: `aud_${crypto.randomUUID()}`,
+      actorUserId: session.user.id,
+      action: "billing.checkout_started",
+      entityType: "payment_reference",
+      entityId: reference,
+      metadataJson: JSON.stringify({
+        provider,
+        packId: pack.id,
+        credits: pack.credits,
+        currency,
+        amountMinor,
+        termsVersion: TERMS_VERSION,
+        termsAccepted: true,
+        ...evidenceFromRequest(request),
+      }),
+      createdAt: now,
+    });
   let appUrl = deps.appUrl.trim();
   while (appUrl.endsWith("/")) appUrl = appUrl.slice(0, -1);
 
@@ -165,6 +228,7 @@ export async function handleCreateCheckout(
       updatedAt: now,
     });
 
+    await recordCheckout("paystack", reference, "NGN", pack.amountNgnKobo);
     return jsonNoStore({ ok: true, provider: "paystack", reference, checkoutUrl }, 201);
   }
 
@@ -236,6 +300,7 @@ export async function handleCreateCheckout(
       updatedAt: now,
     });
 
+    await recordCheckout("polar", polarJson.id, "USD", pack.amountUsdCents);
     return jsonNoStore(
       { ok: true, provider: "polar", reference: polarJson.id, checkoutUrl: polarJson.url },
       201
@@ -315,6 +380,41 @@ function formatMinorAmount(currency: string, amountMinor: number): string {
   return `${currency.toUpperCase()} ${major}`;
 }
 
+/** Refund and dispute events from a payment provider (signature already checked). */
+async function handleReversalWebhook(
+  parsed: ParsedReversal | null,
+  deps: BillingHttpDeps
+): Promise<Response> {
+  if (!parsed) return jsonNoStore({ ok: true, ignored: true }, 200);
+  const now = (deps.nowFn ?? (() => new Date()))();
+  const ctx = { now, notifier: deps.adminNotifier };
+  try {
+    if (parsed.type === "reversal") {
+      const res = await applyPaymentReversal(deps.db, parsed.event, ctx);
+      return jsonNoStore({ ok: true, ...res }, 200);
+    }
+    // A dispute result. If we never saw it open, record it first so a loss still takes credits.
+    if (parsed.result === "lost") await applyPaymentReversal(deps.db, parsed.event, ctx);
+    const res = await resolveDispute(
+      deps.db,
+      {
+        provider: parsed.provider,
+        providerDisputeId: parsed.disputeId,
+        result: parsed.result,
+        status: parsed.status,
+      },
+      ctx
+    );
+    return jsonNoStore({ ok: true, ...res }, 200);
+  } catch (err) {
+    logEvent("error", "billing.reversal_failed", {
+      data: { reason: err instanceof Error ? err.message : String(err) },
+    });
+    // 500 so the provider retries later.
+    return jsonNoStore({ ok: false, error: "Failed to process refund or dispute." }, 500);
+  }
+}
+
 export async function handlePaystackWebhook(
   request: Request,
   deps: BillingHttpDeps
@@ -335,7 +435,7 @@ export async function handlePaystackWebhook(
     return jsonNoStore({ ok: false, error: verified.reason }, 401);
   }
   if (verified.ignored || !verified.payment) {
-    return jsonNoStore({ ok: true, ignored: true }, 200);
+    return handleReversalWebhook(parsePaystackReversal(verified.rawEvent), deps);
   }
 
   const now = (deps.nowFn ?? (() => new Date()))();
@@ -348,6 +448,19 @@ export async function handlePaystackWebhook(
         .from(users)
         .where(eq(users.id, verified.payment.userId))
         .limit(1);
+
+      await deps.adminNotifier?.send(
+        buildPaymentAlert({
+          amountFormatted: formatMinorAmount(
+            verified.payment.currency,
+            verified.payment.amountMinor
+          ),
+          creditsAdded: verified.payment.creditsGranted,
+          provider: verified.payment.provider,
+          customerName: usr?.name,
+          customerEmail: usr?.email,
+        })
+      );
 
       if (usr) {
         let appUrl = deps.appUrl.trim();
@@ -413,6 +526,19 @@ export async function handleStripeWebhook(
         .where(eq(users.id, verified.payment.userId))
         .limit(1);
 
+      await deps.adminNotifier?.send(
+        buildPaymentAlert({
+          amountFormatted: formatMinorAmount(
+            verified.payment.currency,
+            verified.payment.amountMinor
+          ),
+          creditsAdded: verified.payment.creditsGranted,
+          provider: verified.payment.provider,
+          customerName: usr?.name,
+          customerEmail: usr?.email,
+        })
+      );
+
       if (usr) {
         let appUrl = deps.appUrl.trim();
         while (appUrl.endsWith("/")) appUrl = appUrl.slice(0, -1);
@@ -467,7 +593,7 @@ export async function handlePolarWebhook(
     return jsonNoStore({ ok: false, error: verified.reason }, 401);
   }
   if (verified.ignored || !verified.payment) {
-    return jsonNoStore({ ok: true, ignored: true }, 200);
+    return handleReversalWebhook(parsePolarReversal(verified.rawEvent), deps);
   }
 
   try {
@@ -479,6 +605,19 @@ export async function handlePolarWebhook(
         .from(users)
         .where(eq(users.id, verified.payment.userId))
         .limit(1);
+
+      await deps.adminNotifier?.send(
+        buildPaymentAlert({
+          amountFormatted: formatMinorAmount(
+            verified.payment.currency,
+            verified.payment.amountMinor
+          ),
+          creditsAdded: verified.payment.creditsGranted,
+          provider: verified.payment.provider,
+          customerName: usr?.name,
+          customerEmail: usr?.email,
+        })
+      );
 
       if (usr) {
         let appUrl = deps.appUrl.trim();
@@ -636,12 +775,19 @@ export async function handleAdminOverview(
   );
 }
 
-const AdminRefundSchema = z.object({
-  targetUserId: z.string().trim().min(1),
-  credits: z.number().int().min(1).max(1000),
-  reason: z.string().trim().min(5).max(300),
-  idempotencyKey: z.string().trim().min(4).max(120).optional(),
-});
+const AdminRefundSchema = z
+  .object({
+    targetUserId: z.string().trim().min(1),
+    /** "grant" adds credits (default); "deduct" takes them back, never below zero. */
+    mode: z.enum(["grant", "deduct"]).default("grant"),
+    credits: z.number().int().min(1).max(10000),
+    reason: z.string().trim().min(5).max(300),
+    idempotencyKey: z.string().trim().min(4).max(120).optional(),
+  })
+  .refine((v) => v.mode === "deduct" || v.credits <= 1000, {
+    message: "Grant at most 1,000 credits at a time.",
+    path: ["credits"],
+  });
 
 export async function handleAdminManualRefund(
   request: Request,
@@ -667,6 +813,17 @@ export async function handleAdminManualRefund(
 
   const now = (deps.nowFn ?? (() => new Date()))();
   try {
+    if (parsed.data.mode === "deduct") {
+      const res = await issueAdminCreditDeduction(deps.db, {
+        adminUserId: auth.session.user.id,
+        targetUserId: parsed.data.targetUserId,
+        credits: parsed.data.credits,
+        reason: parsed.data.reason,
+        idempotencyKey: parsed.data.idempotencyKey ?? `adm_ded_${crypto.randomUUID()}`,
+        now,
+      });
+      return jsonNoStore({ ok: true, ...res }, 200);
+    }
     const res = await issueAdminManualRefund(deps.db, {
       adminUserId: auth.session.user.id,
       targetUserId: parsed.data.targetUserId,
@@ -771,4 +928,101 @@ export async function handleAdminBatchCredit(
   } catch {
     return jsonNoStore({ ok: false, error: "Failed to process batch credit grant." }, 500);
   }
+}
+
+const LiftHoldSchema = z.object({
+  userId: z.string().trim().min(1),
+  note: z.string().trim().min(5, "Add a short note for the audit log.").max(300),
+});
+
+/** Admin: lift a billing hold (after a dispute is settled, or the customer paid again). */
+export async function handleAdminLiftHold(
+  request: Request,
+  deps: BillingHttpDeps
+): Promise<Response> {
+  const auth = await requireAdminSession(request, deps, true);
+  if (!auth.ok) return auth.error;
+  const parsed = LiftHoldSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return jsonNoStore(
+      { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid request." },
+      400
+    );
+  }
+  const lifted = await liftBillingHold(deps.db, {
+    adminUserId: auth.session.user.id,
+    userId: parsed.data.userId,
+    note: parsed.data.note,
+    now: (deps.nowFn ?? (() => new Date()))(),
+  });
+  if (!lifted) return jsonNoStore({ ok: false, error: "User not found." }, 404);
+  return jsonNoStore({ ok: true }, 200);
+}
+
+const EVIDENCE_FOOTER = brandFooter("Transaction record · Confidential");
+
+/** Admin: the dispute evidence for one payment as a PDF download. */
+export async function handleAdminEvidencePdf(
+  request: Request,
+  paymentId: string,
+  deps: BillingHttpDeps & { browser?: BrowserRunPdfBinding }
+): Promise<Response> {
+  const auth = await requireAdminSession(request, deps, false);
+  if (!auth.ok) return auth.error;
+  if (!deps.browser) {
+    return jsonNoStore({ ok: false, error: "PDF rendering is not available right now." }, 503);
+  }
+  const now = (deps.nowFn ?? (() => new Date()))();
+  const ev = await buildDisputeEvidence(deps.db, paymentId);
+  if (!ev) return jsonNoStore({ ok: false, error: "Payment not found." }, 404);
+
+  let bytes: Uint8Array;
+  try {
+    bytes = await renderHtmlToPdfBytes(renderEvidenceHtml(ev, now), deps.browser, {
+      footerTemplate: EVIDENCE_FOOTER,
+    });
+  } catch (err) {
+    logEvent("error", "billing.evidence_pdf_failed", {
+      data: { paymentId, reason: err instanceof Error ? err.message : String(err) },
+    });
+    return jsonNoStore({ ok: false, error: "The PDF could not be made. Try again." }, 502);
+  }
+
+  await deps.db.insert(auditLog).values({
+    id: `aud_${crypto.randomUUID()}`,
+    actorUserId: auth.session.user.id,
+    action: "admin.evidence_downloaded",
+    entityType: "payment",
+    entityId: ev.payment.id,
+    metadataJson: null,
+    createdAt: now,
+  });
+
+  const safeRef = ev.payment.providerReference
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 24)
+    .replace(/[-_]+$/, "");
+  const filename = `collate-transaction-record-${safeRef || "payment"}-${now.toISOString().slice(0, 10)}.pdf`;
+  return new Response(bytes.slice().buffer as ArrayBuffer, {
+    status: 200,
+    headers: {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="${filename}"`,
+      "cache-control": "private, no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
+/** Admin: search every payment (any age) by customer email or name, or payment reference. */
+export async function handleAdminSearchPayments(
+  request: Request,
+  deps: BillingHttpDeps
+): Promise<Response> {
+  const auth = await requireAdminSession(request, deps, false);
+  if (!auth.ok) return auth.error;
+  const q = (new URL(request.url).searchParams.get("q") ?? "").trim().slice(0, 120);
+  if (q.length < 2) return jsonNoStore({ ok: false, error: "Type at least 2 characters." }, 400);
+  const rows = await loadAdminPayments(deps.db, { query: q, limit: 100 });
+  return jsonNoStore({ ok: true, payments: rows }, 200);
 }

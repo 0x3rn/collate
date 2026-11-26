@@ -148,7 +148,7 @@ export const LANDING_FAQS: readonly LandingFaqItem[] = [
       "Yes, without inventing data. You can upload your real spreadsheet so Collate computes descriptive tables automatically, rely on cited public datasets, or generate a clearly marked template showing where to insert your own findings.",
   },
   {
-    question: "Why does Collate write one chapter at a time instead of the whole thesis at once?",
+    question: "Why does Collate write one chapter at a time instead of the whole project at once?",
     answer:
       "Long academic work loses focus when rushed together. Writing one chapter at a time lets Collate check every claim, measure real rendered pages, email you when ready, and incorporate your edits before the next chapter starts.",
   },
@@ -160,7 +160,7 @@ export const LANDING_FAQS: readonly LandingFaqItem[] = [
   {
     question: "What happens to my credits if a chapter fails halfway through?",
     answer:
-      "Credits are held when you start a chapter and refunded automatically in full if the run fails. Completed sections are saved safely so an interrupted chapter can resume without losing progress.",
+      "Credits are held when you start a chapter. If the run is interrupted, it picks up from the last finished section instead of starting over. If it fails, the held credits are refunded to you in full.",
   },
 ] as const;
 

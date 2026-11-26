@@ -132,7 +132,7 @@ export async function resolveExportFiguresForChapters(
           method: "GET",
           headers: {
             accept: "image/jpeg,image/png,*/*;q=0.5",
-            "user-agent": "CollateAcademicExport/1.0 (https://collate.corstack.dev)",
+            "user-agent": "CollateAcademicExport/1.0 (https://collateresearch.app)",
           },
           signal: controller.signal,
         });

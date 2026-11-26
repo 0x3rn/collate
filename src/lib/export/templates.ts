@@ -1,4 +1,4 @@
-import type { LineSpacing, PageSize } from "@/db/schema";
+import type { HeadingColor, LineSpacing, PageSize } from "@/db/schema";
 import type { CoverDetails, FrontMatterToggles } from "@/lib/wizard/schema";
 import { parseMarkdownToBlocks } from "@/lib/writing/editor-blocks";
 import type { ResolvedExportFigureAsset } from "./figure-assets";
@@ -6,6 +6,12 @@ import {
   computeControlledFigureDimensions,
   formatFigureAttributionForDisplay,
 } from "./figure-layout";
+import {
+  headingColorHex,
+  headingSizePt,
+  type HeadingLevel,
+  PRINT_HEADING_MARGIN_PT,
+} from "./heading-style";
 import { keepWordsTogether } from "./keep-together";
 import { getPageSizeSpec } from "./page-sizes";
 
@@ -16,6 +22,8 @@ export interface ExportFormattingSettings {
   marginsMm: number;
   pageSize?: PageSize;
   pageNumbering: boolean;
+  /** Colour of chapter titles and section headings. Defaults to black. */
+  headingColor?: HeadingColor;
   frontMatter: FrontMatterToggles;
   cover: CoverDetails;
 }
@@ -177,6 +185,28 @@ export function markdownToPrintHtml(
   return htmlParts.join("\n");
 }
 
+/**
+ * Heading rules for the PDF. Spacing is the original print layout; the chapter title is centred,
+ * sizes follow the body size (unchanged at 12pt) and colour is the user's choice. A heading is
+ * never left as the last line of a page: it moves to the next page with its text.
+ */
+function buildHeadingCss(fmt: ExportFormattingSettings): string {
+  const rule = (level: HeadingLevel) => {
+    const { before, after } = PRINT_HEADING_MARGIN_PT[level];
+    return `h${level} { font-size: ${headingSizePt(level, fmt.fontSizePt)}pt; font-weight: 700; margin: ${before}pt 0 ${after}pt 0;${
+      level === 1 ? " text-align: center;" : ""
+    } }`;
+  };
+  const color = fmt.headingColor === "blue" ? ` color: #${headingColorHex("blue")};` : "";
+  return [
+    `h1, h2, h3, h4 {${color} break-after: avoid; page-break-after: avoid; break-inside: avoid; }`,
+    rule(1),
+    rule(2),
+    rule(3),
+    rule(4),
+  ].join("\n    ");
+}
+
 function buildPrintCss(fmt: ExportFormattingSettings): string {
   const safeFont = escapeHtml(fmt.font);
   const pageSpec = getPageSizeSpec(fmt.pageSize);
@@ -234,10 +264,7 @@ function buildPrintCss(fmt: ExportFormattingSettings): string {
     }
     .cover-title { font-size: 20pt; font-weight: 700; line-height: 1.3; text-transform: uppercase; }
     .cover-meta { font-size: 12pt; line-height: 1.8; }
-    h1 { font-size: 16pt; font-weight: 700; margin: 0 0 12pt 0; }
-    h2 { font-size: 13.5pt; font-weight: 700; margin: 16pt 0 8pt 0; }
-    h3 { font-size: 12pt; font-weight: 700; margin: 12pt 0 6pt 0; }
-    h4 { font-size: 11.5pt; font-weight: 700; margin: 10pt 0 4pt 0; }
+    ${buildHeadingCss(fmt)}
     p { margin: 0 0 10pt 0; text-align: left; }
     p.blank-line { margin: 0 0 10pt 0; min-height: 1em; }
     blockquote {
@@ -252,7 +279,9 @@ function buildPrintCss(fmt: ExportFormattingSettings): string {
     th, td { border: 0.75pt solid #444444; padding: 5pt 7pt; text-align: left; }
     th { background: #f2f2f2; font-weight: 700; }
     .toc-row { display: flex; justify-content: space-between; border-bottom: 0.5pt dotted #888888; padding: 4pt 0; }
-    .ref-item { padding-left: 12mm; text-indent: -12mm; margin-bottom: 8pt; }
+    .ref-item { padding-left: 12mm; text-indent: -12mm; margin-bottom: 8pt; overflow-wrap: anywhere; }
+    /* Long links and identifiers wrap inside the margins instead of running off the page. */
+    p, li, td, th, blockquote { overflow-wrap: break-word; }
   `;
 }
 

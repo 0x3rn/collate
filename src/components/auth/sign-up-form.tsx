@@ -1,15 +1,24 @@
 "use client";
 
-import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import { FormAlert } from "@/components/ui/alert";
+import { useRouter } from "next/navigation";
+import { useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { TurnstileWidget } from "@/components/ui/turnstile-widget";
+import { SignUpTermsText, TermsCheckbox } from "@/components/legal/terms-checkbox";
+import { GoogleAuthButton } from "./google-auth-button";
+import { VerifyCodePanel } from "./verify-code-panel";
 
-export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
+export function SignUpForm({
+  turnstileSiteKey,
+  googleEnabled = false,
+}: {
+  turnstileSiteKey: string;
+  googleEnabled?: boolean;
+}) {
   const toast = useToast();
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,7 +27,18 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
     {}
   );
   const [submitting, setSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
+  const termsRef = useRef<HTMLInputElement>(null);
+
+  function requireTerms(): boolean {
+    if (termsAccepted) return true;
+    setTermsError("Tick this box to agree before creating your account.");
+    termsRef.current?.focus();
+    termsRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    return false;
+  }
 
   const nameError =
     touched.name && name.trim().length < 2
@@ -40,6 +60,7 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
     if (name.trim().length < 2 || !email.includes("@") || password.length < 12) {
       return;
     }
+    if (!requireTerms()) return;
 
     setSubmitting(true);
     try {
@@ -51,6 +72,7 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
           email: email.trim(),
           password,
           turnstileToken: turnstileToken || undefined,
+          acceptTerms: true,
         }),
       });
       const data = (await res.json()) as { ok: boolean; message?: string; error?: string };
@@ -61,9 +83,7 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
         );
         return;
       }
-      setSuccessMessage(
-        data.message ?? "Check your inbox for a verification link to activate your account."
-      );
+      setPendingEmail(email.trim().toLowerCase());
       setPassword("");
     } catch {
       toast.error(
@@ -75,33 +95,33 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
     }
   }
 
-  if (successMessage) {
+  if (pendingEmail) {
     return (
-      <div className="space-y-4">
-        <FormAlert tone="success">{successMessage}</FormAlert>
-        <p className="text-sm text-[var(--neutral-600)]">
-          Open the link in your email to verify your address before signing in.
-        </p>
-        <div className="flex flex-wrap gap-3 pt-2">
-          <Link
-            href="/sign-in"
-            className="text-sm font-medium text-[var(--accent-600)] underline underline-offset-4"
-          >
-            Go to sign in
-          </Link>
-          <Link
-            href="/verify-email"
-            className="text-sm font-medium text-[var(--neutral-700)] underline underline-offset-4"
-          >
-            Resend verification link
-          </Link>
-        </div>
-      </div>
+      <VerifyCodePanel
+        email={pendingEmail}
+        onVerified={() =>
+          router.push(`/sign-in?verified=1&email=${encodeURIComponent(pendingEmail)}`)
+        }
+      />
     );
   }
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4">
+      {googleEnabled ? (
+        <div className="space-y-4 pb-1">
+          <GoogleAuthButton
+            label="Sign up with Google"
+            termsAccepted={termsAccepted}
+            onTermsMissing={() => void requireTerms()}
+          />
+          <div className="flex items-center gap-3 text-xs text-[var(--neutral-500)]">
+            <span className="h-px flex-1 bg-[var(--neutral-200)]" />
+            or use your email
+            <span className="h-px flex-1 bg-[var(--neutral-200)]" />
+          </div>
+        </div>
+      ) : null}
       <FormField
         id="signup-name"
         label="Full name"
@@ -146,30 +166,24 @@ export function SignUpForm({ turnstileSiteKey }: { turnstileSiteKey: string }) {
 
       <TurnstileWidget siteKey={turnstileSiteKey} onTokenChange={setTurnstileToken} />
 
+      <TermsCheckbox
+        ref={termsRef}
+        id="signup-terms"
+        checked={termsAccepted}
+        onChange={(checked) => {
+          setTermsAccepted(checked);
+          if (checked) setTermsError(null);
+        }}
+        error={termsError}
+      >
+        <SignUpTermsText />
+      </TermsCheckbox>
+
       <div className="pt-2">
         <Button type="submit" fullWidth loading={submitting} loadingLabel="Creating account...">
           Create account
         </Button>
       </div>
-
-      <p className="text-xs text-[var(--neutral-600)] leading-relaxed">
-        By creating an account, you agree to the{" "}
-        <Link href="/terms" className="underline underline-offset-2 text-[var(--neutral-800)]">
-          Terms of service
-        </Link>
-        ,{" "}
-        <Link
-          href="/acceptable-use"
-          className="underline underline-offset-2 text-[var(--neutral-800)]"
-        >
-          Acceptable use policy
-        </Link>
-        , and{" "}
-        <Link href="/privacy" className="underline underline-offset-2 text-[var(--neutral-800)]">
-          Privacy policy
-        </Link>
-        .
-      </p>
     </form>
   );
 }

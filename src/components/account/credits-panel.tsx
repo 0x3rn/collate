@@ -1,16 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { CheckoutTermsText, TermsCheckbox } from "@/components/legal/terms-checkbox";
 import { Button } from "@/components/ui/button";
+import { ModalCard } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
 import { CREDIT_PACKS } from "@/config/pricing";
-import {
-  formatCreditLedgerType,
-  formatCredits,
-  formatNumber,
-  formatShortDate,
-} from "@/lib/ui/formatters";
+import { formatCreditLedgerType, formatNumber, formatShortDate } from "@/lib/ui/formatters";
 
 export interface LedgerEntryDisplay {
   id: string;
@@ -21,25 +17,35 @@ export interface LedgerEntryDisplay {
   createdAt: string;
 }
 
-export function CreditsPanel({
-  balance,
-  recentLedger,
-}: {
-  balance: number;
-  recentLedger: LedgerEntryDisplay[];
-}) {
+export function CreditsPanel({ recentLedger }: { recentLedger: LedgerEntryDisplay[] }) {
   const toast = useToast();
-  const [currency, setCurrency] = useState<"ngn" | "usd">("ngn");
+  const [currency, setCurrency] = useState<"ngn" | "usd">("usd");
   const [busyPackId, setBusyPackId] = useState<string | null>(null);
+  // The pack being bought: Buy opens this pop-up, and checkout loads only after the box is ticked.
+  const [confirmPackId, setConfirmPackId] = useState<string | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const confirmPack = CREDIT_PACKS.find((p) => p.id === confirmPackId) ?? null;
+
+  function formatPrice(pack: (typeof CREDIT_PACKS)[number]): string {
+    return currency === "ngn"
+      ? `₦${(pack.amountNgnKobo / 100).toLocaleString("en-NG")}`
+      : `$${(pack.amountUsdCents / 100).toFixed(0)}`;
+  }
+
+  function openConfirm(packId: string) {
+    setTermsAccepted(false);
+    setConfirmPackId(packId);
+  }
 
   async function startCheckout(packId: string) {
+    if (!termsAccepted) return;
     const provider = currency === "ngn" ? "paystack" : "polar";
     setBusyPackId(packId);
     try {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider, packId }),
+        body: JSON.stringify({ provider, packId, acceptTerms: true }),
       });
       const json = (await res.json()) as {
         ok: boolean;
@@ -47,6 +53,7 @@ export function CreditsPanel({
         error?: string;
       };
       if (!res.ok || !json.ok || !json.checkoutUrl) {
+        setConfirmPackId(null);
         toast.error(
           json.error ?? "We couldn't open checkout right now. Please try again shortly.",
           "Checkout unavailable"
@@ -83,18 +90,6 @@ export function CreditsPanel({
           >
             <button
               type="button"
-              onClick={() => setCurrency("ngn")}
-              aria-pressed={currency === "ngn"}
-              className={`min-h-[32px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
-                currency === "ngn"
-                  ? "bg-white text-[var(--neutral-900)] shadow-[var(--shadow-subtle)]"
-                  : "text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"
-              }`}
-            >
-              NGN (₦)
-            </button>
-            <button
-              type="button"
               onClick={() => setCurrency("usd")}
               aria-pressed={currency === "usd"}
               className={`min-h-[32px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
@@ -105,16 +100,25 @@ export function CreditsPanel({
             >
               USD ($)
             </button>
+            <button
+              type="button"
+              onClick={() => setCurrency("ngn")}
+              aria-pressed={currency === "ngn"}
+              className={`min-h-[32px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
+                currency === "ngn"
+                  ? "bg-white text-[var(--neutral-900)] shadow-[var(--shadow-subtle)]"
+                  : "text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"
+              }`}
+            >
+              NGN (₦)
+            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[var(--neutral-200)]">
           {CREDIT_PACKS.map((pack, index) => {
             const featured = index === 1;
-            const formattedPrice =
-              currency === "ngn"
-                ? `₦${(pack.amountNgnKobo / 100).toLocaleString("en-NG")}`
-                : `$${(pack.amountUsdCents / 100).toFixed(0)}`;
+            const formattedPrice = formatPrice(pack);
             const buttonLabel = `Buy ${pack.credits} credits`;
 
             return (
@@ -162,7 +166,7 @@ export function CreditsPanel({
                   disabled={busyPackId !== null}
                   loading={busyPackId === pack.id}
                   loadingLabel="Opening checkout..."
-                  onClick={() => startCheckout(pack.id)}
+                  onClick={() => openConfirm(pack.id)}
                 >
                   {buttonLabel}
                 </Button>
@@ -170,23 +174,53 @@ export function CreditsPanel({
             );
           })}
         </div>
-
-        <div className="px-6 py-3 bg-[var(--neutral-50)] border-t border-[var(--neutral-200)] flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--neutral-500)] tabular-nums">
-          <span>Current balance: {formatCredits(balance)}</span>
-          <span className="flex flex-wrap items-center gap-2">
-            <span>
-              Secure checkout · {currency === "ngn" ? "Nigerian Naira (NGN)" : "US Dollars (USD)"}
-            </span>
-            <span aria-hidden="true">·</span>
-            <Link
-              href="/terms#refund-policy"
-              className="text-[var(--neutral-600)] hover:text-[var(--neutral-900)] underline underline-offset-2"
-            >
-              Refund policy
-            </Link>
-          </span>
-        </div>
       </section>
+
+      <ModalCard
+        open={confirmPack !== null}
+        onClose={() => busyPackId === null && setConfirmPackId(null)}
+        eyebrow="Credit pack"
+        title={confirmPack?.label ?? ""}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setConfirmPackId(null)}
+              disabled={busyPackId !== null}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => confirmPack && void startCheckout(confirmPack.id)}
+              disabled={!termsAccepted}
+              loading={busyPackId !== null}
+              loadingLabel="Opening checkout..."
+            >
+              Continue to checkout
+            </Button>
+          </div>
+        }
+      >
+        {confirmPack ? (
+          <div className="space-y-5">
+            <dl className="divide-y divide-[var(--neutral-200)] border-b border-[var(--neutral-200)] text-sm">
+              <div className="flex justify-between gap-4 py-2.5">
+                <dt className="text-[var(--neutral-600)]">Credits</dt>
+                <dd className="text-[var(--neutral-900)] tabular-nums">{confirmPack.credits}</dd>
+              </div>
+              <div className="flex justify-between gap-4 py-2.5">
+                <dt className="text-[var(--neutral-600)]">Price</dt>
+                <dd className="text-[var(--neutral-900)] tabular-nums">
+                  {formatPrice(confirmPack)}
+                </dd>
+              </div>
+            </dl>
+            <TermsCheckbox id="checkout-terms" checked={termsAccepted} onChange={setTermsAccepted}>
+              <CheckoutTermsText />
+            </TermsCheckbox>
+          </div>
+        ) : null}
+      </ModalCard>
 
       {/* Tabular Credit History Ledger */}
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] overflow-hidden">

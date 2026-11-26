@@ -182,6 +182,9 @@ export async function handleStartResearchSweep(
       creditsReserved = sweepCost;
     } catch (err) {
       if (err instanceof BillingError) {
+        if (err.code === "ACCOUNT_ON_HOLD") {
+          return jsonNoStore({ ok: false, code: err.code, error: err.message }, err.status);
+        }
         return jsonNoStore(
           {
             ok: false,

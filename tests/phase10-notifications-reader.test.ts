@@ -79,7 +79,7 @@ describe("Phase 10 — Transactional Emails, Notification Preferences & Chapter 
       new Request("https://collate.app/api/auth/signup", {
         method: "POST",
         headers: { "content-type": "application/json", origin: "https://collate.app" },
-        body: JSON.stringify({ name, email, password, turnstileToken: "ok" }),
+        body: JSON.stringify({ name, email, password, turnstileToken: "ok", acceptTerms: true }),
       }),
       authDeps
     );

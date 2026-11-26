@@ -93,6 +93,42 @@ export function buildPhase0SmokeHtml(generatedAtIso: string): string {
 }
 
 /**
+ * Renders HTML into PDF bytes via Cloudflare Browser Run, without storing them (for documents
+ * that are downloaded once, such as admin dispute evidence).
+ */
+export async function renderHtmlToPdfBytes(
+  html: string,
+  browser: BrowserRunPdfBinding,
+  options: {
+    format?: "a4" | "letter";
+    footerTemplate?: string;
+    margin?: { top: string; right: string; bottom: string; left: string };
+  } = {}
+): Promise<Uint8Array> {
+  const response = await browser.quickAction("pdf", {
+    html,
+    pdfOptions: {
+      format: options.format ?? "a4",
+      printBackground: true,
+      displayHeaderFooter: Boolean(options.footerTemplate),
+      ...(options.footerTemplate
+        ? { headerTemplate: "<span></span>", footerTemplate: options.footerTemplate }
+        : {}),
+      margin: options.margin ?? { top: "18mm", right: "16mm", bottom: "18mm", left: "16mm" },
+    },
+  });
+  if (!response.ok) {
+    const errText = await response.text().catch(() => "");
+    throw new Error(`Browser Run /pdf failed (HTTP ${response.status}): ${errText.slice(0, 300)}`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!hasPdfMagicHeader(bytes)) {
+    throw new Error("Browser Run /pdf returned invalid payload (missing %PDF- signature)");
+  }
+  return bytes;
+}
+
+/**
  * Renders HTML into a real PDF via Cloudflare Browser Run and persists it into R2.
  */
 export async function renderHtmlToPdfAndStore(

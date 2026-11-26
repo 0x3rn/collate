@@ -9,6 +9,7 @@ const PrefsBodySchema = z.object({
   emailNeedsAttention: z.boolean(),
   emailProjectComplete: z.boolean(),
   emailReceipts: z.boolean(),
+  emailMarketing: z.boolean().optional().default(false),
 });
 
 export async function handleGetNotificationPrefs(

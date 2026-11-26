@@ -34,7 +34,7 @@ export interface DeleteAccountDeps extends HttpAuthDeps {
 export const CONFIRMATION_PHRASE = "DELETE MY ACCOUNT";
 
 const DeleteAccountBodySchema = z.object({
-  password: z.string().min(1, "Enter your current password to confirm deletion."),
+  password: z.string().default(""),
   confirmation: z.string().trim(),
 });
 
@@ -104,13 +104,13 @@ export async function handleDeleteAccount(
     .where(and(eq(accounts.userId, session.user.id), eq(accounts.providerId, "credential")))
     .limit(1);
 
-  if (!credAccount?.password) {
-    return jsonNoStore({ ok: false, error: "Invalid password." }, 401);
-  }
-
-  const passwordValid = await verifyPassword(parsed.data.password, credAccount.password);
-  if (!passwordValid) {
-    return jsonNoStore({ ok: false, error: "Invalid password. Account was not deleted." }, 401);
+  // Accounts created with Google have no password: the signed-in session plus the typed
+  // confirmation phrase is the check. Password accounts must also re-enter their password.
+  if (credAccount?.password) {
+    const passwordValid = await verifyPassword(parsed.data.password, credAccount.password);
+    if (!passwordValid) {
+      return jsonNoStore({ ok: false, error: "Invalid password. Account was not deleted." }, 401);
+    }
   }
 
   // Gather R2 object keys belonging to this user's projects before cascading DB delete

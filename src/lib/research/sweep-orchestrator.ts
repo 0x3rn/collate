@@ -1,4 +1,5 @@
 import { and, asc, desc, eq } from "drizzle-orm";
+import { cleanSourceTitle, UNTITLED_DOCUMENT } from "@/lib/citations/source-title";
 import { z } from "zod";
 import { RESEARCH_CONFIG } from "@/config/research";
 import type { AppDb } from "@/db/client";
@@ -359,7 +360,7 @@ export async function runResearchSweepOrchestration(
             url: candidate.openAccessPdfUrl ?? candidate.url,
             canonicalUrl: candidate.canonicalUrl,
             doi: candidate.doi,
-            title: candidate.title,
+            title: cleanSourceTitle(candidate.title) || UNTITLED_DOCUMENT,
             normalizedTitle: candidate.normalizedTitle,
             authorsJson: JSON.stringify(candidate.authors),
             year: candidate.year,

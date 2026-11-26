@@ -567,6 +567,7 @@ describe("Wikimedia Commons Open-License Image Search & Figures HTTP API", () =>
               email,
               password: "StrongPassword123!",
               turnstileToken: "ok",
+              acceptTerms: true,
             }),
           }),
           authDeps

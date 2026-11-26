@@ -20,6 +20,12 @@ import {
   computeControlledFigureDimensions,
   formatFigureAttributionForDisplay,
 } from "./figure-layout";
+import {
+  headingColorHex,
+  headingSizePt,
+  type HeadingLevel as ExportHeadingLevel,
+  wordHeadingSpacingTwips,
+} from "./heading-style";
 import { keepWordsTogether } from "./keep-together";
 import { getPageSizeSpec } from "./page-sizes";
 import type { ThesisExportDocument } from "./templates";
@@ -58,11 +64,43 @@ function parseInlineMarkdownRuns(
   });
 }
 
+const WORD_HEADING_LEVELS = {
+  1: HeadingLevel.HEADING_1,
+  2: HeadingLevel.HEADING_2,
+  3: HeadingLevel.HEADING_3,
+  4: HeadingLevel.HEADING_4,
+} as const;
+
+interface HeadingLayout {
+  font: string;
+  bodySizePt: number;
+  lineSpacing: ThesisExportDocument["formatting"]["lineSpacing"];
+}
+
+/** Chapter titles are centred; every heading stays on the same page as the text after it. */
+function headingParagraph(level: ExportHeadingLevel, text: string, layout: HeadingLayout) {
+  const spacing = wordHeadingSpacingTwips(level, layout.bodySizePt, layout.lineSpacing);
+  return new Paragraph({
+    heading: WORD_HEADING_LEVELS[level],
+    ...(level === 1 ? { alignment: AlignmentType.CENTER } : {}),
+    keepNext: true,
+    keepLines: true,
+    spacing,
+    children: parseInlineMarkdownRuns(
+      text,
+      layout.font,
+      headingSizePt(level, layout.bodySizePt) * 2,
+      true
+    ),
+  });
+}
+
 function markdownToDocxBlocks(
   markdown: string,
   font: string,
   sizeHalfPt: number,
   lineTwips: number,
+  heading: HeadingLayout,
   resolvedFigures?: Record<string, ResolvedExportFigureAsset>
 ): Array<Paragraph | Table> {
   const parsedBlocks = parseMarkdownToBlocks(markdown);
@@ -75,39 +113,8 @@ function markdownToDocxBlocks(
         break;
       }
       case "heading": {
-        if (block.level === 1) {
-          blocks.push(
-            new Paragraph({
-              heading: HeadingLevel.HEADING_1,
-              spacing: { before: 240, after: 160 },
-              children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt + 6, true),
-            })
-          );
-        } else if (block.level === 2) {
-          blocks.push(
-            new Paragraph({
-              heading: HeadingLevel.HEADING_2,
-              spacing: { before: 260, after: 120 },
-              children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt + 2, true),
-            })
-          );
-        } else if (block.level === 3) {
-          blocks.push(
-            new Paragraph({
-              heading: HeadingLevel.HEADING_3,
-              spacing: { before: 200, after: 100 },
-              children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt, true),
-            })
-          );
-        } else {
-          blocks.push(
-            new Paragraph({
-              heading: HeadingLevel.HEADING_4,
-              spacing: { before: 160, after: 80 },
-              children: parseInlineMarkdownRuns(block.text, font, sizeHalfPt, true),
-            })
-          );
-        }
+        const level = Math.min(4, Math.max(1, block.level)) as ExportHeadingLevel;
+        blocks.push(headingParagraph(level, block.text, heading));
         break;
       }
       case "paragraph": {
@@ -268,6 +275,15 @@ export async function buildThesisDocx(
   const sizeHalfPt = doc.formatting.fontSizePt * 2;
   const lineTwips = lineSpacingTwips(doc.formatting.lineSpacing);
   const marginTwips = Math.round(doc.formatting.marginsMm * 56.6929);
+  const headingLayout: HeadingLayout = {
+    font,
+    bodySizePt: doc.formatting.fontSizePt,
+    lineSpacing: doc.formatting.lineSpacing,
+  };
+  // Replaces Word's built-in (blue) heading styles so headings use the user's chosen colour.
+  const headingStyle = {
+    run: { color: headingColorHex(doc.formatting.headingColor), font, bold: true },
+  };
 
   const children: Array<Paragraph | Table> = [];
 
@@ -326,10 +342,7 @@ export async function buildThesisDocx(
 
   if (includeFrontMatter && doc.formatting.frontMatter.abstract) {
     children.push(
-      new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: "Abstract", bold: true, font, size: sizeHalfPt + 6 })],
-      }),
+      headingParagraph(1, "Abstract", headingLayout),
       new Paragraph({
         spacing: { after: 200, line: lineTwips },
         children: [
@@ -351,17 +364,21 @@ export async function buildThesisDocx(
       children.push(new Paragraph({ children: [new PageBreak()] }));
     }
     children.push(
-      ...markdownToDocxBlocks(ch.markdown, font, sizeHalfPt, lineTwips, doc.resolvedFigures)
+      ...markdownToDocxBlocks(
+        ch.markdown,
+        font,
+        sizeHalfPt,
+        lineTwips,
+        headingLayout,
+        doc.resolvedFigures
+      )
     );
   });
 
   if (includeReferences && doc.bibliographyEntries.length > 0) {
     children.push(
       new Paragraph({ children: [new PageBreak()] }),
-      new Paragraph({
-        heading: HeadingLevel.HEADING_1,
-        children: [new TextRun({ text: "References", bold: true, font, size: sizeHalfPt + 6 })],
-      }),
+      headingParagraph(1, "References", headingLayout),
       ...doc.bibliographyEntries.map(
         (entry) =>
           new Paragraph({
@@ -375,6 +392,14 @@ export async function buildThesisDocx(
 
   const pageSpec = getPageSizeSpec(doc.formatting.pageSize);
   const wordDoc = new Document({
+    styles: {
+      default: {
+        heading1: headingStyle,
+        heading2: headingStyle,
+        heading3: headingStyle,
+        heading4: headingStyle,
+      },
+    },
     sections: [
       {
         properties: {

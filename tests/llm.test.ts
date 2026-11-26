@@ -442,6 +442,57 @@ describe("callLLM integration with D1 jobs_log (Google Gemini + Anthropic Claude
     ctx.close();
   });
 
+  it("sends the owner a Telegram alert when an AI call pushes today's spend past a threshold", async () => {
+    await recordJobLog(db, {
+      id: "job_earlier",
+      workflowId: "wf_earlier",
+      step: "draft",
+      provider: "google",
+      model: "gemini-4-neon",
+      status: "succeeded",
+      costEstimateUsd: 4.99,
+    });
+    const telegram: string[] = [];
+    const mockFetch: typeof fetch = async (input, init) => {
+      if (String(input).startsWith("https://api.telegram.org/")) {
+        telegram.push(String((JSON.parse(String(init?.body)) as { text: string }).text));
+        return Response.json({ ok: true });
+      }
+      return Response.json({
+        modelVersion: "gemini-4-neon",
+        candidates: [
+          { finishReason: "STOP", content: { role: "model", parts: [{ text: "Draft." }] } },
+        ],
+        usageMetadata: { promptTokenCount: 3000, candidatesTokenCount: 1000 },
+      });
+    };
+    const env = {
+      ...GEMINI_PLATFORM_ENV,
+      TELEGRAM_BOT_TOKEN: "123:abc",
+      TELEGRAM_CHAT_ID: "42",
+      AI_SPEND_ALERT_THRESHOLDS_USD: "5",
+    };
+    const call = () =>
+      callLLM(
+        {
+          workflowId: "wf_alert",
+          step: "draft_section",
+          task: "draft",
+          system: "Write.",
+          messages: [{ role: "user", content: "Draft." }],
+          maxTokens: 1024,
+        },
+        { db, env, fetchFn: mockFetch }
+      );
+
+    await call();
+    expect(telegram).toHaveLength(1);
+    expect(telegram[0]).toContain("AI spend passed $5 today");
+
+    await call();
+    expect(telegram).toHaveLength(1);
+  });
+
   it("calls Google Cloud Gemini Platform, filters thinking parts, counts thoughts in output tokens, and logs provider='google'", async () => {
     let capturedUrl = "";
     let capturedHeaders: Record<string, string> = {};

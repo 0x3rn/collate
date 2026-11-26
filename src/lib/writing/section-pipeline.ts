@@ -3,6 +3,7 @@ import { WRITING_CONFIG } from "@/config/writing";
 import type { ClaimVerdict, SpellingVariant } from "@/db/schema";
 import { callLLM, type CallLLMContext } from "@/lib/ai/call-llm";
 import type { RetrievedEvidencePassage } from "./retrieval";
+import { writingStyleForLevel } from "./level-style";
 
 export const DraftClaimOutputSchema = z.object({
   text: z.string().trim().min(5),
@@ -294,6 +295,7 @@ export async function draftAndVerifySection(
   const systemPrompt = [
     `You are an academic researcher ${isSurgicalRevision ? "performing a surgical revision of" : "drafting"} a section of "${input.chapterTitle}" (${WRITING_CONFIG.promptVersion}).`,
     `Academic level: ${input.level || "University"}. Spelling: ${input.spelling.toUpperCase()} English.`,
+    writingStyleForLevel(input.level),
     "STRICT EVIDENCE RULES (NON-NEGOTIABLE):",
     ...systemRules,
   ].join("\n");

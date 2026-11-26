@@ -9,6 +9,8 @@ export interface NotificationPrefs {
   emailNeedsAttention: boolean;
   emailProjectComplete: boolean;
   emailReceipts: boolean;
+  /** Promotions and offers; off unless the user opts in. */
+  emailMarketing: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -16,6 +18,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   emailNeedsAttention: true,
   emailProjectComplete: true,
   emailReceipts: true,
+  emailMarketing: false,
 };
 
 export async function getUserNotificationPrefs(
@@ -34,6 +37,7 @@ export async function getUserNotificationPrefs(
     emailNeedsAttention: row.emailNeedsAttention,
     emailProjectComplete: row.emailProjectComplete,
     emailReceipts: row.emailReceipts,
+    emailMarketing: row.emailMarketing,
   };
 }
 

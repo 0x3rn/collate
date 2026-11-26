@@ -98,7 +98,6 @@ export interface DashboardStats {
   chaptersReadyForReview: number;
   chaptersCompleted: number;
   chaptersTotal: number;
-  verifiedSourcesTotal: number;
   exportsTotal: number;
   freeSweepsUsed: number;
   freeSweepsRemaining: number;
@@ -555,7 +554,6 @@ export async function getDashboardOverviewForUser(
   let chaptersReadyForReview = 0;
   let chaptersCompleted = 0;
   let chaptersTotal = 0;
-  let verifiedSourcesTotal = 0;
   let exportsTotal = 0;
 
   for (const project of enrichedProjects) {
@@ -566,7 +564,6 @@ export async function getDashboardOverviewForUser(
     chaptersReadyForReview += project.chaptersReady + project.chaptersNeedsAttention;
     chaptersCompleted += project.chaptersReady + project.chaptersApproved;
     chaptersTotal += project.chaptersTotal;
-    verifiedSourcesTotal += project.sourcesCount;
     exportsTotal += project.exportsCount;
   }
 
@@ -589,7 +586,6 @@ export async function getDashboardOverviewForUser(
       chaptersReadyForReview,
       chaptersCompleted,
       chaptersTotal,
-      verifiedSourcesTotal,
       exportsTotal,
       freeSweepsUsed,
       freeSweepsRemaining,

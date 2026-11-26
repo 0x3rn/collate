@@ -7,15 +7,30 @@
   "main": "./worker/index.ts",
   "compatibility_date": "2026-11-21",
   "compatibility_flags": ["nodejs_compat"],
+  // Hourly: check Polar for payment disputes (Polar sends no dispute webhooks).
+  "triggers": { "crons": ["23 * * * *"] },
   "vars": {
     "APP_NAME": "Collate",
     "APP_ENV": "prod",
-    "APP_URL": "https://collate.corstack.dev",
-    "EMAIL_PROVIDER": "resend",
-    "EMAIL_FROM": "Collate <collate@corstack.dev>",
+    "APP_URL": "https://collateresearch.app",
+    "EMAIL_PROVIDER": "cloudflare",
+    // Sender for automatic emails (verification codes, receipts, chapter updates). Replies go to support.
+    "EMAIL_FROM": "Collate <noreply@collateresearch.app>",
+    "EMAIL_REPLY_TO": "support@collateresearch.app",
+    // Admin inbox: mail sent to each address lands in its own tab. Route each address to this
+    // Worker in Cloudflare Email Routing. Announcements and promotions are sent from their address.
+    "EMAIL_SUPPORT_ADDRESS": "support@collateresearch.app",
+    "EMAIL_BILLING_ADDRESS": "billing@collateresearch.app",
+    "EMAIL_GENERAL_ADDRESS": "hello@collateresearch.app",
+    "EMAIL_ANNOUNCEMENTS_ADDRESS": "news@collateresearch.app",
+    "EMAIL_PROMOTIONS_ADDRESS": "offers@collateresearch.app",
+    // Live Polar products (USD credit packs). Not secret; the access token is a secret.
+    "POLAR_PRODUCT_ID_STARTER": "e3239859-df18-4be3-91c5-a7954454041d",
+    "POLAR_PRODUCT_ID_PROJECT": "16b4c31f-c132-461d-a820-a4557178b878",
+    "POLAR_PRODUCT_ID_THESIS": "48b7fe44-cb62-4831-9c89-abf7abf27a20",
     "ADMIN_EMAILS": "somto.ike.dev@gmail.com",
-    "SCHOLARLY_CONTACT_EMAIL": "collate@corstack.dev",
-    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAFSFBv33VMh4DpXy",
+    "SCHOLARLY_CONTACT_EMAIL": "support@collateresearch.app",
+    "NEXT_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAGTFM7aEpZKIqjNc",
     "GEMINI_API_BACKEND": "vertex-express",
     "GOOGLE_CLOUD_PROJECT": "545937744162",
     // Each LLM_MODEL_* accepts any mix of Google (gemini-4-neon, gemini-4-hydrogen, gemini-4-argon, gemini-4-carbon, gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash-lite),
@@ -56,6 +71,8 @@
   ],
   "browser": {
     "binding": "BROWSER",
+    // Local dev uses the real Browser Run service (PDFs), like production.
+    "remote": true,
   },
   "workflows": [
     {
@@ -73,8 +90,20 @@
       "binding": "WRITE_CHAPTER_WORKFLOW",
       "class_name": "WriteChapterWorkflow",
     },
+    {
+      "name": "collate-broadcast-email",
+      "binding": "BROADCAST_EMAIL_WORKFLOW",
+      "class_name": "BroadcastEmailWorkflow",
+    },
   ],
   "ai": {
     "binding": "AI",
   },
+  // Cloudflare Email Sending (outgoing mail). The sending domain is onboarded in the dashboard.
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "remote": true,
+    },
+  ],
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { SourceType } from "@/db/schema";
 import { normalizeDoi } from "@/lib/research/dedupe";
+import { cleanSourceTitle, UNTITLED_DOCUMENT } from "./source-title";
 
 export const CslAuthorSchema = z.union([
   z.object({
@@ -28,6 +29,8 @@ export const CslItemSchema = z.object({
   publisher: z.string().optional(),
   DOI: z.string().optional(),
   URL: z.string().optional(),
+  /** "a", "b", … when the same author has several works in the same year. Set when loaded. */
+  "year-suffix": z.string().optional(),
   accessed: z
     .object({
       "date-parts": z.array(z.array(z.number().int())),
@@ -115,7 +118,7 @@ export function buildCslItemFromSource(input: VerifiedSourceMetadataInput): CslI
   const raw: CslItem = {
     id: input.citeKey,
     type: mapSourceTypeToCsl(input.sourceType),
-    title: input.title.trim(),
+    title: cleanSourceTitle(input.title) || UNTITLED_DOCUMENT,
     author: authors,
     ...(input.year ? { issued: { "date-parts": [[input.year]] } } : {}),
     ...(input.venue?.trim() ? { "container-title": input.venue.trim() } : {}),

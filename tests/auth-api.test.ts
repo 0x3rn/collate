@@ -80,7 +80,13 @@ describe("Auth & Projects HTTP API (cookies, CSRF, rate limits, and IDOR isolati
           origin: "https://collate.app",
           "cf-connecting-ip": "203.0.113.5",
         },
-        body: JSON.stringify({ name, email, password, turnstileToken: "ok-token" }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          turnstileToken: "ok-token",
+          acceptTerms: true,
+        }),
       }),
       deps
     );

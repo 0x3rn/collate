@@ -8,12 +8,12 @@
 export const LEGAL_CONFIG = {
   serviceName: "Collate",
   operatorName: "Collate",
-  siteUrl: "https://collate.corstack.dev",
+  siteUrl: "https://collateresearch.app",
   effectiveDate: "November 24, 2026",
-  lastUpdated: "November 24, 2026",
-  supportEmail: "collate@corstack.dev",
-  privacyEmail: "collate@corstack.dev",
-  abuseEmail: "collate@corstack.dev",
+  lastUpdated: "November 26, 2026",
+  supportEmail: "support@collateresearch.app",
+  privacyEmail: "privacy@collateresearch.app",
+  abuseEmail: "abuse@collateresearch.app",
   governingLaw: "the Federal Republic of Nigeria",
   venueLocation: "Lagos, Nigeria",
 } as const;
