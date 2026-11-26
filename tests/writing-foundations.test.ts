@@ -13,7 +13,11 @@ import {
 } from "@/db/schema";
 import { retrieveEvidencePassages } from "@/lib/writing/retrieval";
 import { analyzeCsvDataset, buildLabelledResultsFramework } from "@/lib/writing/results-data";
-import { draftAndVerifySection, normalizeCiteKey } from "@/lib/writing/section-pipeline";
+import {
+  draftAndVerifySection,
+  isWorkStructureSection,
+  normalizeCiteKey,
+} from "@/lib/writing/section-pipeline";
 import {
   isEmDashOnlyRequest,
   isLightStyleCopyEditRequest,
@@ -566,5 +570,83 @@ describe("Phase 7 — Verified Evidence Passage Retrieval & D1 Writing Constrain
     expect(
       sectionContainsEmOrSpacedEnDash("Battery degradation – a persistent risk – raises costs.")
     ).toBe(true);
+  });
+
+  it("detects Structure of the work sections and guides chapter-by-chapter roadmap drafting from the project outline", async () => {
+    expect(isWorkStructureSection("Structure of the work")).toBe(true);
+    expect(isWorkStructureSection("1.8 Structure of the work")).toBe(true);
+    expect(isWorkStructureSection("Organization of the study")).toBe(true);
+    expect(isWorkStructureSection("Thesis outline and chapter overview")).toBe(true);
+    expect(isWorkStructureSection("Background of the study")).toBe(false);
+    expect(isWorkStructureSection("Statement of the problem")).toBe(false);
+
+    let capturedSystem = "";
+    let capturedUser = "";
+    const outline = [
+      "- Chapter 1: Introduction (current chapter) | Sections: Background of the study; Statement of the problem; Aim and objectives; Scope and delimitations; Structure of the work",
+      "- Chapter 2: Literature Review | Sections: Conceptual review; Theoretical framework; Thematic empirical review; Summary of research gap",
+      "- Chapter 3: Methodology | Sections: Research design; Population and sampling strategy; Data collection instruments; Data analysis methods",
+      "- Chapter 4: Results and Findings | Sections: Data description and overview; Analysis by research question; Summary of key findings",
+      "- Chapter 5: Discussion and Conclusion | Sections: Interpretation against prior literature; Conclusions; Recommendations",
+    ].join("\n");
+
+    const result = await draftAndVerifySection(
+      {
+        workflowId: "wf_structure_1",
+        projectId: "prj_w",
+        topic: "Metoclopramide-induced extrapyramidal symptoms in clinical practice",
+        chapterTitle: "Introduction",
+        sectionHeading: "Structure of the work",
+        wordBudget: 240,
+        spelling: "uk",
+        projectOutlineText: outline,
+        priorSummaryText: "",
+        glossaryText: "",
+        passages: [],
+        spendCapUsd: 1,
+      },
+      {
+        db,
+        env: {
+          CLOUDFLARE_ACCOUNT_ID: "acct_1",
+          CLOUDFLARE_AI_GATEWAY_ID: "gw_1",
+          ANTHROPIC_API_KEY: "sk-ant-test",
+          APP_ENV: "dev",
+        },
+        fetchFn: async (_url, init) => {
+          const body = JSON.parse(String(init?.body ?? "{}")) as {
+            system?: string;
+            messages?: Array<{ content?: string }>;
+          };
+          capturedSystem = body.system ?? "";
+          capturedUser = body.messages?.[0]?.content ?? "";
+          return Response.json({
+            id: "msg_struct_1",
+            model: "claude-sonnet-4-5",
+            stop_reason: "end_turn",
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  prose:
+                    "This study is organised into five chapters. Chapter 1 introduces the background, problem statement, aim and objectives, scope, and structural roadmap of the work. Chapter 2 presents the Literature Review, covering the conceptual review, theoretical framework, thematic empirical review, and research gap. Chapter 3 details the Methodology, outlining the research design, sampling strategy, instruments, and data analysis methods. Chapter 4 reports the Results and Findings by research question. Chapter 5 provides the Discussion and Conclusion, interpreting the findings against prior literature and offering conclusions and recommendations.",
+                  claims: [],
+                }),
+              },
+            ],
+            usage: { input_tokens: 140, output_tokens: 110 },
+          });
+        },
+        nowFn: () => now.getTime(),
+      }
+    );
+
+    expect(capturedSystem).toContain("STRUCTURE OF THE WORK (CHAPTER ROADMAP)");
+    expect(capturedSystem).toContain("continuous prose");
+    expect(capturedUser).toContain("PROJECT CHAPTER OUTLINE:");
+    expect(capturedUser).toContain("Chapter 2: Literature Review");
+    expect(capturedUser).toContain("Chapter 5: Discussion and Conclusion");
+    expect(result.claims).toHaveLength(0);
+    expect(result.prose).toContain("five chapters");
   });
 });

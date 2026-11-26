@@ -148,6 +148,12 @@ export interface DraftFigureContext {
   height: number;
 }
 
+export function isWorkStructureSection(sectionHeading: string): boolean {
+  return /\b(structure|organi[sz]ation|outline|overview|layout)\b.*\b(work|study|thesis|dissertation|paper|report|project|chapters?)\b|\bchapter\s+(overview|breakdown|summaries?|organisation|organization)\b/i.test(
+    sectionHeading
+  );
+}
+
 export async function draftAndVerifySection(
   input: {
     workflowId: string;
@@ -158,6 +164,7 @@ export async function draftAndVerifySection(
     wordBudget: number;
     level?: string | null;
     spelling: SpellingVariant;
+    projectOutlineText?: string;
     priorSummaryText: string;
     glossaryText: string;
     chapterGuidance?: string | null;
@@ -268,11 +275,23 @@ export async function draftAndVerifySection(
       : "";
 
   const hasChapterGuidance = Boolean(!isSurgicalRevision && input.chapterGuidance?.trim());
-  const systemRules: string[] = [
-    "1. Use ONLY the provided passages, verified data tables, and any explicit experimental measurements supplied by the author below. Never invent statistics, quotes, or sources.",
-    `2. You may cite ONLY these registered citation keys using [@key] syntax: ${allowedKeys.map((k) => `@${k}`).join(", ") || "(none)"}. Attach [@key] citations strictly to claims supported by the provided scholarly passages.`,
-    "3. Write in original academic prose without copying source sentences verbatim. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
-  ];
+  const isStructureSection = Boolean(
+    !omitChapterWideContext &&
+    input.projectOutlineText?.trim() &&
+    isWorkStructureSection(input.sectionHeading)
+  );
+  const systemRules: string[] = isStructureSection
+    ? [
+        "1. STRUCTURE OF THE WORK (CHAPTER ROADMAP): Write a clear, concise academic roadmap of the entire document in continuous prose (do NOT use bullet lists unless explicitly requested by the author). State the exact number of chapters listed in PROJECT CHAPTER OUTLINE and walk sequentially from Chapter 1 through the final chapter using each chapter's exact number, exact title, and planned section scope.",
+        "2. Explain briefly in 1 to 3 sentences per chapter what each chapter does using precise academic verbs (for example: introduces, reviews, details, examines, presents, discusses, concludes) and how each chapter connects to the research topic.",
+        "3. Ground this roadmap strictly in PROJECT CHAPTER OUTLINE and the study topic. Never invent chapters outside the outline, never fabricate empirical results, sample sizes, or findings for later chapters, and do NOT force unrelated external citations into this structural overview (return an empty claims array when no external sources are cited).",
+        "4. Write in original academic prose. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
+      ]
+    : [
+        "1. Use ONLY the provided passages, verified data tables, and any explicit experimental measurements supplied by the author below. Never invent statistics, quotes, or sources.",
+        `2. You may cite ONLY these registered citation keys using [@key] syntax: ${allowedKeys.map((k) => `@${k}`).join(", ") || "(none)"}. Attach [@key] citations strictly to claims supported by the provided scholarly passages.`,
+        "3. Write in original academic prose without copying source sentences verbatim. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
+      ];
   if (isSurgicalRevision) {
     systemRules.push(
       `${systemRules.length + 1}. SURGICAL REVISION MODE: Preserve all unaffected sentences, existing verified [@key] citations, tables, page breaks (<!-- pagebreak -->), and :::figure blocks from CURRENT SECTION TEXT verbatim. Modify ONLY what the user's revision request specifically asks to add, fix, expand, or tighten.`
@@ -304,6 +323,9 @@ export async function draftAndVerifySection(
     `Topic: ${input.topic}`,
     `Section heading: ${input.sectionHeading}`,
     `Target length: approximately ${input.wordBudget} words.`,
+    isStructureSection && input.projectOutlineText?.trim()
+      ? `PROJECT CHAPTER OUTLINE:\n${input.projectOutlineText.trim()}`
+      : "",
     !omitChapterWideContext && input.priorSummaryText
       ? `Prior chapter memory:\n${input.priorSummaryText}`
       : "",

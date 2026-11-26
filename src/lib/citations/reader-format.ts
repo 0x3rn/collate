@@ -7,6 +7,29 @@ export interface FormattedCitationCluster {
   citeKeys: string[];
 }
 
+export function formatCitationAuthorsLabel(item: CslItem): string | null {
+  if (item.author.length === 0) return null;
+  const formatted = item.author.map((a) => {
+    if ("literal" in a) return a.literal.trim();
+    const given = a.given?.trim();
+    return given ? `${a.family.trim()}, ${given}` : a.family.trim();
+  });
+  const nonEmpty = formatted.filter(Boolean);
+  if (nonEmpty.length === 0) return null;
+  if (nonEmpty.length === 1) return nonEmpty[0]!;
+  if (nonEmpty.length === 2) return `${nonEmpty[0]} & ${nonEmpty[1]}`;
+  if (nonEmpty.length === 3) return `${nonEmpty[0]}, ${nonEmpty[1]}, & ${nonEmpty[2]}`;
+  return `${nonEmpty[0]} et al.`;
+}
+
+export function formatCitationYearLabel(item: CslItem): string {
+  const y = item.issued?.["date-parts"]?.[0]?.[0];
+  const suffix = item["year-suffix"] ?? "";
+  if (typeof y === "number") return `${y}${suffix}`;
+  // Non-breaking hyphen (U+2011) matches formatter.ts so n.d.-a / n.d.-b stay on one line.
+  return suffix ? `n.d.‑${suffix}` : "n.d.";
+}
+
 /**
  * Formats every bracketed `[@key]` / `[@key1; @key2]` citation cluster in chapter Markdown
  * using the project's exact citation style (Harvard, APA 7, MLA 9, Chicago, IEEE, Vancouver),
@@ -20,6 +43,8 @@ export function buildReaderCitationLabels(params: {
 }): {
   clusters: Record<string, FormattedCitationCluster>;
   singleKeyLabels: Record<string, string>;
+  authorLabels: Record<string, string | null>;
+  yearLabels: Record<string, string>;
 } {
   const formatter = getCitationFormatter(params.style);
   const registry = withYearSuffixesForText(params.registry, params.markdown);
@@ -27,6 +52,13 @@ export function buildReaderCitationLabels(params: {
   const numberByKey = new Map<string, number>();
   const clusters: Record<string, FormattedCitationCluster> = {};
   const singleKeyLabels: Record<string, string> = {};
+  const authorLabels: Record<string, string | null> = {};
+  const yearLabels: Record<string, string> = {};
+
+  for (const [key, item] of registry) {
+    authorLabels[key] = formatCitationAuthorsLabel(item);
+    yearLabels[key] = formatCitationYearLabel(item);
+  }
 
   const matches = params.markdown.matchAll(/\[(@[^\]]+)\]/g);
 
@@ -83,5 +115,5 @@ export function buildReaderCitationLabels(params: {
     }
   }
 
-  return { clusters, singleKeyLabels };
+  return { clusters, singleKeyLabels, authorLabels, yearLabels };
 }

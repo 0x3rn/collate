@@ -638,6 +638,10 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(readyReaderHtml).toContain("(Ponce de Vila et al. 2026)");
     expect(readyReaderHtml).toContain("(Ponce de Vila et al. 2026; Darvish 2024)");
     expect(readyReaderHtml).not.toContain("[@poncedvila2026]");
+    // Inline citations render as true non-atomic inline elements (not centered <button> blocks)
+    expect(readyReaderHtml).toContain('role="button" tabindex="0"');
+    expect(readyReaderHtml).toContain("inline text-left [box-decoration-break:clone]");
+    expect(readyReaderHtml).not.toContain('<button type="button" title=');
     expect(readyReaderHtml).toContain("<em>Beta vulgaris</em>");
     expect(readyReaderHtml).not.toContain("*Beta vulgaris*");
     expect(readyReaderHtml).not.toContain("Chapter 1: Introduction");
@@ -686,6 +690,86 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(editorHtml).toContain("Source: Example Author, Wikimedia Commons (CC BY-SA 4.0)");
     expect(editorHtml).not.toContain("File:Beetroot.jpg");
     expect(editorHtml).not.toContain("commons.wikimedia.org");
+
+    // Multi-source untitled FDA citation normalizes stray punctuation space and shows org + host + year-suffix in inspector
+    const fdaRegistry = new Map<string, CslItem>([
+      [
+        "fda_a",
+        {
+          id: "fda_a",
+          type: "report",
+          title: "[Untitled document]",
+          author: [{ literal: "U.S. Food and Drug Administration" }],
+          URL: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2017/017854s062lbl.pdf",
+        },
+      ],
+      [
+        "fda_b",
+        {
+          id: "fda_b",
+          type: "report",
+          title: "REGLAN (metoclopramide) tablets",
+          author: [{ literal: "U.S. Food and Drug Administration" }],
+          URL: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2011/017854s058lbl.pdf",
+        },
+      ],
+    ]);
+    const fdaMd = "Extrapyramidal reactions are documented [@fda_a; @fda_b] .";
+    const fdaLabels = buildReaderCitationLabels({
+      markdown: fdaMd,
+      registry: fdaRegistry,
+      style: "apa7",
+    });
+    expect(fdaLabels.authorLabels.fda_a).toBe("U.S. Food and Drug Administration");
+    expect(fdaLabels.yearLabels.fda_a).toBe("n.d.‑a");
+    expect(fdaLabels.yearLabels.fda_b).toBe("n.d.‑b");
+
+    const fdaReaderHtml = renderToStaticMarkup(
+      <ChapterReaderClient
+        initial={{
+          projectId: "prj_001",
+          chapter: { id: "ch_1", number: 1, title: "Introduction", status: "ready" },
+          markdown: fdaMd,
+          headings: [],
+          citationClusters: fdaLabels.clusters,
+          citations: [
+            {
+              citeKey: "fda_a",
+              inlineLabel: fdaLabels.singleKeyLabels.fda_a,
+              title: "[Untitled document]",
+              authors: fdaLabels.authorLabels.fda_a,
+              year: null,
+              yearLabel: fdaLabels.yearLabels.fda_a,
+              venue: null,
+              doi: null,
+              url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2017/017854s062lbl.pdf",
+            },
+            {
+              citeKey: "fda_b",
+              inlineLabel: fdaLabels.singleKeyLabels.fda_b,
+              title: "REGLAN (metoclopramide) tablets",
+              authors: fdaLabels.authorLabels.fda_b,
+              year: null,
+              yearLabel: fdaLabels.yearLabels.fda_b,
+              venue: null,
+              doi: null,
+              url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2011/017854s058lbl.pdf",
+            },
+          ],
+          versions: [],
+          verifiedClaimsCount: 1,
+          originalityReport: null,
+        }}
+      />
+    );
+    // Space before trailing period is removed so "." stays attached to the citation pill
+    expect(fdaReaderHtml).toContain("</span><span><span>.</span></span>");
+    expect(fdaReaderHtml).not.toContain("</span><span><span> .</span></span>");
+    // Citation inspector identifies the untitled FDA PDF by organisation, host, and lettered year
+    expect(fdaReaderHtml).toContain("U.S. Food and Drug Administration");
+    expect(fdaReaderHtml).toContain("Untitled document");
+    expect(fdaReaderHtml).toContain("accessdata.fda.gov · n.d.‑a");
+    expect(fdaReaderHtml).not.toContain(">[Untitled document]<");
   });
 
   it("uses student-friendly Research copy without Workspace and computes auto-hide scrollbar metrics accurately", () => {

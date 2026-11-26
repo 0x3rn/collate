@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { WRITING_CONFIG } from "@/config/writing";
 import type { AppDb } from "@/db/client";
@@ -59,6 +59,7 @@ import {
   defaultMeasurePages,
   draftAndVerifySection,
   enforceChapterLengthBand,
+  isWorkStructureSection,
   summarizeChapterForMemory,
   type DraftFigureContext,
   type MeasurePagesFn,
@@ -121,6 +122,7 @@ export interface LoadedChapterContext {
   wordsPerPage: number;
   formatting: ExportFormattingSettings;
   startedAtIso: string;
+  projectOutlineText: string;
   priorSummaryText: string;
   glossaryText: string;
   resultsMode:
@@ -314,6 +316,48 @@ export async function runWriteChapterOrchestration(
           .where(eq(sections.chapterId, chapter.id))
           .orderBy(asc(sections.orderIndex));
       }
+
+      const allProjectChapters = await deps.db
+        .select({
+          id: chapters.id,
+          number: chapters.number,
+          title: chapters.title,
+          brief: chapters.brief,
+          isAutoReferences: chapters.isAutoReferences,
+        })
+        .from(chapters)
+        .where(eq(chapters.projectId, project.id))
+        .orderBy(asc(chapters.number));
+
+      const outlineChapters = allProjectChapters.filter((ch) => !ch.isAutoReferences);
+      const outlineChapterIds = outlineChapters.map((ch) => ch.id);
+      const outlineSectionsByChapter = new Map<string, string[]>();
+      if (outlineChapterIds.length > 0) {
+        const allOutlineSections = await deps.db
+          .select({
+            chapterId: sections.chapterId,
+            orderIndex: sections.orderIndex,
+            heading: sections.heading,
+          })
+          .from(sections)
+          .where(inArray(sections.chapterId, outlineChapterIds))
+          .orderBy(asc(sections.orderIndex));
+        for (const s of allOutlineSections) {
+          const list = outlineSectionsByChapter.get(s.chapterId) ?? [];
+          list.push(s.heading.trim());
+          outlineSectionsByChapter.set(s.chapterId, list);
+        }
+      }
+
+      const projectOutlineText = outlineChapters
+        .map((ch) => {
+          const currentTag = ch.number === chapter.number ? " (current chapter)" : "";
+          const brief = ch.brief?.trim() ? ` | Focus: ${ch.brief.trim()}` : "";
+          const secHeadings = outlineSectionsByChapter.get(ch.id) ?? [];
+          const secList = secHeadings.length > 0 ? ` | Sections: ${secHeadings.join("; ")}` : "";
+          return `- Chapter ${ch.number}: ${ch.title}${currentTag}${brief}${secList}`;
+        })
+        .join("\n");
 
       const [memoryRow] = await deps.db
         .select()
@@ -573,6 +617,7 @@ export async function runWriteChapterOrchestration(
         wordsPerPage,
         formatting,
         startedAtIso: startedAt.toISOString(),
+        projectOutlineText,
         priorSummaryText,
         glossaryText,
         resultsMode,
@@ -772,6 +817,11 @@ export async function runWriteChapterOrchestration(
           .where(eq(sections.id, sec.sectionId));
 
         const useLightCopyEditPath = Boolean(isLightCopyEdit && existingSectionProse);
+        const isPureWorkStructureSection = Boolean(
+          !payload.revisionNotes?.trim() &&
+          context.projectOutlineText.trim() &&
+          isWorkStructureSection(sec.heading)
+        );
         const topPassagesForSection = isTargetedSectionRevision
           ? 4
           : sec.wordBudget <= 350
@@ -780,17 +830,20 @@ export async function runWriteChapterOrchestration(
               ? 6
               : WRITING_CONFIG.limits.topPassagesPerSection;
 
-        const passages = useLightCopyEditPath
-          ? []
-          : await retrieveEvidencePassages(deps.db, {
-              projectId: context.projectId,
-              queryText: `${context.topic} ${context.chapterTitle} ${sec.heading}`,
-              topK: topPassagesForSection,
-              sourceTypeFilter:
-                context.resultsMode === "public_dataset" ? ["dataset", "institutional"] : undefined,
-              embedder: deps.embedder,
-              vectorStore: deps.vectorStore,
-            });
+        const passages =
+          useLightCopyEditPath || isPureWorkStructureSection
+            ? []
+            : await retrieveEvidencePassages(deps.db, {
+                projectId: context.projectId,
+                queryText: `${context.topic} ${context.chapterTitle} ${sec.heading}`,
+                topK: topPassagesForSection,
+                sourceTypeFilter:
+                  context.resultsMode === "public_dataset"
+                    ? ["dataset", "institutional"]
+                    : undefined,
+                embedder: deps.embedder,
+                vectorStore: deps.vectorStore,
+              });
 
         const result = await draftAndVerifySection(
           {
@@ -802,6 +855,7 @@ export async function runWriteChapterOrchestration(
             wordBudget: sec.wordBudget,
             level: context.level,
             spelling: context.spelling,
+            projectOutlineText: context.projectOutlineText,
             priorSummaryText: context.priorSummaryText,
             glossaryText: context.glossaryText,
             chapterGuidance: context.chapterGuidance,

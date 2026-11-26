@@ -31,10 +31,21 @@ export interface ReaderCitationCard {
   citeKey: string;
   inlineLabel?: string;
   title: string;
+  authors?: string | null;
   year: number | null;
+  yearLabel?: string | null;
   venue: string | null;
   doi: string | null;
   url: string | null;
+}
+
+function extractHostFromUrl(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl?.trim()) return null;
+  try {
+    return new URL(rawUrl).hostname.replace(/^www\./i, "") || null;
+  } catch {
+    return null;
+  }
 }
 
 export interface ReaderVersionItem {
@@ -106,7 +117,8 @@ function renderParagraphWithCitations(
   citationClusters: Record<string, FormattedCitationCluster> | undefined,
   onInspect: (cards: ReaderCitationCard[]) => void
 ): ReactNode[] {
-  const parts = text.split(/(\[@[^\]]+\])/g);
+  const normalizedText = text.replace(/(\[@[^\]]+\])\s+([.,;:!?])/g, "$1$2");
+  const parts = normalizedText.split(/(\[@[^\]]+\])/g);
   return parts.map((part, idx) => {
     if (part.startsWith("[@") && part.endsWith("]")) {
       const cluster = citationClusters?.[part];
@@ -126,20 +138,38 @@ function renderParagraphWithCitations(
         const displayLabel =
           cluster?.label ??
           (cards.length === 1 && cards[0]?.inlineLabel ? cards[0].inlineLabel : part);
-        const tooltip = cards.map((c) => `${c.title} (${c.year ?? "n.d."})`).join(" · ");
+        const tooltip = cards
+          .map((c) => {
+            const yearDisplay = c.yearLabel ?? (c.year ? String(c.year) : "n.d.");
+            const titleLabel =
+              c.title === "[Untitled document]" && c.authors
+                ? `${c.authors} (Untitled document)`
+                : c.authors
+                  ? `${c.authors}: ${c.title}`
+                  : c.title;
+            return `${titleLabel} (${yearDisplay})`;
+          })
+          .join(" · ");
 
         return (
-          <button
+          <span
             key={idx}
-            type="button"
+            role="button"
+            tabIndex={0}
             title={tooltip}
             onMouseEnter={() => onInspect(cards)}
             onFocus={() => onInspect(cards)}
             onClick={() => onInspect(cards)}
-            className="inline px-1 py-[1px] text-[0.94em] font-normal rounded-[4px] bg-[var(--accent-100)]/75 hover:bg-[var(--accent-100)] text-[var(--accent-700)] transition-colors cursor-pointer [overflow-wrap:anywhere]"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onInspect(cards);
+              }
+            }}
+            className="inline text-left [box-decoration-break:clone] px-0.5 py-[1px] text-[0.94em] font-normal rounded-[4px] bg-[var(--accent-100)]/75 hover:bg-[var(--accent-100)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--accent-600)] text-[var(--accent-700)] transition-colors cursor-pointer [overflow-wrap:anywhere]"
           >
             {displayLabel}
-          </button>
+          </span>
         );
       }
     }
@@ -881,33 +911,58 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
           ) : null}
 
           <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-4">
-            <h2 className="text-base font-semibold text-[var(--neutral-900)]">
-              Citation inspector
-            </h2>
+            <div className="flex flex-col gap-1">
+              <h2 className="text-base font-semibold text-[var(--neutral-900)]">
+                Citation inspector
+              </h2>
+              {inspectedCitations.length > 1 ? (
+                <p className="text-xs text-[var(--neutral-500)]">
+                  {inspectedCitations.length} verified sources cited together
+                </p>
+              ) : null}
+            </div>
             {inspectedCitations.length > 0 ? (
               <div className="flex flex-col gap-4 divide-y divide-[var(--neutral-100)]">
-                {inspectedCitations.map((citation, idx) => (
-                  <div
-                    key={citation.citeKey}
-                    className={`flex flex-col gap-3 text-sm ${idx > 0 ? "pt-4" : ""}`}
-                  >
-                    <span className="self-start inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-700)]">
-                      Verified source
-                    </span>
-                    <p className="text-[0.9375rem] font-medium text-[var(--neutral-900)] leading-snug [overflow-wrap:anywhere]">
-                      {citation.title}
-                    </p>
-                    <div className="pt-2.5 border-t border-[var(--neutral-100)] flex flex-col gap-1.5 text-xs text-[var(--neutral-600)]">
-                      <p>
-                        {citation.venue ? `${citation.venue} · ` : ""}
-                        {citation.year ?? "n.d."}
-                      </p>
-                      {citation.doi ? (
-                        <p className="break-all text-[var(--neutral-500)]">DOI: {citation.doi}</p>
-                      ) : null}
+                {inspectedCitations.map((citation, idx) => {
+                  const isUntitled = citation.title === "[Untitled document]";
+                  const primaryTitle =
+                    isUntitled && citation.authors ? citation.authors : citation.title;
+                  const secondaryLine =
+                    isUntitled && citation.authors
+                      ? "Untitled document"
+                      : (citation.authors ?? null);
+                  const venueOrHost = citation.venue || extractHostFromUrl(citation.url);
+                  const yearDisplay =
+                    citation.yearLabel ?? (citation.year ? String(citation.year) : "n.d.");
+                  const metaLine = [venueOrHost, yearDisplay].filter(Boolean).join(" · ");
+
+                  return (
+                    <div
+                      key={citation.citeKey}
+                      className={`flex flex-col gap-2.5 text-sm ${idx > 0 ? "pt-4" : ""}`}
+                    >
+                      <span className="self-start inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[4px] bg-[var(--accent-100)] text-[var(--accent-700)]">
+                        Verified source
+                      </span>
+                      <div className="flex flex-col gap-1">
+                        <p className="text-[0.9375rem] font-medium text-[var(--neutral-900)] leading-snug [overflow-wrap:anywhere]">
+                          {primaryTitle}
+                        </p>
+                        {secondaryLine ? (
+                          <p className="text-xs text-[var(--neutral-700)] leading-snug [overflow-wrap:anywhere]">
+                            {secondaryLine}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="pt-2.5 border-t border-[var(--neutral-100)] flex flex-col gap-1.5 text-xs text-[var(--neutral-600)]">
+                        <p>{metaLine}</p>
+                        {citation.doi ? (
+                          <p className="break-all text-[var(--neutral-500)]">DOI: {citation.doi}</p>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-xs text-[var(--neutral-600)] leading-relaxed">
