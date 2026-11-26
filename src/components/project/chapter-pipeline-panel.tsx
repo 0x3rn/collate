@@ -69,7 +69,7 @@ const CHAPTER_STATUS_BADGE: Record<ChapterStatus, { label: string; classes: stri
   },
   ready: {
     label: "Ready for review",
-    classes: "bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]",
+    classes: "bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]",
   },
   approved: {
     label: "Approved",
@@ -580,9 +580,11 @@ export function ChapterPipelinePanel({
                       className={`mt-0.5 w-8 h-8 rounded-[var(--radius-sm)] text-xs font-semibold tabular-nums grid place-items-center shrink-0 ${
                         ch.isAutoReferences
                           ? "bg-[var(--neutral-100)] text-[var(--neutral-600)] border border-[var(--neutral-200)]"
-                          : ch.status === "approved" || ch.status === "ready"
+                          : ch.status === "approved"
                             ? "bg-[var(--success-bg)] text-[var(--success-text)] border border-[var(--success-border)]"
-                            : "bg-[var(--accent-100)] text-[var(--accent-600)]"
+                            : ch.status === "ready"
+                              ? "bg-[var(--warning-bg)] text-[var(--warning-text)] border border-[var(--warning-border)]"
+                              : "bg-[var(--accent-100)] text-[var(--accent-600)]"
                       }`}
                     >
                       {ch.isAutoReferences ? "Ref" : String(ch.number).padStart(2, "0")}

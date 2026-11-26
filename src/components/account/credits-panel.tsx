@@ -172,8 +172,6 @@ export function CreditsPanel({ recentLedger }: { recentLedger: LedgerEntryDispla
                   variant={featured ? "primary" : "secondary"}
                   fullWidth
                   disabled={busyPackId !== null}
-                  loading={busyPackId === pack.id}
-                  loadingLabel="Opening checkout..."
                   onClick={() => openConfirm(pack.id)}
                 >
                   {buttonLabel}

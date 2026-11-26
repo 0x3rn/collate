@@ -529,6 +529,8 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(approveIdx).toBeGreaterThan(reviseIdx);
     expect(downloadIdx).toBeGreaterThan(approveIdx);
     expect(readyPipelineHtml).toContain("justify-end");
+    expect(readyPipelineHtml).toContain("bg-[var(--warning-bg)]");
+    expect(readyPipelineHtml).toContain("Ready for review");
 
     const pausedReaderHtml = renderToStaticMarkup(
       <ChapterReaderClient

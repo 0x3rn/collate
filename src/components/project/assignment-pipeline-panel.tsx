@@ -46,7 +46,7 @@ const STATUS_BADGE: Record<ChapterStatus, { label: string; classes: string }> = 
   },
   ready: {
     label: "Ready for review",
-    classes: "bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]",
+    classes: "bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]",
   },
   approved: {
     label: "Approved",

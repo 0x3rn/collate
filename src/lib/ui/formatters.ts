@@ -36,7 +36,7 @@ export const CHAPTER_STATUS_DISPLAY: Record<ChapterStatus, StatusDisplay> = {
   not_started: { label: "Not started", tone: "neutral" },
   queued: { label: "Queued", tone: "info" },
   writing: { label: "Writing", tone: "info" },
-  ready: { label: "Ready for Review", tone: "info" },
+  ready: { label: "Ready for Review", tone: "warning" },
   approved: { label: "Approved", tone: "success" },
   needs_attention: { label: "Needs Attention", tone: "warning" },
 };
@@ -93,7 +93,7 @@ export function resolveProjectDisplayStatus(input: {
   }
 
   if ((input.chaptersReady ?? 0) > 0) {
-    return { label: "Ready for Review", tone: "info" };
+    return { label: "Ready for Review", tone: "warning" };
   }
 
   const total = input.chaptersTotal ?? 0;

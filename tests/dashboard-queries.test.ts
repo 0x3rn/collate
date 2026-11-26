@@ -425,7 +425,7 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
         chaptersReady: 1,
         chaptersApproved: 4,
       })
-    ).toEqual({ label: "Ready for Review", tone: "info" });
+    ).toEqual({ label: "Ready for Review", tone: "warning" });
     expect(
       resolveProjectDisplayStatus({
         status: "completed",
