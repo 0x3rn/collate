@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Privacy Policy | Collate",
   description:
     "How Collate collects, protects, processes, and deletes your personal and research data under NDPA 2023, GDPR, UK GDPR, and CCPA/CPRA.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default async function PrivacyPage() {

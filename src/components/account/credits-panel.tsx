@@ -49,6 +49,7 @@ export function CreditsPanel({ recentLedger }: { recentLedger: LedgerEntryDispla
       });
       const json = (await res.json()) as {
         ok: boolean;
+        reference?: string;
         checkoutUrl?: string;
         error?: string;
       };
@@ -59,6 +60,13 @@ export function CreditsPanel({ recentLedger }: { recentLedger: LedgerEntryDispla
           "Checkout unavailable"
         );
         return;
+      }
+      if (json.reference) {
+        try {
+          window.sessionStorage.setItem("collate_pending_checkout_ref", json.reference);
+        } catch {
+          // Ignore restricted storage environments
+        }
       }
       window.location.href = json.checkoutUrl;
     } catch {

@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Projects | Collate",
   description: "Browse and filter your active, completed, and archived projects.",
+  robots: { index: false, follow: false },
 };
 
 export default async function ProjectsPage() {

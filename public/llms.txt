@@ -1,0 +1,38 @@
+# Collate
+
+> Collate (https://collateresearch.app) is a source-first academic research and writing platform for students and researchers. Before writing begins, Collate searches real academic indexes and credible publications to check whether a topic has enough evidence. When a topic passes, Collate helps users structure, draft, verify, and export projects, research papers, theses, and assignments as print-ready PDF and editable Word (.docx) documents.
+
+## Core Capabilities
+
+- **Topic Feasibility Verification:** Searches scholarly databases before drafting starts. If credible evidence is missing, Collate explains which subtopics lack support and asks the user to refine instead of guessing.
+- **Four Supported Academic Work Types:**
+  - **Project** (50 to 80 pages): Final-year undergraduate and HND capstone projects, including standard five-chapter layouts and software engineering chapters.
+  - **Research Paper** (12 to 25 pages): Focused journal-style studies, technical reports, and policy papers.
+  - **Thesis / Dissertation** (50 to 300 pages): Bachelor's (50 to 80 pages), Master's (80 to 150 pages), and PhD (150 to 300 pages) theses with front matter, table of contents, and cross-chapter memory.
+  - **Assignment** (2 to 5 pages per question): Single or multi-question coursework and seminar sets checked and cited per question.
+- **Verified Citations Only:** Builds inline citations and reference lists strictly from retrieved publisher and journal records in APA 7, Harvard, MLA 9, Chicago, IEEE, and Vancouver formats. Never fabricates authors, titles, DOIs, or URLs.
+- **Empirical Results Integrity:** Computes descriptive statistical tables automatically from user-uploaded CSV datasets, uses cited public datasets or literature benchmark ranges when selected, or outputs clearly labelled `[ADD]` placeholders. Never fabricates survey counts, interviews, or lab numbers.
+- **Originality & Transparency:** Runs layered overlap and cross-user uniqueness checks on drafts and provides a similarity summary, writing log, and AI-use disclosure draft.
+- **Document Formatting & Export:** Exports typeset PDF and editable Word (.docx) files with configurable font, line spacing, margins, A4 or Letter page size, UK or US spelling, cover page, and front matter.
+
+## Pricing
+
+Pay-as-you-go prepaid credit packs with no recurring subscription (one credit per target page, plus 3 free topic checks on sign-up; failed chapters are refunded automatically):
+
+- **Starter Pack:** 25 credits ($10 USD / NGN 10,000)
+- **Project Pack:** 100 credits ($30 USD / NGN 35,000)
+- **Thesis Pack:** 200 credits ($50 USD / NGN 60,000)
+
+## Public Pages
+
+- [Home](https://collateresearch.app/): Product overview, workflow, deliverables, pricing, and frequently asked questions
+- [Terms of Service & Refund Policy](https://collateresearch.app/terms): Terms of use, prepaid credits, refund policy, and academic integrity terms
+- [Privacy Policy](https://collateresearch.app/privacy): Data protection, retention, and account erasure rights
+- [Acceptable Use Policy](https://collateresearch.app/acceptable-use): Academic integrity standards and prohibited uses
+- [Cookie & Local Storage Policy](https://collateresearch.app/cookies): Complete inventory of essential cookies and opt-in analytics
+
+## Contact
+
+- General inquiries: hello@collateresearch.app
+- Support: support@collateresearch.app
+- Billing: billing@collateresearch.app

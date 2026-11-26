@@ -10,17 +10,19 @@ import { buildPaymentAlert } from "@/lib/notify/admin-alerts";
 import { logEvent } from "@/lib/observability/logger";
 import {
   BillingError,
+  cancelPendingUserCheckout,
   checkSpendCircuitBreaker,
   grantPaymentCreditsIdempotent,
   issueAdminBatchCredits,
   issueAdminCreditDeduction,
   issueAdminManualRefund,
+  markPendingPaymentTerminal,
   setGlobalCircuitBreaker,
 } from "./ledger";
 import { evidenceFromRequest, TERMS_VERSION } from "./evidence";
 import { loadAdminPayments } from "./admin-payments";
 import { renderEvidenceHtml } from "./evidence-pdf";
-import { buildDisputeEvidence } from "./evidence-report";
+import { buildDisputeEvidence, isSettledPaymentStatus } from "./evidence-report";
 import { brandFooter } from "@/lib/pdf/brand-document";
 import { type BrowserRunPdfBinding, renderHtmlToPdfBytes } from "@/lib/pdf/render-pdf";
 import {
@@ -32,8 +34,11 @@ import {
 } from "./reversals";
 import {
   type ParsedReversal,
+  parsePaystackChargeFailure,
   parsePaystackReversal,
+  parsePolarCheckoutTermination,
   parsePolarReversal,
+  parseStripeCheckoutExpired,
   verifyPaystackWebhook,
   verifyPolarWebhook,
   verifyStripeWebhook,
@@ -372,6 +377,45 @@ export async function handleCreateCheckout(
   );
 }
 
+const CancelCheckoutSchema = z.object({
+  reference: z.string().trim().min(1).max(120).optional(),
+});
+
+/**
+ * POST /api/billing/checkout/cancel
+ * Called when the user returns to /billing?payment=cancelled so their abandoned checkout
+ * is marked "cancelled" instead of remaining stuck as "pending".
+ */
+export async function handleCancelCheckout(
+  request: Request,
+  deps: BillingHttpDeps
+): Promise<Response> {
+  if (!isAllowedOrigin(request, deps.appUrl)) {
+    return jsonNoStore({ ok: false, error: "Forbidden cross-origin request." }, 403);
+  }
+
+  const isProd = deps.appEnv === "prod";
+  const session = await getSessionFromToken(
+    deps.db,
+    readSessionTokenFromRequest(request, isProd),
+    deps.nowFn
+  );
+  if (!session) {
+    return jsonNoStore({ ok: false, error: "Authentication required." }, 401);
+  }
+
+  const rawBody = await request.json().catch(() => ({}));
+  const parsed = CancelCheckoutSchema.safeParse(rawBody ?? {});
+  const now = (deps.nowFn ?? (() => new Date()))();
+  const result = await cancelPendingUserCheckout(deps.db, {
+    userId: session.user.id,
+    providerReference: parsed.success ? parsed.data.reference : undefined,
+    now,
+  });
+
+  return jsonNoStore({ ok: true, ...result }, 200);
+}
+
 function formatMinorAmount(currency: string, amountMinor: number): string {
   const major = (amountMinor / 100).toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -435,6 +479,18 @@ export async function handlePaystackWebhook(
     return jsonNoStore({ ok: false, error: verified.reason }, 401);
   }
   if (verified.ignored || !verified.payment) {
+    const failed = parsePaystackChargeFailure(verified.rawEvent);
+    if (failed) {
+      const now = (deps.nowFn ?? (() => new Date()))();
+      const res = await markPendingPaymentTerminal(deps.db, {
+        provider: failed.provider,
+        providerReference: failed.providerReference,
+        status: failed.status,
+        rawEventJson: rawBody,
+        now,
+      });
+      return jsonNoStore({ ok: true, status: failed.status, ...res }, 200);
+    }
     return handleReversalWebhook(parsePaystackReversal(verified.rawEvent), deps);
   }
 
@@ -513,6 +569,17 @@ export async function handleStripeWebhook(
     return jsonNoStore({ ok: false, error: verified.reason }, 401);
   }
   if (verified.ignored || !verified.payment) {
+    const expired = parseStripeCheckoutExpired(verified.rawEvent);
+    if (expired) {
+      const res = await markPendingPaymentTerminal(deps.db, {
+        provider: expired.provider,
+        providerReference: expired.providerReference,
+        status: expired.status,
+        rawEventJson: rawBody,
+        now,
+      });
+      return jsonNoStore({ ok: true, status: expired.status, ...res }, 200);
+    }
     return jsonNoStore({ ok: true, ignored: true }, 200);
   }
 
@@ -593,6 +660,17 @@ export async function handlePolarWebhook(
     return jsonNoStore({ ok: false, error: verified.reason }, 401);
   }
   if (verified.ignored || !verified.payment) {
+    const terminated = parsePolarCheckoutTermination(verified.rawEvent);
+    if (terminated) {
+      const res = await markPendingPaymentTerminal(deps.db, {
+        provider: terminated.provider,
+        providerReference: terminated.providerReference,
+        status: terminated.status,
+        rawEventJson: rawBody,
+        now,
+      });
+      return jsonNoStore({ ok: true, status: terminated.status, ...res }, 200);
+    }
     return handleReversalWebhook(parsePolarReversal(verified.rawEvent), deps);
   }
 
@@ -973,6 +1051,19 @@ export async function handleAdminEvidencePdf(
     return jsonNoStore({ ok: false, error: "PDF rendering is not available right now." }, 503);
   }
   const now = (deps.nowFn ?? (() => new Date()))();
+  const [paymentRow] = await deps.db
+    .select({ id: payments.id, status: payments.status })
+    .from(payments)
+    .where(eq(payments.id, paymentId))
+    .limit(1);
+  if (!paymentRow) return jsonNoStore({ ok: false, error: "Payment not found." }, 404);
+  if (!isSettledPaymentStatus(paymentRow.status)) {
+    return jsonNoStore(
+      { ok: false, error: "Transaction records are only available for completed payments." },
+      409
+    );
+  }
+
   const ev = await buildDisputeEvidence(deps.db, paymentId);
   if (!ev) return jsonNoStore({ ok: false, error: "Payment not found." }, 404);
 

@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Sign in | Collate",
   description: "Sign in to Collate to view your projects and continue writing chapters.",
+  robots: { index: false, follow: false },
 };
 
 function googleErrorMessage(value: string | string[] | undefined): string | null {

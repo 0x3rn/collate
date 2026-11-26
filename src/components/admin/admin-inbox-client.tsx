@@ -251,7 +251,7 @@ function MailboxView({
           />
         ) : (
           <p className="text-sm text-[var(--neutral-500)] py-16 text-center border border-dashed border-[var(--neutral-300)] rounded-[var(--radius-md)]">
-            Choose a conversation to read it.
+            Select a conversation.
           </p>
         )}
       </section>
@@ -635,16 +635,15 @@ function BroadcastView({ kind }: { kind: BroadcastKind }) {
 
   return (
     <div className="space-y-8">
-      <p className="text-sm text-[var(--neutral-600)] max-w-[640px]">
-        {kind === "announcement"
-          ? "Announcements go to every verified account. Use them for service news people need to know."
-          : "Promotions go only to people who turned on “News and offers”. Each email has its own unsubscribe link."}{" "}
-        {audience && (
+      {audience && (
+        <p className="text-sm text-[var(--neutral-600)]">
+          Recipients:{" "}
           <strong className="text-[var(--neutral-900)]">
-            {count} {count === 1 ? "person" : "people"} would receive it.
-          </strong>
-        )}
-      </p>
+            {count.toLocaleString("en-US")} {count === 1 ? "account" : "accounts"}
+          </strong>{" "}
+          ({kind === "announcement" ? "verified accounts" : "opted-in subscribers"})
+        </p>
+      )}
 
       {error && <FormAlert tone="error">{error}</FormAlert>}
 
@@ -711,7 +710,7 @@ function BroadcastView({ kind }: { kind: BroadcastKind }) {
               rows={14}
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder={"Write the message. Leave a blank line between paragraphs."}
+              placeholder={"Write your message..."}
               className="w-full rounded-[var(--radius-sm)] border border-[var(--neutral-300)] px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:border-[var(--accent-600)]"
             />
           </div>

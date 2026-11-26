@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Reset password | Collate",
   description: "Reset the password for your Collate account with an emailed code.",
+  robots: { index: false, follow: false },
 };
 
 export default async function ForgotPasswordPage() {

@@ -397,8 +397,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
         <div className="space-y-1">
           <h2 className="text-xl font-medium">Global circuit breaker</h2>
           <p className="text-sm text-[var(--neutral-600)]">
-            Pausing blocks all new chapter drafts, revisions, assignments, and topic checks without
-            charging credits, while letting any runs already in progress finish cleanly.
+            Pausing stops new drafting runs without charging credits; active runs finish normally.
           </p>
         </div>
         {!initial.circuitBreaker.allowed && initial.circuitBreaker.reason ? (
@@ -437,9 +436,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
         <div className="space-y-1">
           <h2 className="text-xl font-medium">Credit users in batches</h2>
           <p className="text-sm text-[var(--neutral-600)]">
-            Grant credits to all registered accounts (or a random subset) in automatic 50-user
-            batches for outages or promotions. Every batch is idempotent and safe to resume at
-            100,000+ users.
+            Grant credits to all accounts or a random subset in idempotent 50-user batches.
           </p>
         </div>
 
@@ -899,8 +896,8 @@ function RecentPayments({ payments: latest }: { payments: AdminOverviewProps["re
           <h2 className="text-xl font-medium">Recent payments</h2>
           <p className="text-xs text-[var(--neutral-500)] mt-1">
             {results
-              ? `${results.length} match${results.length === 1 ? "" : "es"} in all payments`
-              : `Latest ${latest.length} · search to find older ones`}
+              ? `${results.length} match${results.length === 1 ? "" : "es"}`
+              : `Latest ${latest.length}`}
           </p>
         </div>
         <div className="w-full sm:w-auto">
@@ -940,7 +937,9 @@ function RecentPayments({ payments: latest }: { payments: AdminOverviewProps["re
                     ? STATUS_STYLES.succeeded
                     : p.status === "failed"
                       ? STATUS_STYLES.failed
-                      : STATUS_STYLES.started
+                      : p.status === "cancelled"
+                        ? "bg-[var(--neutral-100)] text-[var(--neutral-600)] border-[var(--neutral-300)]"
+                        : STATUS_STYLES.started
                 }`}
               >
                 {p.status}
@@ -961,12 +960,14 @@ function RecentPayments({ payments: latest }: { payments: AdminOverviewProps["re
                 {p.provider.toUpperCase()} · {p.providerReference} · {p.creditsGranted} credits ·{" "}
                 {formatAdminTime(p.createdAt)}
               </p>
-              <a
-                href={`/admin/payments/${encodeURIComponent(p.id)}`}
-                className="text-xs text-[var(--accent-700)] underline underline-offset-2 hover:text-[var(--accent-600)]"
-              >
-                Record
-              </a>
+              {p.status === "succeeded" || p.status === "refunded" ? (
+                <a
+                  href={`/admin/payments/${encodeURIComponent(p.id)}`}
+                  className="text-xs text-[var(--accent-700)] underline underline-offset-2 hover:text-[var(--accent-600)]"
+                >
+                  Record
+                </a>
+              ) : null}
             </div>
           </li>
         ))}

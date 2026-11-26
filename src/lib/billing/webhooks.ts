@@ -228,7 +228,7 @@ export async function verifyStripeWebhook(params: {
   nowMs?: number;
 }): Promise<
   | { valid: false; reason: string }
-  | { valid: true; ignored?: true; payment?: NormalizedPaymentWebhook }
+  | { valid: true; ignored?: true; payment?: NormalizedPaymentWebhook; rawEvent?: unknown }
 > {
   const parsedSig = parseStripeSignatureHeader(params.signatureHeader);
   if (!parsedSig) {
@@ -262,7 +262,7 @@ export async function verifyStripeWebhook(params: {
   }
 
   if (parsed.data.type !== "checkout.session.completed") {
-    return { valid: true, ignored: true };
+    return { valid: true, ignored: true, rawEvent: parsedJson };
   }
 
   const obj = parsed.data.data.object;
@@ -635,5 +635,89 @@ export function parsePolarReversal(rawEnvelope: unknown): ParsedReversal | null 
       status: "succeeded",
       reason: str(data.reason),
     },
+  };
+}
+
+// ── Cancelled, expired, and failed checkouts ────────────────────────────────
+
+export interface ParsedCheckoutTermination {
+  provider: PaymentProvider;
+  providerReference: string;
+  status: "cancelled" | "failed";
+  reason: string;
+}
+
+/**
+ * Polar emits `checkout.updated` when a checkout expires or fails (and `checkout.expired` in
+ * some SDK/API versions). Maps those to terminal local payment statuses so unpaid checkouts do
+ * not stay stuck as "pending".
+ */
+export function parsePolarCheckoutTermination(
+  rawEnvelope: unknown
+): ParsedCheckoutTermination | null {
+  const env = rawEnvelope as { type?: unknown; data?: Record<string, unknown> } | null;
+  const type = typeof env?.type === "string" ? env.type : "";
+  const data = env?.data ?? {};
+  const checkoutId = str(data.id);
+  if (!checkoutId) return null;
+
+  if (type === "checkout.expired") {
+    return {
+      provider: "polar",
+      providerReference: checkoutId,
+      status: "cancelled",
+      reason: "expired",
+    };
+  }
+
+  if (type === "checkout.updated") {
+    const status = (str(data.status) ?? "").toLowerCase();
+    if (status === "expired") {
+      return {
+        provider: "polar",
+        providerReference: checkoutId,
+        status: "cancelled",
+        reason: "expired",
+      };
+    }
+    if (status === "failed") {
+      return {
+        provider: "polar",
+        providerReference: checkoutId,
+        status: "failed",
+        reason: "failed",
+      };
+    }
+  }
+
+  return null;
+}
+
+/** Paystack `charge.failed` webhook (signature already verified). */
+export function parsePaystackChargeFailure(raw: unknown): ParsedCheckoutTermination | null {
+  const ev = raw as { event?: unknown; data?: Record<string, unknown> } | null;
+  if (ev?.event !== "charge.failed") return null;
+  const data = ev.data ?? {};
+  const ref = str(data.reference);
+  if (!ref) return null;
+  return {
+    provider: "paystack",
+    providerReference: ref,
+    status: "failed",
+    reason: str(data.gateway_response) ?? "charge.failed",
+  };
+}
+
+/** Stripe `checkout.session.expired` webhook (signature already verified). */
+export function parseStripeCheckoutExpired(raw: unknown): ParsedCheckoutTermination | null {
+  const ev = raw as { type?: unknown; data?: { object?: Record<string, unknown> } } | null;
+  if (ev?.type !== "checkout.session.expired") return null;
+  const id = str(ev.data?.object?.id);
+  if (!id) return null;
+  return {
+    provider: "stripe",
+    providerReference: id,
+    status: "cancelled",
+    reason: "expired",
   };
 }

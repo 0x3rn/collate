@@ -14,15 +14,18 @@ import {
   WORKFLOW_STEPS,
   WORK_TYPE_OVERVIEWS,
 } from "@/lib/marketing/landing-content";
+import { buildLandingJsonLd, serializeJsonLd } from "@/lib/seo/site-metadata";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const user = await getCurrentUser();
   const pricing = getPublicPricingSummary();
+  const structuredData = serializeJsonLd(buildLandingJsonLd());
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: structuredData }} />
       <SiteHeader user={user} />
 
       <main className="flex-1">
@@ -36,13 +39,14 @@ export default async function HomePage() {
                     For students and researchers
                   </p>
                   <h1 className="text-[2.25rem] sm:text-[2.875rem] font-medium leading-[1.13] text-[var(--neutral-900)]">
-                    Check your topic against real sources, then write one verified chapter at a time
+                    Check your topic against real sources, then write verified academic work
                   </h1>
                 </div>
                 <p className="text-lg text-[var(--neutral-600)] max-w-[54ch] leading-relaxed">
                   Collate searches research databases and credible publications before any writing
                   starts. If evidence is missing, it tells you why instead of guessing. When a topic
-                  passes, it drafts chapter by chapter and exports print-ready PDF and Word files.
+                  passes, it drafts cited chapters or assignment answers and exports print-ready PDF
+                  and Word files.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-3 pt-1">

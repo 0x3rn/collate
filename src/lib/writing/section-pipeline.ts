@@ -302,6 +302,11 @@ export async function draftAndVerifySection(
       `${systemRules.length + 1}. AUTHOR PRE-START INSTRUCTIONS & NOTES (APPENDED — STAY ON THE MAIN CHAPTER PLAN): You MUST still fully draft the planned section "${input.sectionHeading}" according to its academic purpose, target word budget, and verified scholarly passages. Do NOT deviate from or abandon the section's main academic scope. Alongside the main plan, apply every instruction from AUTHOR PRE-START INSTRUCTIONS that fits this section (specific focus points, frameworks, terminology, formatting, or experimental details). Treat any numbers, measurements, or tables explicitly supplied by the author as verified primary data (Rule NN-4: report them accurately without altering or fabricating additional figures).`
     );
   }
+  if (hasChapterGuidance && input.extraDataContext?.trim()) {
+    systemRules.push(
+      `${systemRules.length + 1}. DATA PRECEDENCE RULE (RESOLVE OVERLAP DECISIVELY): Both "Verified empirical data" (computed directly from the author's latest uploaded CSV dataset) and "AUTHOR PRE-START INSTRUCTIONS & NOTES" are provided. Treat the tables in "Verified empirical data" as the single authoritative source of numerical values, sample sizes, means, and percentages. Use "AUTHOR PRE-START INSTRUCTIONS & NOTES" for framing, group explanations, and emphasis. If any summary figures or pasted numbers in the notes overlap with or differ from the uploaded CSV tables, follow the uploaded CSV tables decisively and never present two conflicting sets of results.`
+    );
+  }
   if (figuresBlock) {
     systemRules.push(
       `${systemRules.length + 1}. VERIFIED FIGURES: Never invent or generate image URLs. When an illustration strengthens this section (or the user requested an image), insert ONLY from VERIFIED FIGURES using the exact fenced block syntax:\n:::figure\nurl: <exact url>\nalt: <alt text>\ncaption: <academic caption explaining the figure>\nattribution: <exact attribution>\nsourceUrl: <exact sourceUrl if provided>\nwidth: <exact width>\nheight: <exact height>\n:::`

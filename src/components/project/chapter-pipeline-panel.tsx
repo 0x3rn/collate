@@ -531,10 +531,13 @@ export function ChapterPipelinePanel({
           </div>
           {datasets.length > 0 ? (
             <p className="text-xs text-[var(--neutral-700)] tabular-nums pt-2 border-t border-[var(--neutral-200)]">
-              Attached file{datasets.length === 1 ? "" : "s"}:{" "}
-              {datasets
-                .map((d) => `${d.filename} (${d.rowCount.toLocaleString("en-US")} rows)`)
-                .join(", ")}
+              Active dataset:{" "}
+              <span className="font-medium text-[var(--neutral-900)]">{datasets[0]!.filename}</span>{" "}
+              ({datasets[0]!.rowCount.toLocaleString("en-US")} rows)
+              <span className="text-[var(--neutral-500)]">
+                {" "}
+                · Uploading a new CSV replaces the active dataset for your Results chapter.
+              </span>
             </p>
           ) : null}
         </section>
@@ -1151,10 +1154,11 @@ export function ChapterPipelinePanel({
                 </div>
                 {datasets.length > 0 ? (
                   <p className="text-xs text-[var(--neutral-700)] tabular-nums pt-2 border-t border-[var(--neutral-200)]">
-                    Attached:{" "}
-                    {datasets
-                      .map((d) => `${d.filename} (${d.rowCount.toLocaleString("en-US")} rows)`)
-                      .join(", ")}
+                    Active dataset:{" "}
+                    <span className="font-medium text-[var(--neutral-900)]">
+                      {datasets[0]!.filename}
+                    </span>{" "}
+                    ({datasets[0]!.rowCount.toLocaleString("en-US")} rows)
                   </p>
                 ) : null}
               </div>

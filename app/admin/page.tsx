@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Admin operations | Collate",
   description: "Monitor users, drafting job costs, failures, circuit breakers, and credit grants.",
+  robots: { index: false, follow: false },
 };
 
 export default async function AdminPage() {
@@ -77,13 +78,7 @@ export default async function AdminPage() {
     <WorkspaceShell user={user} maxWidthClassName="max-w-[1040px]">
       <div className="space-y-8">
         <div className="border-b border-[var(--neutral-200)] pb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-[2rem] font-medium">Admin operations</h1>
-            <p className="text-sm text-[var(--neutral-600)] mt-1.5">
-              Monitor users, drafting job costs, failures, spend circuit breakers, and credit
-              grants.
-            </p>
-          </div>
+          <h1 className="text-[2rem] font-medium">Admin operations</h1>
           <LinkButton href="/admin/inbox" variant="secondary">
             Email
           </LinkButton>

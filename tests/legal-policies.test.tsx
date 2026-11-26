@@ -95,7 +95,9 @@ describe("Legal policy documents, refund rules, and Polar.sh compliance", () => 
     );
     expect(cookieHtml).toContain("__Host-collate_session");
     expect(cookieHtml).toContain("__cf_bm");
-    expect(cookieHtml).toContain("Zero Advertising or Tracking Cookies");
+    expect(cookieHtml).toContain("Zero Advertising Cookies and Opt-In Analytics Only");
+    expect(cookieHtml).toContain("Google Analytics 4");
+    expect(cookieHtml).toContain("7 days");
     expect(cookieHtml).toContain("Polar.sh");
 
     const footerHtml = renderToStaticMarkup(<SiteFooter />);
@@ -104,6 +106,7 @@ describe("Legal policy documents, refund rules, and Polar.sh compliance", () => 
     expect(footerHtml).toContain('href="/privacy"');
     expect(footerHtml).toContain('href="/acceptable-use"');
     expect(footerHtml).toContain('href="/cookies"');
+    expect(footerHtml).toContain("Cookie preferences");
     expect(footerHtml).not.toMatch(/cloudflare/i);
   });
 });

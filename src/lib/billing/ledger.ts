@@ -127,7 +127,8 @@ export async function grantPaymentCreditsIdempotent(
   const paymentId = existing?.id ?? `pay_${crypto.randomUUID()}`;
   const idempotencyKey = `payment:${payment.provider}:${payment.providerReference}`;
 
-  // Atomically claim the payment before mutating creditsBalance (prevents TOCTOU double-credit)
+  // Atomically claim the payment before mutating creditsBalance (prevents TOCTOU double-credit).
+  // Also permits a verified late payment webhook to recover a checkout marked cancelled/failed.
   if (existing) {
     const claimed = await db
       .update(payments)
@@ -137,7 +138,12 @@ export async function grantPaymentCreditsIdempotent(
         ...(payment.providerOrderId ? { providerOrderId: payment.providerOrderId } : {}),
         updatedAt: now,
       })
-      .where(and(eq(payments.id, paymentId), eq(payments.status, "pending")))
+      .where(
+        and(
+          eq(payments.id, paymentId),
+          inArray(payments.status, ["pending", "cancelled", "failed"])
+        )
+      )
       .returning({ id: payments.id });
 
     if (claimed.length === 0) {
@@ -249,6 +255,109 @@ export async function grantPaymentCreditsIdempotent(
   });
 
   return { alreadyProcessed: false, paymentId, newBalance };
+}
+
+/**
+ * Transitions a pending checkout row to "cancelled" or "failed" on a verified webhook
+ * (e.g. Polar checkout.updated=expired/failed, Paystack charge.failed, Stripe session expired).
+ * Never overwrites a payment that has already settled ("succeeded" or "refunded").
+ */
+export async function markPendingPaymentTerminal(
+  db: AppDb,
+  params: {
+    provider: "paystack" | "polar" | "stripe";
+    providerReference: string;
+    status: "cancelled" | "failed";
+    rawEventJson: string;
+    now?: Date;
+  }
+): Promise<{ updated: boolean; paymentId: string | null }> {
+  const now = params.now ?? new Date();
+  const updated = await db
+    .update(payments)
+    .set({
+      status: params.status,
+      rawEventJson: params.rawEventJson.slice(0, 8000),
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(payments.provider, params.provider),
+        eq(payments.providerReference, params.providerReference),
+        eq(payments.status, "pending")
+      )
+    )
+    .returning({ id: payments.id });
+
+  return {
+    updated: updated.length > 0,
+    paymentId: updated[0]?.id ?? null,
+  };
+}
+
+/**
+ * Marks a signed-in user's own pending checkout as "cancelled" when they return from the
+ * payment provider via the cancel URL (?payment=cancelled). Scoped strictly to `userId`
+ * and `status = 'pending'`.
+ */
+export async function cancelPendingUserCheckout(
+  db: AppDb,
+  params: {
+    userId: string;
+    providerReference?: string | null;
+    now?: Date;
+  }
+): Promise<{ updated: boolean; paymentId: string | null }> {
+  const now = params.now ?? new Date();
+  const ref = params.providerReference?.trim();
+
+  if (ref) {
+    const updated = await db
+      .update(payments)
+      .set({ status: "cancelled", updatedAt: now })
+      .where(
+        and(
+          eq(payments.userId, params.userId),
+          eq(payments.providerReference, ref),
+          eq(payments.status, "pending")
+        )
+      )
+      .returning({ id: payments.id });
+    if (updated.length > 0) {
+      return { updated: true, paymentId: updated[0]!.id };
+    }
+  }
+
+  // Fallback when provider return_url has no reference and browser storage was cleared:
+  // cancel the user's most recent pending checkout created within the last 2 hours.
+  const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+  const [recentPending] = await db
+    .select({ id: payments.id })
+    .from(payments)
+    .where(
+      and(
+        eq(payments.userId, params.userId),
+        eq(payments.status, "pending"),
+        gte(payments.createdAt, twoHoursAgo)
+      )
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(1);
+
+  if (!recentPending) {
+    return { updated: false, paymentId: null };
+  }
+
+  const updated = await db
+    .update(payments)
+    .set({ status: "cancelled", updatedAt: now })
+    .where(and(eq(payments.id, recentPending.id), eq(payments.status, "pending")))
+    .returning({ id: payments.id });
+
+  return {
+    updated: updated.length > 0,
+    paymentId: updated[0]?.id ?? null,
+  };
 }
 
 /**

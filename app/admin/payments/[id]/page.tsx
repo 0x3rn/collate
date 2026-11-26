@@ -8,12 +8,15 @@ import {
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { FormAlert } from "@/components/ui/alert";
 import { LinkButton } from "@/components/ui/button";
+import { eq } from "drizzle-orm";
 import { createDb } from "@/db/client";
+import { payments } from "@/db/schema";
 import { requireUser } from "@/lib/auth/server";
 import {
   buildDisputeEvidence,
   describeCheckoutAgreement,
   describeSignupAgreement,
+  isSettledPaymentStatus,
   type EvidenceEvent,
 } from "@/lib/billing/evidence-report";
 import { isAdminEmail } from "@/lib/billing/http-handlers";
@@ -23,6 +26,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Transaction record | Collate admin",
   description: "Everything recorded about one payment, for answering a refund or dispute.",
+  robots: { index: false, follow: false },
 };
 
 const when = (d: Date | null | undefined) =>
@@ -106,7 +110,43 @@ export default async function PaymentEvidencePage({ params }: { params: Promise<
     );
   }
 
-  const ev = await buildDisputeEvidence(createDb(env.DB), id);
+  const db = createDb(env.DB);
+  const [paymentRow] = await db
+    .select({ id: payments.id, status: payments.status })
+    .from(payments)
+    .where(eq(payments.id, id))
+    .limit(1);
+
+  if (!paymentRow) {
+    return (
+      <WorkspaceShell user={user} maxWidthClassName="max-w-[600px]">
+        <div className="py-8 space-y-5">
+          <FormAlert tone="error">Payment not found.</FormAlert>
+          <LinkButton href="/admin" variant="secondary">
+            Back to admin
+          </LinkButton>
+        </div>
+      </WorkspaceShell>
+    );
+  }
+
+  if (!isSettledPaymentStatus(paymentRow.status)) {
+    return (
+      <WorkspaceShell user={user} maxWidthClassName="max-w-[600px]">
+        <div className="py-8 space-y-5">
+          <FormAlert tone="error">
+            No transaction record is available because this checkout is {paymentRow.status} and was
+            not paid.
+          </FormAlert>
+          <LinkButton href="/admin" variant="secondary">
+            Back to admin
+          </LinkButton>
+        </div>
+      </WorkspaceShell>
+    );
+  }
+
+  const ev = await buildDisputeEvidence(db, id);
   if (!ev) {
     return (
       <WorkspaceShell user={user} maxWidthClassName="max-w-[600px]">

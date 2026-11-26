@@ -30,10 +30,10 @@ export const COOKIE_POLICY: LegalDocumentData = {
         {
           type: "callout",
           tone: "accent",
-          title: "Zero Advertising or Tracking Cookies",
+          title: "Zero Advertising Cookies and Opt-In Analytics Only",
           runs: [
             t(
-              "Collate uses strictly necessary authentication and security cookies only. We do not deploy third-party advertising pixels, behavioral retargeting tags, cross-site analytics cookies, social tracking widgets, or invasive browser fingerprinting."
+              "Collate never deploys advertising pixels, behavioral retargeting tags, or social tracking widgets. Optional Google Analytics 4 measurement stays completely off unless you explicitly click Accept analytics in the cookie preferences popup."
             ),
           ],
         },
@@ -142,6 +142,20 @@ export const COOKIE_POLICY: LegalDocumentData = {
               "Set ONLY after you navigate to Polar.sh or Paystack's external hosted checkout page to process payment securely, prevent fraud, and calculate applicable sales tax/VAT",
               "Governed by Polar.sh and Paystack's cookie policies during checkout",
             ],
+            [
+              "collate_analytics_consent (Visitors) & account consent record (Signed-in users)",
+              "Collate (First-party)",
+              "Preference Storage",
+              "Remembers whether you accepted optional analytics cookies. For signed-in users who accept, your choice is saved permanently on your account until you change it; for signed-in users who decline, the record is automatically discarded after 7 days so you are asked again. For visitors who accept, remembered persistently until cleared; for visitors who decline, held only for the current tab visit",
+              "SameSite=Lax, Path=/ (1 year if accepted by a visitor); permanent on account when accepted by signed-in users, 7-day automatic expiry when declined",
+            ],
+            [
+              "_ga and _ga_* (Google Analytics 4)",
+              "Google Analytics (Optional Analytics Partner)",
+              "Optional Analytics (Opt-In Only)",
+              "Measures aggregate page views and site traffic trends strictly after you click Accept analytics. Never loaded or set if you decline or have not opted in",
+              "Loaded only after explicit opt-in consent; cleared immediately if you switch to Decline",
+            ],
           ],
         },
         {
@@ -194,16 +208,14 @@ export const COOKIE_POLICY: LegalDocumentData = {
           type: "list",
           items: [
             [
-              b("No Tracking in Browser Storage: "),
+              b("Minimal Browser Storage: "),
               t(
-                "Collate's application code does not write user identifiers, tracking profiles, analytics events, or private manuscript drafts into "
+                "Collate does not write private manuscript drafts or advertising profiles into browser storage. Only your cookie preference state ("
               ),
               c("localStorage"),
-              t(", "),
+              t(" when a visitor accepts analytics, or tab-scoped "),
               c("sessionStorage"),
-              t(", or "),
-              c("IndexedDB"),
-              t("."),
+              t(" when a visitor declines for the current visit) is stored locally."),
             ],
             [
               b("Ephemeral In-Memory UI State: "),
@@ -273,9 +285,9 @@ export const COOKIE_POLICY: LegalDocumentData = {
         {
           type: "paragraph",
           runs: [
-            b("Commitment Regarding Future Changes: "),
+            b("Opt-In Analytics Consent & Periodic Renewal: "),
             t(
-              "Because Collate deploys zero advertising, profiling, or non-essential analytics cookies, we do not display an intrusive cookie banner across your workspace. If Collate ever introduces optional analytics or non-essential cookies in the future, we will update this Policy beforehand, document every new cookie transparently, and obtain your explicit prior opt-in consent before placing any non-essential cookie."
+              "Optional Google Analytics 4 scripts and cookies never load until you actively choose Accept analytics in our bottom cookie preferences popup. For signed-in users, accepting is saved permanently on your account across sessions until you change it, while declining is kept for 7 days and then automatically discarded so we ask you again. For visitors who are not signed in, accepting is remembered unless your browser clears site data, while declining applies only to the current visit so you are asked again on subsequent visits. You can also reopen Cookie preferences at any time from the site footer."
             ),
           ],
         },

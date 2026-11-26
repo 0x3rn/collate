@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CollateLogo } from "@/components/brand/collate-logo";
+import { CookiePreferencesTrigger } from "@/components/privacy/cookie-consent-analytics";
 
 export function SiteFooter() {
   return (
@@ -94,6 +95,7 @@ export function SiteFooter() {
             >
               Cookie policy
             </Link>
+            <CookiePreferencesTrigger />
           </nav>
         </div>
 

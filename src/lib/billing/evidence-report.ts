@@ -122,12 +122,17 @@ const fmtDate = (d: Date) =>
 const money = (currency: string, minor: number) =>
   `${currency.toUpperCase()} ${(minor / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 
+/** Only settled payments that actually completed have an enforceable transaction record. */
+export function isSettledPaymentStatus(status: string): boolean {
+  return status === "succeeded" || status === "refunded";
+}
+
 export async function buildDisputeEvidence(
   db: AppDb,
   paymentId: string
 ): Promise<DisputeEvidence | null> {
   const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
-  if (!payment) return null;
+  if (!payment || !isSettledPaymentStatus(payment.status)) return null;
   const [user] = await db.select().from(users).where(eq(users.id, payment.userId)).limit(1);
   if (!user) return null;
 

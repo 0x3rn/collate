@@ -96,7 +96,13 @@ export type ChapterVersionCreator = (typeof CHAPTER_VERSION_CREATORS)[number];
 export const PAYMENT_PROVIDERS = ["paystack", "polar", "stripe"] as const;
 export type PaymentProvider = (typeof PAYMENT_PROVIDERS)[number];
 
-export const PAYMENT_STATUSES = ["pending", "succeeded", "failed", "refunded"] as const;
+export const PAYMENT_STATUSES = [
+  "pending",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "refunded",
+] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const CREDIT_LEDGER_TYPES = [
@@ -162,6 +168,9 @@ export const users = sqliteTable(
      */
     billingHoldReason: text("billing_hold_reason"),
     billingHoldAt: integer("billing_hold_at", { mode: "timestamp_ms" }),
+    /** Signed-in analytics cookie choice; acceptance persists on the account, while declines expire after 7 days. */
+    analyticsConsent: text("analytics_consent", { enum: ["accepted", "declined"] }),
+    analyticsConsentAt: integer("analytics_consent_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
@@ -837,6 +846,8 @@ export const notificationPreferences = sqliteTable("notification_preferences", {
   emailReceipts: integer("email_receipts", { mode: "boolean" }).notNull().default(true),
   /** Promotions and offers. Off unless the user opts in. */
   emailMarketing: integer("email_marketing", { mode: "boolean" }).notNull().default(false),
+  /** Set once the user responds to (or dismisses) the dashboard product-updates opt-in prompt. */
+  marketingPromptSeenAt: integer("marketing_prompt_seen_at", { mode: "timestamp_ms" }),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 });
 

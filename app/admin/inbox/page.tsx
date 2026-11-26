@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Email | Collate admin",
   description: "Support, billing and general email, announcements and promotions.",
+  robots: { index: false, follow: false },
 };
 
 export default async function AdminInboxPage() {
@@ -39,12 +40,7 @@ export default async function AdminInboxPage() {
     <WorkspaceShell user={user} maxWidthClassName="max-w-[1180px]">
       <div className="space-y-6">
         <div className="border-b border-[var(--neutral-200)] pb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-[2rem] font-medium">Email</h1>
-            <p className="text-sm text-[var(--neutral-600)] mt-1.5">
-              Read and answer email, and send announcements and promotions.
-            </p>
-          </div>
+          <h1 className="text-[2rem] font-medium">Email</h1>
           <LinkButton href="/admin" variant="secondary">
             Admin overview
           </LinkButton>

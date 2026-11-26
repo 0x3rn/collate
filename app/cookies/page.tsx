@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Cookie & Local Storage Policy | Collate",
   description:
-    "Complete inventory of Collate's strictly necessary session and security cookies, browser storage practices, and payment checkout cookies.",
+    "Complete inventory of Collate's strictly necessary session and security cookies, opt-in Google Analytics consent rules, and payment checkout cookies.",
+  alternates: { canonical: "/cookies" },
 };
 
 export default async function CookiePolicyPage() {

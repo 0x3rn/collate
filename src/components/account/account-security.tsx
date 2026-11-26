@@ -670,11 +670,6 @@ export function ActiveSessions() {
               </li>
             ))}
           </ul>
-          {rows.length > 5 ? (
-            <p className="px-5 py-2 text-xs text-[var(--neutral-500)] border-t border-[var(--neutral-200)]">
-              Scroll to see more devices.
-            </p>
-          ) : null}
           <div className="px-5 py-4 border-t border-[var(--neutral-200)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <p className="text-sm text-[var(--neutral-600)]">
               {others === 0

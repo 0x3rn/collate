@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Terms of Service & Refund Policy | Collate",
   description:
     "Collate Terms of Service, prepaid credit pack billing via Polar.sh and Paystack, academic integrity responsibilities, and Refund Policy.",
+  alternates: { canonical: "/terms" },
 };
 
 export default async function TermsPage() {

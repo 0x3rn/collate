@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Verify email | Collate",
   description: "Confirm your email address to activate your Collate account.",
+  robots: { index: false, follow: false },
 };
 
 export default async function VerifyEmailPage({

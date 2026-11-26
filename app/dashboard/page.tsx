@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MarketingOptInModal } from "@/components/dashboard/marketing-opt-in-modal";
 import { OverviewLedgerClient } from "@/components/dashboard/overview-ledger-client";
 import { QuickStartWorkbench } from "@/components/dashboard/quick-start-workbench";
 import { ArrowRightIcon, DownloadIcon } from "@/components/layout/workspace-icons";
@@ -9,6 +10,7 @@ import { BILLING_POLICY } from "@/config/pricing";
 import { createDb } from "@/db/client";
 import { getDashboardOverviewForUser, resolveExportSigningSecret } from "@/db/queries/dashboard";
 import { requireUser } from "@/lib/auth/server";
+import { shouldShowMarketingPrompt } from "@/lib/email/notifications";
 import {
   formatCredits,
   formatExportFormat,
@@ -21,6 +23,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Overview | Collate",
   description: "Start a topic check, continue active drafts, and access recent exports.",
+  robots: { index: false, follow: false },
 };
 
 export default async function DashboardOverviewPage() {
@@ -32,7 +35,10 @@ export default async function DashboardOverviewPage() {
     appEnv: runtimeEnv.APP_ENV,
   });
 
-  const overview = await getDashboardOverviewForUser(db, user.id, { signingSecret });
+  const [overview, showMarketingPrompt] = await Promise.all([
+    getDashboardOverviewForUser(db, user.id, { signingSecret }),
+    shouldShowMarketingPrompt(db, user.id),
+  ]);
   const { stats, attentionItems, recentProjects, recentExports } = overview;
   const firstName = user.name.trim().split(/\s+/)[0] || user.name;
   const freeSweepsTotal = BILLING_POLICY.freeFeasibilitySweepsPerUser;
@@ -43,6 +49,7 @@ export default async function DashboardOverviewPage() {
 
   return (
     <WorkspaceShell user={user}>
+      <MarketingOptInModal initialOpen={showMarketingPrompt} />
       <div className="space-y-6">
         {/* Slim editorial header with inline metadata ribbon (zero KPI boxes) */}
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-5 border-b border-[var(--neutral-200)]">

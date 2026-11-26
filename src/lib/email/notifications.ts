@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { AppDb } from "@/db/client";
-import { notificationPreferences, users } from "@/db/schema";
+import { auditLog, notificationPreferences, users } from "@/db/schema";
 import { escapeHtml } from "@/lib/export/templates";
 import type { EmailMessage, EmailSender, EmailSendResult } from "./mailer";
 
@@ -52,17 +52,78 @@ export async function updateUserNotificationPrefs(
     .values({
       userId,
       ...prefs,
+      marketingPromptSeenAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
       target: notificationPreferences.userId,
       set: {
         ...prefs,
+        marketingPromptSeenAt: sql`coalesce(${notificationPreferences.marketingPromptSeenAt}, ${now.getTime()})`,
         updatedAt: now,
       },
     });
 
   return prefs;
+}
+
+/**
+ * Returns true once for accounts that have neither opted in to product news/offers
+ * nor dismissed the dashboard updates prompt yet.
+ */
+export async function shouldShowMarketingPrompt(db: AppDb, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({
+      emailMarketing: notificationPreferences.emailMarketing,
+      marketingPromptSeenAt: notificationPreferences.marketingPromptSeenAt,
+    })
+    .from(notificationPreferences)
+    .where(eq(notificationPreferences.userId, userId))
+    .limit(1);
+
+  if (!row) return true;
+  return !row.emailMarketing && !row.marketingPromptSeenAt;
+}
+
+/**
+ * Records a user's one-time response to the dashboard product-updates opt-in prompt.
+ * Preserves existing transactional notification preferences when a row already exists.
+ */
+export async function recordMarketingPromptChoice(
+  db: AppDb,
+  userId: string,
+  optIn: boolean,
+  now: Date = new Date()
+): Promise<{ emailMarketing: boolean; seenAt: Date }> {
+  await db
+    .insert(notificationPreferences)
+    .values({
+      userId,
+      ...DEFAULT_NOTIFICATION_PREFS,
+      emailMarketing: optIn,
+      marketingPromptSeenAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: notificationPreferences.userId,
+      set: {
+        emailMarketing: optIn,
+        marketingPromptSeenAt: now,
+        updatedAt: now,
+      },
+    });
+
+  await db.insert(auditLog).values({
+    id: `aud_${crypto.randomUUID()}`,
+    actorUserId: userId,
+    action: "account.marketing_prompt_responded",
+    entityType: "user",
+    entityId: userId,
+    metadataJson: JSON.stringify({ optIn }),
+    createdAt: now,
+  });
+
+  return { emailMarketing: optIn, seenAt: now };
 }
 
 export function buildChapterReadyEmail(params: {

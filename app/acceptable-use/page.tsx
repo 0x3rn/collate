@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Acceptable Use Policy | Collate",
   description:
     "Academic integrity standards, prohibited content rules, file upload requirements, security boundaries, and enforcement policy for Collate.",
+  alternates: { canonical: "/acceptable-use" },
 };
 
 export default async function AcceptableUsePage() {

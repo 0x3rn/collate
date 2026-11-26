@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Credits & Billing | Collate",
   description: "Check your credit balance, buy credit packs, and review your credit history.",
+  robots: { index: false, follow: false },
 };
 
 export default async function BillingPage({

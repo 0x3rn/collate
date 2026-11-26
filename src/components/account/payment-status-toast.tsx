@@ -31,6 +31,21 @@ export function PaymentStatusToast({ payment }: { payment?: string }) {
       payment === "polar_cancelled" ||
       payment === "stripe_cancelled"
     ) {
+      let pendingRef: string | undefined;
+      try {
+        pendingRef = window.sessionStorage.getItem("collate_pending_checkout_ref") ?? undefined;
+        window.sessionStorage.removeItem("collate_pending_checkout_ref");
+      } catch {
+        pendingRef = undefined;
+      }
+      void fetch("/api/billing/checkout/cancel", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(pendingRef ? { reference: pendingRef } : {}),
+      }).catch(() => {
+        // Best effort; webhook expiry also marks unpaid checkouts terminal.
+      });
       toast.info("No charge was made to your payment method.", "Checkout cancelled");
     } else {
       return;

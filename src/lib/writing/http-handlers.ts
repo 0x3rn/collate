@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import {
   estimateAssignmentCredits,
@@ -232,10 +232,19 @@ export async function handleSaveChapterInstructions(
       filename: prepared.userAttachmentName,
       r2Key,
       rowCount: prepared.csvAnalysis.rowCount,
-      columnsJson: JSON.stringify(prepared.csvAnalysis.columns),
+      columnsJson: JSON.stringify(prepared.csvAnalysis.columns.map((c) => c.column)),
       summaryJson: JSON.stringify(prepared.csvAnalysis),
       createdAt: now,
     });
+  } else if (
+    target.chapterType === "results" &&
+    target.userAttachmentKind === "csv" &&
+    !prepared.userAttachmentName &&
+    !prepared.userDataSummaryMarkdown
+  ) {
+    // User explicitly removed/cleared the saved CSV on the Results chapter: remove stale
+    // project_datasets rows so an older dataset cannot silently resurface at drafting time.
+    await deps.db.delete(projectDatasets).where(eq(projectDatasets.projectId, auth.project.id));
   }
 
   await deps.db
@@ -833,6 +842,24 @@ export async function handleUploadProjectDataset(
     summaryJson: JSON.stringify(analysis),
     createdAt: now,
   });
+
+  // Keep any unstarted/paused Results chapter synced to this newly uploaded CSV so there is
+  // always a single authoritative active dataset across both the Results card and Add instructions.
+  await deps.db
+    .update(chapters)
+    .set({
+      userAttachmentName: safeFilename,
+      userAttachmentKind: "csv",
+      userDataSummaryMarkdown: analysis.markdownTables,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(chapters.projectId, auth.project.id),
+        eq(chapters.chapterType, "results"),
+        inArray(chapters.status, ["not_started", "needs_attention"])
+      )
+    );
 
   return jsonNoStore(
     {

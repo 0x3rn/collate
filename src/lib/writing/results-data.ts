@@ -1,4 +1,5 @@
 import { WRITING_CONFIG } from "@/config/writing";
+import { hasUserExperimentalData } from "./chapter-instructions";
 
 export interface NumericColumnSummary {
   column: string;
@@ -224,4 +225,107 @@ export function buildLabelledResultsFramework(params: {
     "",
     ...sectionsMarkdown,
   ].join("\n\n");
+}
+
+export interface AuthoritativeResultsData {
+  source: "csv_dataset" | "chapter_notes" | "none";
+  datasetMarkdown: string | null;
+  activeFilename: string | null;
+  hasInlineNotesOverlap: boolean;
+}
+
+/**
+ * Resolves a single authoritative empirical dataset for a Results chapter so the writer
+ * never receives conflicting duplicate datasets when a user uploads via both the project
+ * Results data card and the chapter's Add instructions dialog.
+ *
+ * Precedence:
+ * 1. Latest uploaded CSV dataset (comparing timestamps when both records exist).
+ * 2. Author measurements/tables written in chapter pre-start instructions (when no CSV exists).
+ * 3. None (orchestrator falls back to published benchmarks, public datasets, or labelled framework).
+ */
+export function resolveAuthoritativeResultsData(input: {
+  chapterDataSummaryMarkdown?: string | null;
+  chapterAttachmentName?: string | null;
+  chapterUpdatedAt?: Date | null;
+  chapterInstructions?: string | null;
+  latestDataset?: {
+    filename: string;
+    summaryJson: string;
+    createdAt: Date;
+  } | null;
+}): AuthoritativeResultsData {
+  const chapterMarkdown = input.chapterDataSummaryMarkdown?.trim() || null;
+
+  let projectMarkdown: string | null = null;
+  if (input.latestDataset?.summaryJson) {
+    try {
+      const parsed = JSON.parse(input.latestDataset.summaryJson) as DatasetAnalysisResult;
+      projectMarkdown = parsed.markdownTables?.trim() || null;
+    } catch {
+      projectMarkdown = null;
+    }
+  }
+
+  const hasInlineNotes = hasUserExperimentalData({
+    userInstructions: input.chapterInstructions ?? null,
+    userDataSummaryMarkdown: null,
+  });
+
+  if (chapterMarkdown && projectMarkdown) {
+    const projectIsNewer =
+      Boolean(input.latestDataset?.createdAt) &&
+      (!input.chapterUpdatedAt ||
+        input.latestDataset!.createdAt.getTime() > input.chapterUpdatedAt.getTime());
+
+    if (projectIsNewer) {
+      return {
+        source: "csv_dataset",
+        datasetMarkdown: projectMarkdown,
+        activeFilename: input.latestDataset?.filename ?? null,
+        hasInlineNotesOverlap: hasInlineNotes,
+      };
+    }
+
+    return {
+      source: "csv_dataset",
+      datasetMarkdown: chapterMarkdown,
+      activeFilename: input.chapterAttachmentName ?? input.latestDataset?.filename ?? null,
+      hasInlineNotesOverlap: hasInlineNotes,
+    };
+  }
+
+  if (projectMarkdown) {
+    return {
+      source: "csv_dataset",
+      datasetMarkdown: projectMarkdown,
+      activeFilename: input.latestDataset?.filename ?? null,
+      hasInlineNotesOverlap: hasInlineNotes,
+    };
+  }
+
+  if (chapterMarkdown) {
+    return {
+      source: "csv_dataset",
+      datasetMarkdown: chapterMarkdown,
+      activeFilename: input.chapterAttachmentName ?? null,
+      hasInlineNotesOverlap: hasInlineNotes,
+    };
+  }
+
+  if (hasInlineNotes) {
+    return {
+      source: "chapter_notes",
+      datasetMarkdown: null,
+      activeFilename: null,
+      hasInlineNotesOverlap: false,
+    };
+  }
+
+  return {
+    source: "none",
+    datasetMarkdown: null,
+    activeFilename: null,
+    hasInlineNotesOverlap: false,
+  };
 }

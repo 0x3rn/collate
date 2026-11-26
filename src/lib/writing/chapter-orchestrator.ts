@@ -51,8 +51,7 @@ import {
   recordChapterNeedsAttentionAudit,
   type ChapterAttentionKind,
 } from "./attention";
-import { buildLabelledResultsFramework, type DatasetAnalysisResult } from "./results-data";
-import { hasUserExperimentalData } from "./chapter-instructions";
+import { buildLabelledResultsFramework, resolveAuthoritativeResultsData } from "./results-data";
 import { retrieveEvidencePassages, type RetrievedEvidencePassage } from "./retrieval";
 import {
   countWords,
@@ -403,23 +402,24 @@ export async function runWriteChapterOrchestration(
           .orderBy(desc(projectDatasets.createdAt))
           .limit(1);
 
-        if (chapter.userDataSummaryMarkdown?.trim()) {
+        const resolvedData = resolveAuthoritativeResultsData({
+          chapterDataSummaryMarkdown: chapter.userDataSummaryMarkdown,
+          chapterAttachmentName: chapter.userAttachmentName,
+          chapterUpdatedAt: chapter.updatedAt,
+          chapterInstructions: chapter.userInstructions,
+          latestDataset: dataset
+            ? {
+                filename: dataset.filename,
+                summaryJson: dataset.summaryJson,
+                createdAt: dataset.createdAt,
+              }
+            : null,
+        });
+
+        if (resolvedData.source === "csv_dataset") {
           resultsMode = "user_dataset";
-          datasetMarkdown = chapter.userDataSummaryMarkdown.trim();
-        } else if (dataset) {
-          resultsMode = "user_dataset";
-          try {
-            const summary = JSON.parse(dataset.summaryJson) as DatasetAnalysisResult;
-            datasetMarkdown = summary.markdownTables || null;
-          } catch {
-            datasetMarkdown = null;
-          }
-        } else if (
-          hasUserExperimentalData({
-            userInstructions: chapter.userInstructions,
-            userDataSummaryMarkdown: chapter.userDataSummaryMarkdown,
-          })
-        ) {
+          datasetMarkdown = resolvedData.datasetMarkdown;
+        } else if (resolvedData.source === "chapter_notes") {
           resultsMode = "user_dataset";
           datasetMarkdown = null;
         } else if (

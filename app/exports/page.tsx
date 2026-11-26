@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Exports | Collate",
   description: "Download saved PDF and Word documents from your Collate projects.",
+  robots: { index: false, follow: false },
 };
 
 export default async function ExportsPage() {
