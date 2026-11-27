@@ -96,9 +96,9 @@ export default async function DashboardOverviewPage() {
         {/* Signature Hunter-inspired action-first Quick-Start Workbench */}
         <QuickStartWorkbench />
 
-        {/* Editorial 8 / 4 asymmetric ledger + allowance/files rail */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-8">
+        {/* Editorial 8 / 4 asymmetric ledger + allowance/files rail (stacks cleanly on <=1024px so rows never crush beside sidebar) */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          <div className="xl:col-span-8 min-w-0">
             <OverviewLedgerClient
               recentProjects={recentProjects}
               totalProjects={stats.totalProjects}
@@ -107,7 +107,7 @@ export default async function DashboardOverviewPage() {
             />
           </div>
 
-          <aside className="lg:col-span-4 space-y-5">
+          <aside className="xl:col-span-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 gap-5 items-start">
             {/* Clean horizontal allowance & credits meter (Hunter.io style) */}
             <section
               aria-label="Account allowance"

@@ -100,7 +100,7 @@ export function CreditsPanel({ recentLedger }: { recentLedger: LedgerEntryDispla
               type="button"
               onClick={() => setCurrency("usd")}
               aria-pressed={currency === "usd"}
-              className={`min-h-[32px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
+              className={`min-h-[38px] sm:min-h-[34px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
                 currency === "usd"
                   ? "bg-white text-[var(--neutral-900)] shadow-[var(--shadow-subtle)]"
                   : "text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"
@@ -112,7 +112,7 @@ export function CreditsPanel({ recentLedger }: { recentLedger: LedgerEntryDispla
               type="button"
               onClick={() => setCurrency("ngn")}
               aria-pressed={currency === "ngn"}
-              className={`min-h-[32px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
+              className={`min-h-[38px] sm:min-h-[34px] px-3 py-1 rounded-[5px] text-xs font-semibold transition-all cursor-pointer ${
                 currency === "ngn"
                   ? "bg-white text-[var(--neutral-900)] shadow-[var(--shadow-subtle)]"
                   : "text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"

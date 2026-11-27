@@ -5,8 +5,8 @@ import { CookiePreferencesTrigger } from "@/components/privacy/cookie-consent-an
 export function SiteFooter() {
   return (
     <footer className="mt-auto border-t border-[var(--neutral-200)] bg-white">
-      <div className="mx-auto max-w-[1120px] px-4 sm:px-6 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 text-sm">
-        <div className="sm:col-span-2 space-y-2">
+      <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-10 text-sm">
+        <div className="sm:col-span-2 space-y-2.5">
           <div className="inline-flex items-center gap-2">
             <CollateLogo className="w-5 h-5 text-[var(--accent-600)] shrink-0" />
             <p
@@ -26,34 +26,37 @@ export function SiteFooter() {
           <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             Product
           </p>
-          <nav aria-label="Product links" className="flex flex-col gap-2 text-[var(--neutral-700)]">
+          <nav
+            aria-label="Product links"
+            className="flex flex-col gap-0.5 sm:gap-2 text-[var(--neutral-700)]"
+          >
             <Link
               href="/#work-types"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Work types
             </Link>
             <Link
               href="/#how-it-works"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               How it works
             </Link>
             <Link
               href="/#what-you-get"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               What you get
             </Link>
             <Link
               href="/#pricing"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Pricing
             </Link>
             <Link
               href="/#faq"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               FAQ
             </Link>
@@ -64,38 +67,41 @@ export function SiteFooter() {
           <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             Legal
           </p>
-          <nav aria-label="Legal links" className="flex flex-col gap-2 text-[var(--neutral-700)]">
+          <nav
+            aria-label="Legal links"
+            className="flex flex-col gap-0.5 sm:gap-2 text-[var(--neutral-700)]"
+          >
             <Link
               href="/terms"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Terms of service
             </Link>
             <Link
               href="/terms#refund-policy"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Refund policy
             </Link>
             <Link
               href="/privacy"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Privacy policy
             </Link>
             <Link
               href="/acceptable-use"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Acceptable use
             </Link>
             <Link
               href="/cookies"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Cookie policy
             </Link>
-            <CookiePreferencesTrigger />
+            <CookiePreferencesTrigger className="inline-flex items-center min-h-[40px] sm:min-h-0 w-fit" />
           </nav>
         </div>
 
@@ -103,16 +109,19 @@ export function SiteFooter() {
           <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             Account
           </p>
-          <nav aria-label="Account links" className="flex flex-col gap-2 text-[var(--neutral-700)]">
+          <nav
+            aria-label="Account links"
+            className="flex flex-col gap-0.5 sm:gap-2 text-[var(--neutral-700)]"
+          >
             <Link
               href="/sign-up"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Create account
             </Link>
             <Link
               href="/sign-in"
-              className="hover:text-[var(--neutral-900)] hover:underline underline-offset-4"
+              className="inline-flex items-center min-h-[40px] sm:min-h-0 hover:text-[var(--neutral-900)] hover:underline underline-offset-4 w-fit"
             >
               Sign in
             </Link>

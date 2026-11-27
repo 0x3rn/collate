@@ -88,7 +88,7 @@ export default async function BillingPage({
   );
 
   return (
-    <WorkspaceShell user={currentUser} maxWidthClassName="max-w-[980px]">
+    <WorkspaceShell user={currentUser} maxWidthClassName="max-w-[1280px]">
       <div className="space-y-6">
         <header className="space-y-1 pb-5 border-b border-[var(--neutral-200)]">
           <h1 className="text-[1.75rem] sm:text-[2rem] font-medium leading-tight">

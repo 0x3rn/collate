@@ -173,7 +173,7 @@ export default async function ChapterReaderPage({
   };
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[1120px]">
+    <WorkspaceShell user={user}>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-3 border-b border-[var(--neutral-200)] pb-5">
           <Link

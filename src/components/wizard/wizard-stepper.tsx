@@ -59,7 +59,7 @@ export function WizardStepper({
                 disabled={!isClickable}
                 onClick={() => onSelectStep(s.number)}
                 aria-current={isCurrent ? "step" : undefined}
-                className={`min-h-[38px] px-3 py-1.5 text-xs sm:text-sm font-medium rounded-[var(--radius-sm)] border transition-colors duration-150 ${
+                className={`min-h-[40px] sm:min-h-[38px] px-2.5 sm:px-3 py-1.5 text-xs sm:text-[13px] font-medium whitespace-nowrap rounded-[var(--radius-sm)] border transition-colors duration-150 ${
                   isCurrent
                     ? "bg-[var(--accent-600)] text-white border-[var(--accent-600)]"
                     : isClickable

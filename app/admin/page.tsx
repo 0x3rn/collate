@@ -75,7 +75,7 @@ export default async function AdminPage() {
   const recentPayments = await loadAdminPayments(db);
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[1040px]">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[1440px]">
       <div className="space-y-8">
         <div className="border-b border-[var(--neutral-200)] pb-5 flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-[2rem] font-medium">Admin operations</h1>

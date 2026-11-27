@@ -57,7 +57,10 @@ function renderBlock(block: LegalBlock, index: number) {
   switch (block.type) {
     case "paragraph":
       return (
-        <p key={index} className="text-[15px] text-[var(--neutral-700)] leading-relaxed">
+        <p
+          key={index}
+          className="text-[15px] text-[var(--neutral-700)] leading-relaxed max-w-[74ch]"
+        >
           {renderRuns(block.runs)}
         </p>
       );
@@ -67,7 +70,7 @@ function renderBlock(block: LegalBlock, index: number) {
         <h3
           key={index}
           id={block.id}
-          className="text-base font-semibold text-[var(--neutral-900)] pt-2 scroll-mt-24"
+          className="text-base font-semibold text-[var(--neutral-900)] pt-2 scroll-mt-24 max-w-[74ch]"
         >
           {block.title}
         </h3>
@@ -78,7 +81,7 @@ function renderBlock(block: LegalBlock, index: number) {
         return (
           <ol
             key={index}
-            className="list-decimal pl-5 space-y-2.5 text-[15px] text-[var(--neutral-700)] leading-relaxed marker:text-[var(--neutral-500)] marker:font-medium"
+            className="list-decimal pl-5 space-y-2.5 text-[15px] text-[var(--neutral-700)] leading-relaxed marker:text-[var(--neutral-500)] marker:font-medium max-w-[74ch]"
           >
             {block.items.map((item, i) => (
               <li key={i} className="pl-1">
@@ -91,7 +94,7 @@ function renderBlock(block: LegalBlock, index: number) {
       return (
         <ul
           key={index}
-          className="list-disc pl-5 space-y-2.5 text-[15px] text-[var(--neutral-700)] leading-relaxed marker:text-[var(--neutral-400)]"
+          className="list-disc pl-5 space-y-2.5 text-[15px] text-[var(--neutral-700)] leading-relaxed marker:text-[var(--neutral-400)] max-w-[74ch]"
         >
           {block.items.map((item, i) => (
             <li key={i} className="pl-1">
@@ -105,7 +108,7 @@ function renderBlock(block: LegalBlock, index: number) {
       return (
         <aside
           key={index}
-          className={`rounded-[var(--radius-sm)] border p-4 sm:p-5 space-y-1.5 ${
+          className={`rounded-[var(--radius-sm)] border p-4 sm:p-5 space-y-1.5 max-w-[74ch] ${
             block.tone === "accent"
               ? "bg-[var(--accent-100)]/45 border-[var(--accent-600)]/25"
               : "bg-[var(--neutral-50)] border-[var(--neutral-200)]"
@@ -121,46 +124,82 @@ function renderBlock(block: LegalBlock, index: number) {
     case "table": {
       const compact = block.headers.length >= 5;
       return (
-        <div
-          key={index}
-          className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--neutral-200)]"
-        >
-          <table className={`w-full border-collapse text-left ${compact ? "text-xs" : "text-sm"}`}>
-            {block.caption ? <caption className="sr-only">{block.caption}</caption> : null}
-            <thead>
-              <tr className="bg-[var(--neutral-50)] border-b border-[var(--neutral-200)]">
-                {block.headers.map((header, i) => (
-                  <th
-                    key={i}
-                    scope="col"
-                    className={`${
-                      compact ? "px-3 py-2.5" : "px-4 py-3 whitespace-nowrap"
-                    } text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-600)]`}
+        <div key={index} className="space-y-3">
+          {/* Stacked responsive cards on mobile (< md) so wide policy tables never overflow 375px */}
+          <div className="md:hidden space-y-2.5">
+            {block.rows.map((row, rIdx) => (
+              <dl
+                key={rIdx}
+                className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]/60 p-3.5 space-y-2 text-xs"
+              >
+                {row.map((cell, cIdx) => (
+                  <div
+                    key={cIdx}
+                    className={
+                      cIdx === 0
+                        ? "pb-2 border-b border-[var(--neutral-200)]"
+                        : "grid grid-cols-[110px_minmax(0,1fr)] gap-2 items-baseline"
+                    }
                   >
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--neutral-200)] bg-white">
-              {block.rows.map((row, rIdx) => (
-                <tr key={rIdx} className="align-top hover:bg-[var(--neutral-50)]/60">
-                  {row.map((cell, cIdx) => (
-                    <td
-                      key={cIdx}
-                      className={`${compact ? "px-3 py-2.5 break-words" : "px-4 py-3"} leading-relaxed ${
+                    <dt className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
+                      {block.headers[cIdx]}
+                    </dt>
+                    <dd
+                      className={`leading-relaxed [overflow-wrap:anywhere] ${
                         cIdx === 0
-                          ? `font-medium text-[var(--neutral-900)] ${compact ? "min-w-[110px]" : "min-w-[150px]"}`
+                          ? "text-sm font-semibold text-[var(--neutral-900)] mt-0.5"
                           : "text-[var(--neutral-700)]"
                       }`}
                     >
                       {cell}
-                    </td>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ))}
+          </div>
+
+          {/* Full tabular view on md+ */}
+          <div className="hidden md:block overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--neutral-200)]">
+            <table
+              className={`w-full border-collapse text-left ${compact ? "text-xs" : "text-sm"}`}
+            >
+              {block.caption ? <caption className="sr-only">{block.caption}</caption> : null}
+              <thead>
+                <tr className="bg-[var(--neutral-50)] border-b border-[var(--neutral-200)]">
+                  {block.headers.map((header, i) => (
+                    <th
+                      key={i}
+                      scope="col"
+                      className={`${
+                        compact ? "px-3 py-2.5" : "px-4 py-3 whitespace-nowrap"
+                      } text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-600)]`}
+                    >
+                      {header}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-[var(--neutral-200)] bg-white">
+                {block.rows.map((row, rIdx) => (
+                  <tr key={rIdx} className="align-top hover:bg-[var(--neutral-50)]/60">
+                    {row.map((cell, cIdx) => (
+                      <td
+                        key={cIdx}
+                        className={`${compact ? "px-3 py-2.5 [overflow-wrap:anywhere]" : "px-4 py-3"} leading-relaxed ${
+                          cIdx === 0
+                            ? `font-medium text-[var(--neutral-900)] ${compact ? "min-w-[110px]" : "min-w-[150px]"}`
+                            : "text-[var(--neutral-700)]"
+                        }`}
+                      >
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       );
     }
@@ -178,7 +217,7 @@ export function LegalDocumentView({
     <>
       <SiteHeader user={user} />
       <main className="flex-1 bg-[var(--neutral-50)]">
-        <div className="mx-auto w-full max-w-[1080px] px-4 sm:px-6 py-10 sm:py-14 space-y-8">
+        <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-14 space-y-8">
           {/* Policy Switcher Bar */}
           <nav
             aria-label="Legal policies"
@@ -191,7 +230,7 @@ export function LegalDocumentView({
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`px-3.5 py-2 rounded-[var(--radius-sm)] text-xs sm:text-sm font-medium transition-colors ${
+                  className={`min-h-[44px] sm:min-h-[38px] inline-flex items-center px-3.5 py-2 rounded-[var(--radius-sm)] text-xs sm:text-sm font-medium transition-colors ${
                     active
                       ? "bg-[var(--accent-100)] text-[var(--accent-600)] font-semibold"
                       : "text-[var(--neutral-700)] hover:bg-white hover:text-[var(--neutral-900)] border border-transparent hover:border-[var(--neutral-200)]"
@@ -204,9 +243,9 @@ export function LegalDocumentView({
           </nav>
 
           {/* Editorial Title Header */}
-          <header className="space-y-3 max-w-[760px]">
+          <header className="space-y-3 max-w-[780px]">
             <h1
-              className="text-[2rem] sm:text-[2.4rem] font-medium leading-tight tracking-tight text-[var(--neutral-900)]"
+              className="text-[1.875rem] sm:text-[2.4rem] font-medium leading-tight tracking-tight text-[var(--neutral-900)]"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               {document.title}
@@ -214,9 +253,11 @@ export function LegalDocumentView({
             <p className="text-base text-[var(--neutral-600)] leading-relaxed">
               {document.subtitle}
             </p>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--neutral-500)] pt-1">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-x-4 gap-y-1 text-xs text-[var(--neutral-500)] pt-1">
               <span>Effective date: {document.effectiveDate}</span>
-              <span aria-hidden="true">·</span>
+              <span aria-hidden="true" className="hidden sm:inline">
+                ·
+              </span>
               <span>Last updated: {document.lastUpdated}</span>
             </div>
           </header>
@@ -224,17 +265,17 @@ export function LegalDocumentView({
           {/* Mobile Table of Contents */}
           <nav
             aria-label="Sections in this policy"
-            className="lg:hidden bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-4 space-y-2.5"
+            className="lg:hidden bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-4 sm:p-5 space-y-2.5"
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
               On this page
             </p>
-            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 list-none p-0 text-sm">
+            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 list-none p-0 text-sm">
               {document.sections.map((section) => (
                 <li key={section.id}>
                   <a
                     href={`#${section.id}`}
-                    className="text-[var(--neutral-700)] hover:text-[var(--accent-600)] hover:underline underline-offset-4"
+                    className="inline-flex items-center min-h-[40px] py-1 text-[var(--neutral-700)] hover:text-[var(--accent-600)] hover:underline underline-offset-4"
                   >
                     {section.number}. {section.title}
                   </a>
@@ -244,7 +285,7 @@ export function LegalDocumentView({
           </nav>
 
           {/* Desktop 2-Column Layout: Sticky TOC + Editorial Document Card */}
-          <div className="grid grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)] gap-8 lg:gap-10 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)] gap-8 lg:gap-10 xl:gap-12 items-start">
             <aside className="hidden lg:block sticky top-24 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-[var(--neutral-500)] px-2">
                 On this page
@@ -268,11 +309,14 @@ export function LegalDocumentView({
               </nav>
             </aside>
 
-            <article className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-8 lg:p-10 space-y-10 min-w-0">
+            <article className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-8 lg:p-10 space-y-10 min-w-0">
               {document.intro.length > 0 ? (
                 <div className="space-y-3 pb-6 border-b border-[var(--neutral-200)]">
                   {document.intro.map((runs, idx) => (
-                    <p key={idx} className="text-[15px] text-[var(--neutral-700)] leading-relaxed">
+                    <p
+                      key={idx}
+                      className="text-[15px] text-[var(--neutral-700)] leading-relaxed max-w-[74ch]"
+                    >
                       {renderRuns(runs)}
                     </p>
                   ))}
@@ -283,7 +327,7 @@ export function LegalDocumentView({
                 <section
                   key={section.id}
                   id={section.id}
-                  className="space-y-4 scroll-mt-24 pt-2 first:pt-0"
+                  className="space-y-4 scroll-mt-24 pt-2 first:pt-0 min-w-0"
                 >
                   <h2
                     className="text-xl sm:text-[1.35rem] font-medium text-[var(--neutral-900)] leading-snug"
@@ -294,7 +338,7 @@ export function LegalDocumentView({
                     </span>
                     {section.title}
                   </h2>
-                  <div className="space-y-3.5">
+                  <div className="space-y-3.5 min-w-0">
                     {section.blocks.map((block, idx) => renderBlock(block, idx))}
                   </div>
                 </section>

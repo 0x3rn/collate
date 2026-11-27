@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeftIcon, ArrowRightIcon } from "@/components/layout/workspace-icons";
+import { useState, type ReactNode } from "react";
+import { ArrowRightIcon } from "@/components/layout/workspace-icons";
 import { CITATION_SPECIMENS } from "@/lib/marketing/landing-content";
 
 type DeliverableKey = "citations" | "claims" | "results" | "exports" | "integrity";
@@ -10,40 +10,45 @@ const FEATURES: Array<{
   id: DeliverableKey;
   title: string;
   summary: string;
+  guarantee: string;
 }> = [
   {
     id: "citations",
     title: "Verified citations in six official styles",
     summary:
       "References are formatted from checked publisher records, never guessed or typed from memory.",
+    guarantee:
+      "Every reference in the bibliography matches an in-text citation and stored DOI/URL.",
   },
   {
     id: "claims",
     title: "Claim-by-claim source checking",
     summary:
       "A second pass checks every factual claim against its saved source passage before delivery.",
+    guarantee: "Unsupported claims are automatically rewritten to match evidence or removed.",
   },
   {
     id: "results",
     title: "Honest results for empirical work",
     summary:
       "Tables are calculated from your uploaded data or taken from published studies, never invented.",
+    guarantee: "Uploaded CSV measurements are computed deterministically, never fabricated.",
   },
   {
     id: "exports",
     title: "Print-ready PDF and Word (.docx)",
     summary:
       "Opening pages numbered i, ii, iii, chapters numbered 1, 2, 3, and a table of contents with the real page numbers.",
+    guarantee: "Both PDF and editable Word files preserve your font, margins, and line spacing.",
   },
   {
     id: "integrity",
     title: "Similarity report, logs & chapter memory",
     summary:
       "Every chapter keeps prior terms consistent and includes overlap scores, a writing log, and a disclosure template.",
+    guarantee: "Shared project memory keeps terminology and findings aligned across all chapters.",
   },
 ];
-
-const MOBILE_QUERY = "(max-width: 1023px)";
 
 function PanelHeading({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
@@ -79,7 +84,7 @@ function CitationsPanel() {
               key={item.id}
               type="button"
               onClick={() => setActiveStyle(item.id)}
-              className={`min-h-[36px] px-3 py-1 text-xs font-medium rounded-[var(--radius-sm)] border cursor-pointer transition-colors ${
+              className={`min-h-[44px] sm:min-h-[38px] px-3 py-1 text-xs font-medium rounded-[var(--radius-sm)] border cursor-pointer transition-colors ${
                 isCurrent
                   ? "bg-[var(--accent-600)] text-white border-[var(--accent-600)]"
                   : "bg-white text-[var(--neutral-700)] border-[var(--neutral-200)] hover:border-[var(--neutral-400)]"
@@ -91,7 +96,7 @@ function CitationsPanel() {
         })}
       </div>
 
-      <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-5 space-y-4">
+      <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-4 sm:p-5 space-y-4">
         <div className="space-y-1">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             In-text sentence
@@ -107,7 +112,7 @@ function CitationsPanel() {
           <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
             Generated reference list entry
           </p>
-          <p className="text-xs text-[var(--neutral-800)] leading-relaxed pl-4 -indent-4">
+          <p className="text-xs text-[var(--neutral-800)] leading-relaxed pl-4 -indent-4 [overflow-wrap:anywhere]">
             {specimen.reference}
           </p>
         </div>
@@ -318,138 +323,152 @@ const PANELS: Record<DeliverableKey, () => ReactNode> = {
 };
 
 /**
- * Desktop: list on the left, the selected item's detail on the right, sized to its own content.
- * Phones and tablets: the same two panes side by side in a swipeable track. Tapping an item
- * slides its detail into view; swiping or "All features" slides back to the list.
+ * Desktop (lg+): 5 capability tabs on the left, matched-height detail stage on the right with
+ * zero vertical void. Phones & tablets (< lg): expandable capability accordion so every preview
+ * opens directly inline with zero horizontal overflow or hidden off-screen panes.
  */
 export function DeliverablesBento() {
   const [selected, setSelected] = useState<DeliverableKey>("citations");
-  const [page, setPage] = useState<0 | 1>(0);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const detailRef = useRef<HTMLDivElement>(null);
-
-  const isMobile = () => typeof window !== "undefined" && window.matchMedia(MOBILE_QUERY).matches;
-
-  // On phones the track is as tall as the pane in view, so neither pane leaves empty space.
-  const fitHeight = useCallback(() => {
-    const track = trackRef.current;
-    if (!track) return;
-    if (!isMobile()) {
-      track.style.height = "";
-      return;
-    }
-    const pane = page === 0 ? listRef.current : detailRef.current;
-    if (pane) track.style.height = `${pane.offsetHeight}px`;
-  }, [page]);
-
-  useEffect(() => {
-    fitHeight();
-    const observer = new ResizeObserver(fitHeight);
-    if (listRef.current) observer.observe(listRef.current);
-    if (detailRef.current) observer.observe(detailRef.current);
-    window.addEventListener("resize", fitHeight);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", fitHeight);
-    };
-  }, [fitHeight, selected]);
-
-  function goTo(target: 0 | 1) {
-    const track = trackRef.current;
-    if (!track) return;
-    track.scrollTo({ left: target === 1 ? track.clientWidth : 0, behavior: "smooth" });
-    setPage(target);
-  }
-
-  function choose(id: DeliverableKey) {
-    setSelected(id);
-    if (isMobile()) goTo(1);
-  }
-
-  function handleScroll() {
-    const track = trackRef.current;
-    if (!track || !isMobile()) return;
-    const next = track.scrollLeft > track.clientWidth / 2 ? 1 : 0;
-    if (next !== page) setPage(next);
-  }
-
   const current = FEATURES.find((f) => f.id === selected)!;
 
   return (
-    <div
-      ref={trackRef}
-      onScroll={handleScroll}
-      className="flex items-start overflow-x-auto overflow-y-hidden snap-x snap-mandatory transition-[height] duration-300 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:grid lg:grid-cols-12 lg:gap-8 lg:overflow-visible lg:snap-none"
-    >
-      {/* Left: feature list */}
-      <div
-        ref={listRef}
-        role="tablist"
-        aria-label="Project deliverables"
-        className="w-full shrink-0 snap-start pr-3 lg:pr-0 lg:col-span-5 flex flex-col gap-3"
-      >
+    <div>
+      {/* Mobile & Tablet (< lg): inline expandable capability stack */}
+      <div className="lg:hidden space-y-3" aria-label="Project deliverables">
         {FEATURES.map((feat) => {
           const active = selected === feat.id;
           return (
-            <button
+            <div
               key={feat.id}
-              type="button"
-              role="tab"
-              id={`deliverable-tab-${feat.id}`}
-              aria-selected={active}
-              aria-controls="deliverable-panel"
-              onClick={() => choose(feat.id)}
-              className={`text-left p-4 sm:p-5 rounded-[var(--radius-md)] border transition-all duration-150 cursor-pointer ${
+              className={`rounded-[var(--radius-md)] border overflow-hidden transition-colors duration-150 ${
                 active
                   ? "bg-white border-[var(--accent-600)] shadow-[var(--shadow-subtle)]"
-                  : "bg-[var(--neutral-50)] border-[var(--neutral-200)] hover:bg-white hover:border-[var(--neutral-300)]"
+                  : "bg-[var(--neutral-50)] border-[var(--neutral-200)]"
               }`}
             >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-base font-semibold text-[var(--neutral-900)]">
-                  {feat.title}
-                </span>
-                <ArrowRightIcon
-                  className={`w-4 h-4 shrink-0 transition-transform duration-150 ${
-                    active
-                      ? "text-[var(--accent-600)] translate-x-0.5"
-                      : "text-[var(--neutral-400)]"
-                  }`}
-                />
-              </div>
-              <p className="text-sm text-[var(--neutral-600)] leading-relaxed mt-1.5">
-                {feat.summary}
-              </p>
-            </button>
+              <button
+                type="button"
+                id={`deliverable-mobile-tab-${feat.id}`}
+                aria-expanded={active}
+                aria-controls={`deliverable-mobile-panel-${feat.id}`}
+                onClick={() => setSelected(feat.id)}
+                className="w-full min-h-[44px] text-left p-4 sm:p-5 cursor-pointer"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-base font-semibold text-[var(--neutral-900)]">
+                    {feat.title}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`w-7 h-7 rounded-full grid place-items-center text-sm font-medium shrink-0 transition-colors ${
+                      active
+                        ? "bg-[var(--accent-100)] text-[var(--accent-600)]"
+                        : "bg-white text-[var(--neutral-500)] border border-[var(--neutral-200)]"
+                    }`}
+                  >
+                    {active ? "−" : "+"}
+                  </span>
+                </div>
+                <p className="text-sm text-[var(--neutral-600)] leading-relaxed mt-1.5">
+                  {feat.summary}
+                </p>
+              </button>
+
+              {active ? (
+                <div
+                  id={`deliverable-mobile-panel-${feat.id}`}
+                  role="region"
+                  aria-labelledby={`deliverable-mobile-tab-${feat.id}`}
+                  className="border-t border-[var(--neutral-200)] bg-[var(--neutral-50)] p-4 sm:p-6 space-y-4 animate-[fadeIn_200ms_ease-out]"
+                >
+                  {PANELS[feat.id]()}
+                  <p className="pt-3 border-t border-[var(--neutral-200)] text-xs text-[var(--neutral-600)]">
+                    <strong className="font-semibold text-[var(--neutral-900)]">Guarantee:</strong>{" "}
+                    {feat.guarantee}
+                  </p>
+                </div>
+              ) : null}
+            </div>
           );
         })}
       </div>
 
-      {/* Right: detail for the selected feature */}
-      <div
-        ref={detailRef}
-        className="w-full shrink-0 snap-start pl-3 lg:pl-0 lg:col-span-7 lg:sticky lg:top-24"
-      >
-        <button
-          type="button"
-          onClick={() => goTo(0)}
-          className="lg:hidden mb-3 inline-flex items-center gap-1.5 min-h-[40px] text-sm font-medium text-[var(--accent-600)] cursor-pointer"
-        >
-          <ArrowLeftIcon className="w-4 h-4" />
-          All features
-        </button>
+      {/* Desktop (lg+): balanced 2-column tab list + matched-height preview stage */}
+      <div className="hidden lg:grid lg:grid-cols-12 lg:gap-8 xl:gap-10 lg:items-stretch">
         <div
-          id="deliverable-panel"
-          role="tabpanel"
-          aria-labelledby={`deliverable-tab-${selected}`}
-          className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-8"
+          role="tablist"
+          aria-label="Project deliverables"
+          className="lg:col-span-5 flex flex-col justify-between gap-3"
         >
-          <p className="lg:hidden mb-4 text-base font-semibold text-[var(--neutral-900)]">
-            {current.title}
-          </p>
-          <div key={selected} className="animate-[fadeIn_200ms_ease-out]">
-            {PANELS[selected]()}
+          {FEATURES.map((feat) => {
+            const active = selected === feat.id;
+            return (
+              <button
+                key={feat.id}
+                type="button"
+                role="tab"
+                id={`deliverable-tab-${feat.id}`}
+                aria-selected={active}
+                aria-controls="deliverable-panel"
+                onClick={() => setSelected(feat.id)}
+                className={`text-left p-4 xl:p-5 rounded-[var(--radius-md)] border transition-all duration-150 cursor-pointer ${
+                  active
+                    ? "bg-white border-[var(--accent-600)] shadow-[var(--shadow-subtle)]"
+                    : "bg-[var(--neutral-50)] border-[var(--neutral-200)] hover:bg-white hover:border-[var(--neutral-300)]"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[0.9375rem] xl:text-base font-semibold text-[var(--neutral-900)]">
+                    {feat.title}
+                  </span>
+                  <ArrowRightIcon
+                    className={`w-4 h-4 shrink-0 transition-transform duration-150 ${
+                      active
+                        ? "text-[var(--accent-600)] translate-x-0.5"
+                        : "text-[var(--neutral-400)]"
+                    }`}
+                  />
+                </div>
+                <p className="text-sm text-[var(--neutral-600)] leading-relaxed mt-1">
+                  {feat.summary}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="lg:col-span-7 flex flex-col">
+          <div
+            id="deliverable-panel"
+            role="tabpanel"
+            aria-labelledby={`deliverable-tab-${selected}`}
+            className="flex-1 flex flex-col justify-between gap-6 bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 xl:p-8"
+          >
+            <div className="space-y-6">
+              <div className="pb-4 border-b border-[var(--neutral-200)] space-y-1">
+                <h3 className="text-xl font-medium text-[var(--neutral-900)]">{current.title}</h3>
+                <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
+                  {current.summary}
+                </p>
+              </div>
+
+              <div key={selected} className="animate-[fadeIn_200ms_ease-out]">
+                {PANELS[selected]()}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-[var(--neutral-200)] flex items-start gap-2.5 text-xs text-[var(--neutral-700)]">
+              <span
+                aria-hidden="true"
+                className="text-[var(--success-text)] font-bold mt-0.5 shrink-0"
+              >
+                ✓
+              </span>
+              <p className="leading-relaxed">
+                <strong className="font-semibold text-[var(--neutral-900)]">Built-in check:</strong>{" "}
+                {current.guarantee}
+              </p>
+            </div>
           </div>
         </div>
       </div>

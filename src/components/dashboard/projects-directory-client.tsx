@@ -67,7 +67,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
       className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]"
     >
       {/* Integrated Hunter-style underline tabs + inline search/filter bar */}
-      <div className="px-5 sm:px-6 border-b border-[var(--neutral-200)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="px-4 sm:px-6 border-b border-[var(--neutral-200)] flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         <div
           role="tablist"
           aria-label="Filter projects by status"
@@ -82,7 +82,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                 role="tab"
                 aria-selected={selected}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative py-3 text-[13px] sm:text-sm font-medium inline-flex items-center gap-1.5 sm:gap-2 whitespace-nowrap transition-colors cursor-pointer ${
+                className={`relative min-h-[44px] py-2.5 text-[13px] sm:text-sm font-medium inline-flex items-center gap-1.5 sm:gap-2 whitespace-nowrap transition-colors cursor-pointer ${
                   selected
                     ? "text-[var(--neutral-900)] font-semibold"
                     : "text-[var(--neutral-500)] hover:text-[var(--neutral-800)]"
@@ -110,7 +110,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
         </div>
 
         {projects.length > 0 ? (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pb-3 lg:pb-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pb-3 xl:pb-0">
             <div className="relative sm:w-56">
               <label htmlFor="projects-search" className="sr-only">
                 Search projects
@@ -203,11 +203,11 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
       ) : (
         <>
           {/* Desktop column header */}
-          <div className="hidden md:grid md:grid-cols-12 gap-4 px-6 py-2.5 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
-            <div className="col-span-5">Project</div>
-            <div className="col-span-3">Stage &amp; progress</div>
-            <div className="col-span-2">Sources</div>
-            <div className="col-span-2 text-right">Next step</div>
+          <div className="hidden md:grid md:grid-cols-[minmax(0,2fr)_minmax(136px,1.25fr)_minmax(96px,0.85fr)_minmax(168px,1.35fr)] gap-4 px-6 py-2.5 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] text-[11px] font-semibold uppercase tracking-wider text-[var(--neutral-500)]">
+            <div>Project</div>
+            <div>Stage &amp; progress</div>
+            <div>Sources</div>
+            <div className="text-right">Next step</div>
           </div>
 
           <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
@@ -242,10 +242,10 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
               return (
                 <li
                   key={project.id}
-                  className="px-5 sm:px-6 py-3.5 md:py-4 grid grid-cols-1 md:grid-cols-12 gap-2.5 md:gap-4 items-start md:items-center hover:bg-[var(--neutral-50)] transition-colors duration-150 group"
+                  className="px-5 sm:px-6 py-3.5 md:py-4 grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(136px,1.25fr)_minmax(96px,0.85fr)_minmax(168px,1.35fr)] gap-2.5 md:gap-4 items-start md:items-center hover:bg-[var(--neutral-50)] transition-colors duration-150 group"
                 >
                   {/* Project title & type */}
-                  <div className="md:col-span-5 min-w-0 space-y-1">
+                  <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--neutral-500)]">
                       <span className="font-medium text-[var(--neutral-700)]">
                         {formatProjectType(project.type)}
@@ -266,16 +266,16 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                   </div>
 
                   {/* Stage & slim progress bar */}
-                  <div className="md:col-span-3 space-y-1.5">
+                  <div className="min-w-0 space-y-1.5">
                     <span
                       className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium border rounded-[4px] ${STATUS_BADGE_CLASSES[status.tone]}`}
                     >
                       {status.label}
                     </span>
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px] text-[var(--neutral-600)] tabular-nums">
-                        <span>{progressLabel}</span>
-                        <span>{progressPct}%</span>
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--neutral-600)] tabular-nums">
+                        <span className="truncate">{progressLabel}</span>
+                        <span className="shrink-0">{progressPct}%</span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-[var(--neutral-100)] overflow-hidden">
                         <div
@@ -293,20 +293,20 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                   </div>
 
                   {/* Sources & date */}
-                  <div className="md:col-span-2 text-xs text-[var(--neutral-600)] tabular-nums flex items-center justify-between gap-2 md:block md:space-y-0.5">
-                    <p className="font-medium text-[var(--neutral-800)]">
+                  <div className="min-w-0 text-xs text-[var(--neutral-600)] tabular-nums flex items-center justify-between gap-2 md:block md:space-y-0.5">
+                    <p className="font-medium text-[var(--neutral-800)] truncate">
                       {project.sourcesCount} {project.sourcesCount === 1 ? "source" : "sources"}
                     </p>
-                    <p className="text-[var(--neutral-500)]">
+                    <p className="text-[var(--neutral-500)] truncate">
                       {formatShortDate(project.updatedAt)}
                     </p>
                   </div>
 
                   {/* Next step action */}
-                  <div className="md:col-span-2 flex items-center justify-between md:justify-end gap-2">
+                  <div className="min-w-0 flex items-center justify-between md:justify-end gap-2">
                     <Link
                       href={project.nextAction.href}
-                      className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--accent-600)] hover:text-[var(--accent-700)]"
+                      className="inline-flex items-center justify-end gap-1.5 text-sm font-medium leading-snug text-left md:text-right text-[var(--accent-600)] hover:text-[var(--accent-700)] xl:whitespace-nowrap"
                     >
                       <span>{project.nextAction.label}</span>
                       <ArrowRightIcon className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5 shrink-0" />

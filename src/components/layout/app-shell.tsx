@@ -227,7 +227,7 @@ function SidebarContent({
 export function AppShell({
   user,
   children,
-  maxWidthClassName = "max-w-[1120px]",
+  maxWidthClassName = "max-w-[1440px]",
 }: {
   user: AppShellUser;
   children: ReactNode;
@@ -308,7 +308,7 @@ export function AppShell({
         <Link
           href="/projects/new"
           onClick={handleNavigate}
-          className="min-h-[36px] px-3 rounded-[var(--radius-sm)] bg-[var(--accent-600)] hover:bg-[var(--accent-700)] text-white text-xs font-medium inline-flex items-center gap-1 shrink-0 transition-colors"
+          className="min-h-[40px] px-3 rounded-[var(--radius-sm)] bg-[var(--accent-600)] hover:bg-[var(--accent-700)] text-white text-xs font-medium inline-flex items-center gap-1 shrink-0 transition-colors"
         >
           <PlusIcon className="w-3.5 h-3.5" />
           <span>New project</span>
@@ -351,7 +351,7 @@ export function AppShell({
       <main className="flex-1 min-w-0">
         <div
           key={pathname}
-          className={`page-enter mx-auto w-full ${maxWidthClassName} px-4 sm:px-6 lg:px-8 py-7 sm:py-9`}
+          className={`page-enter mx-auto w-full ${maxWidthClassName} px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8`}
         >
           {children}
         </div>

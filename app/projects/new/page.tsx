@@ -16,7 +16,7 @@ export default async function NewProjectPage() {
   const user = await requireUser("/projects/new");
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[820px]">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[1120px]">
       <div className="space-y-6">
         <div className="space-y-4">
           <Link

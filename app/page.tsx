@@ -31,18 +31,18 @@ export default async function HomePage() {
       <main className="flex-1">
         {/* 1. Hero: Asymmetric editorial intro + layered stacked-page project preview */}
         <section className="relative overflow-hidden">
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 py-14 sm:py-20 lg:py-24">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-              <div className="lg:col-span-6 space-y-6">
+          <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10 py-10 sm:py-16 lg:py-20 xl:py-24">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-14 items-center">
+              <div className="lg:col-span-6 space-y-5 sm:space-y-6">
                 <div className="space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent-600)]">
                     For students and researchers
                   </p>
-                  <h1 className="text-[2.25rem] sm:text-[2.875rem] font-medium leading-[1.13] text-[var(--neutral-900)]">
+                  <h1 className="text-[1.875rem] sm:text-[2.5rem] lg:text-[2.625rem] xl:text-[3.125rem] font-medium leading-[1.12] text-[var(--neutral-900)]">
                     Check your topic against real sources, then write verified academic work
                   </h1>
                 </div>
-                <p className="text-lg text-[var(--neutral-600)] max-w-[52ch] leading-relaxed">
+                <p className="text-base sm:text-lg text-[var(--neutral-600)] max-w-[54ch] leading-relaxed">
                   Collate researches real academic databases first, then writes your project, paper,
                   thesis, or assignment with every claim grounded in verified sources, formatted
                   citations, and zero fabricated references.
@@ -75,10 +75,10 @@ export default async function HomePage() {
                 </p>
               </div>
 
-              <div className="lg:col-span-6 relative">
+              <div className="lg:col-span-6 relative sm:pr-2.5 sm:pb-2.5">
                 <div
                   aria-hidden="true"
-                  className="hidden sm:block absolute inset-0 translate-x-2.5 translate-y-2.5 rounded-[var(--radius-md)] bg-[var(--neutral-100)] border border-[var(--neutral-200)]"
+                  className="hidden sm:block absolute top-2.5 left-2.5 right-0 bottom-0 rounded-[var(--radius-md)] bg-[var(--neutral-100)] border border-[var(--neutral-200)]"
                 />
                 <div className="relative">
                   <HeroWorkspacePreview />
@@ -91,11 +91,11 @@ export default async function HomePage() {
         {/* 2. Work Types: 2x2 architectural ledger with bracketed page ranges aligned right of each title */}
         <section
           id="work-types"
-          className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24"
+          className="border-t border-[var(--neutral-200)] bg-white py-14 sm:py-16 md:py-24"
         >
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-10">
+          <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10 space-y-10">
             <Reveal>
-              <div className="max-w-[64ch] space-y-3">
+              <div className="max-w-[66ch] space-y-3">
                 <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium">
                   Built for four types of academic work
                 </h2>
@@ -110,7 +110,7 @@ export default async function HomePage() {
               {WORK_TYPE_OVERVIEWS.map((item, idx) => (
                 <article
                   key={item.title}
-                  className={`p-6 sm:p-7 ${
+                  className={`p-6 sm:p-7 xl:p-8 ${
                     idx % 2 === 1 ? "md:border-l border-[var(--neutral-200)]" : ""
                   } ${idx >= 2 ? "border-t border-[var(--neutral-200)]" : idx === 1 ? "border-t md:border-t-0 border-[var(--neutral-200)]" : ""}`}
                 >
@@ -135,9 +135,12 @@ export default async function HomePage() {
         </section>
 
         {/* 3. How Collate Works: Sticky left narrative + vertical timeline */}
-        <section id="how-it-works" className="border-t border-[var(--neutral-200)] py-16 md:py-24">
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
+        <section
+          id="how-it-works"
+          className="border-t border-[var(--neutral-200)] py-14 sm:py-16 md:py-24"
+        >
+          <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-14 items-start">
               <div className="lg:col-span-5 lg:sticky lg:top-24">
                 <Reveal className="space-y-4">
                   <div className="space-y-3">
@@ -148,7 +151,7 @@ export default async function HomePage() {
                       How Collate works
                     </h2>
                   </div>
-                  <p className="text-[var(--neutral-600)] leading-relaxed">
+                  <p className="text-[var(--neutral-600)] leading-relaxed max-w-[48ch]">
                     Serious academic projects take time. Every stage saves automatically so you can
                     verify sources, review each chapter, and control when the next chapter starts.
                   </p>
@@ -164,14 +167,14 @@ export default async function HomePage() {
                 {WORKFLOW_STEPS.map((item, idx) => (
                   <li key={item.step}>
                     <Reveal delayMs={idx * 70}>
-                      <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-7 flex items-start gap-5 transition-colors duration-150 hover:border-[var(--neutral-300)]">
+                      <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-7 flex items-start gap-4 sm:gap-5 transition-colors duration-150 hover:border-[var(--neutral-300)]">
                         <span
                           className="shrink-0 w-9 h-9 rounded-[var(--radius-sm)] bg-[var(--accent-100)] text-[var(--accent-600)] font-semibold text-sm tabular-nums grid place-items-center"
                           aria-hidden="true"
                         >
                           {item.step}
                         </span>
-                        <div className="space-y-2">
+                        <div className="space-y-2 min-w-0">
                           <h3 className="text-lg font-medium text-[var(--neutral-900)]">
                             {item.title}
                           </h3>
@@ -191,12 +194,12 @@ export default async function HomePage() {
         {/* 4. What You Get (Interactive Showcase) + Strict Rules */}
         <section
           id="what-you-get"
-          className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24"
+          className="border-t border-[var(--neutral-200)] bg-white py-14 sm:py-16 md:py-24"
         >
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-16">
+          <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10 space-y-16">
             <div className="space-y-10">
               <Reveal>
-                <div className="max-w-[64ch] space-y-3">
+                <div className="max-w-[66ch] space-y-3">
                   <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium">
                     What you get in every finished project
                   </h2>
@@ -214,7 +217,7 @@ export default async function HomePage() {
 
             <div className="border-t border-[var(--neutral-200)] pt-14 space-y-8">
               <Reveal>
-                <div className="max-w-[64ch] space-y-3">
+                <div className="max-w-[66ch] space-y-3">
                   <h2 className="text-[1.625rem] font-medium">
                     Strict rules built into every step
                   </h2>
@@ -238,19 +241,19 @@ export default async function HomePage() {
                       key={row.willDo}
                       className="grid grid-cols-1 md:grid-cols-2 bg-white text-sm"
                     >
-                      <div className="px-6 py-4 text-[var(--neutral-900)] flex items-start gap-2.5">
+                      <div className="px-5 sm:px-6 py-4 text-[var(--neutral-900)] flex items-start gap-2.5">
                         <span
                           aria-hidden="true"
-                          className="text-[var(--success-text)] font-bold mt-0.5"
+                          className="text-[var(--success-text)] font-bold mt-0.5 shrink-0"
                         >
                           ✓
                         </span>
                         <span>{row.willDo}</span>
                       </div>
-                      <div className="px-6 py-4 text-[var(--neutral-600)] border-t md:border-t-0 md:border-l border-[var(--neutral-200)] flex items-start gap-2.5 bg-[var(--neutral-50)] md:bg-white">
+                      <div className="px-5 sm:px-6 py-4 text-[var(--neutral-600)] border-t md:border-t-0 md:border-l border-[var(--neutral-200)] flex items-start gap-2.5 bg-[var(--neutral-50)] md:bg-white">
                         <span
                           aria-hidden="true"
-                          className="text-[var(--error-text)] font-bold mt-0.5"
+                          className="text-[var(--error-text)] font-bold mt-0.5 shrink-0"
                         >
                           ✕
                         </span>
@@ -265,10 +268,13 @@ export default async function HomePage() {
         </section>
 
         {/* 5. Transparent Pricing & Credit Calculator */}
-        <section id="pricing" className="border-t border-[var(--neutral-200)] py-16 md:py-24">
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6 space-y-8">
+        <section
+          id="pricing"
+          className="border-t border-[var(--neutral-200)] py-14 sm:py-16 md:py-24"
+        >
+          <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10 space-y-8">
             <Reveal>
-              <div className="max-w-[64ch] space-y-3">
+              <div className="max-w-[66ch] space-y-3">
                 <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium">
                   Simple credit packs, pay as you write
                 </h2>
@@ -287,9 +293,12 @@ export default async function HomePage() {
         </section>
 
         {/* 6. Split FAQ */}
-        <section id="faq" className="border-t border-[var(--neutral-200)] bg-white py-16 md:py-24">
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
+        <section
+          id="faq"
+          className="border-t border-[var(--neutral-200)] bg-white py-14 sm:py-16 md:py-24"
+        >
+          <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-14 items-start">
               <div className="lg:col-span-4 lg:sticky lg:top-24">
                 <Reveal className="space-y-4">
                   <h2 className="text-[1.75rem] sm:text-[2.125rem] font-medium">
@@ -302,7 +311,7 @@ export default async function HomePage() {
                   <p className="text-sm pt-1">
                     <Link
                       href="/terms"
-                      className="text-[var(--accent-600)] font-medium underline underline-offset-4"
+                      className="inline-flex items-center min-h-[44px] sm:min-h-0 text-[var(--accent-600)] font-medium underline underline-offset-4"
                     >
                       Read terms and integrity limits
                     </Link>
@@ -314,7 +323,7 @@ export default async function HomePage() {
                 <div className="divide-y divide-[var(--neutral-200)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] bg-[var(--neutral-50)]">
                   {LANDING_FAQS.map((faq) => (
                     <details key={faq.question} className="group p-5 sm:p-6">
-                      <summary className="list-none cursor-pointer flex items-center justify-between gap-4 text-base font-semibold text-[var(--neutral-900)]">
+                      <summary className="list-none cursor-pointer flex items-center justify-between gap-4 min-h-[40px] sm:min-h-0 text-base font-semibold text-[var(--neutral-900)]">
                         <span>{faq.question}</span>
                         <span
                           aria-hidden="true"
@@ -335,11 +344,11 @@ export default async function HomePage() {
         </section>
 
         {/* 7. Final CTA */}
-        <section className="border-t border-[var(--neutral-200)] bg-[var(--neutral-100)] py-16">
-          <div className="mx-auto max-w-[1120px] px-4 sm:px-6">
+        <section className="border-t border-[var(--neutral-200)] bg-[var(--neutral-100)] py-14 sm:py-16">
+          <div className="mx-auto w-full max-w-[1380px] 2xl:max-w-[1520px] px-4 sm:px-6 lg:px-8 xl:px-10">
             <Reveal>
-              <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-8 sm:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                <div className="space-y-2 max-w-[54ch]">
+              <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="space-y-2 max-w-[60ch]">
                   <h2 className="text-[1.75rem] font-medium">
                     Test your topic against real sources first
                   </h2>

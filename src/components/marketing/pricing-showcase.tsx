@@ -70,7 +70,7 @@ export function PricingShowcase({
                 size="sm"
                 value={workType}
                 onChange={handleWorkTypeChange}
-                buttonClassName="bg-[var(--neutral-50)] hover:bg-white"
+                buttonClassName="min-h-[44px] sm:min-h-[38px] bg-[var(--neutral-50)] hover:bg-white"
                 options={[
                   { value: "project", label: "Project (40-70 pages)" },
                   { value: "research", label: "Research paper (15-40 pages)" },
@@ -119,7 +119,7 @@ export function PricingShowcase({
         <button
           type="button"
           onClick={() => setCurrency("usd")}
-          className={`min-h-[38px] px-4 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
+          className={`min-h-[44px] sm:min-h-[40px] px-4 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
             currency === "usd"
               ? "bg-[var(--accent-600)] text-white"
               : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
@@ -130,7 +130,7 @@ export function PricingShowcase({
         <button
           type="button"
           onClick={() => setCurrency("ngn")}
-          className={`min-h-[38px] px-4 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
+          className={`min-h-[44px] sm:min-h-[40px] px-4 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
             currency === "ngn"
               ? "bg-[var(--accent-600)] text-white"
               : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
@@ -140,22 +140,22 @@ export function PricingShowcase({
         </button>
       </div>
 
-      {/* 3 Packs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+      {/* 3 Packs: stacked on phones, crisp 2-column horizontal rows on md tablet, spacious 3-column comparison grid on lg+ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 xl:gap-6 items-stretch">
         {packs.map((pack) => (
           <div
             key={pack.id}
-            className={`bg-white rounded-[var(--radius-md)] p-6 sm:p-7 flex flex-col justify-between gap-6 border transition-shadow duration-200 hover:shadow-[var(--shadow-subtle)] ${
+            className={`bg-white rounded-[var(--radius-md)] p-6 sm:p-7 flex flex-col md:flex-row md:items-center lg:flex-col lg:items-stretch justify-between gap-6 border transition-shadow duration-200 hover:shadow-[var(--shadow-subtle)] ${
               pack.featured
                 ? "border-[var(--accent-600)] ring-1 ring-[var(--accent-600)]"
                 : "border-[var(--neutral-200)]"
             }`}
           >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
+            <div className="space-y-3 md:flex-1 lg:flex-none">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-[var(--accent-600)]">{pack.label}</p>
                 {pack.featured ? (
-                  <span className="px-2.5 py-0.5 text-[11px] font-medium rounded-[var(--radius-sm)] bg-[var(--accent-100)] text-[var(--accent-600)]">
+                  <span className="shrink-0 whitespace-nowrap px-2.5 py-0.5 text-[11px] font-medium rounded-[var(--radius-sm)] bg-[var(--accent-100)] text-[var(--accent-600)]">
                     Most common
                   </span>
                 ) : null}
@@ -186,13 +186,15 @@ export function PricingShowcase({
               </ul>
             </div>
 
-            <LinkButton
-              href={signedIn ? "/billing" : "/sign-up"}
-              variant={pack.featured ? "primary" : "secondary"}
-              fullWidth
-            >
-              {signedIn ? "Top up credits" : "Create account"}
-            </LinkButton>
+            <div className="md:w-48 lg:w-full shrink-0">
+              <LinkButton
+                href={signedIn ? "/billing" : "/sign-up"}
+                variant={pack.featured ? "primary" : "secondary"}
+                fullWidth
+              >
+                {signedIn ? "Top up credits" : "Create account"}
+              </LinkButton>
+            </div>
           </div>
         ))}
       </div>

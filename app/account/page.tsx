@@ -38,7 +38,7 @@ export default async function AccountPage() {
   const hasPassword = Boolean(credential?.password);
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[980px]">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[1240px]">
       <div className="space-y-2">
         <header className="pb-6 border-b border-[var(--neutral-200)] space-y-1">
           <h1 className="text-[1.75rem] sm:text-[2rem] font-medium leading-tight">Account</h1>

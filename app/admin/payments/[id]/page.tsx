@@ -67,29 +67,47 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function EventTable({ events, empty }: { events: EvidenceEvent[]; empty: string }) {
   if (events.length === 0) return <p className="text-sm text-[var(--neutral-500)]">{empty}</p>;
   return (
-    <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-      <table className="w-full text-sm min-w-[560px]">
-        <thead>
-          <tr className="text-left text-xs text-[var(--neutral-500)]">
-            <th className="py-1.5 pr-3 font-medium">When</th>
-            <th className="py-1.5 pr-3 font-medium">What</th>
-            <th className="py-1.5 pr-3 font-medium">IP address</th>
-            <th className="py-1.5 pr-3 font-medium">Device</th>
-            <th className="py-1.5 font-medium">Location</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--neutral-200)]">
-          {events.map((e, i) => (
-            <tr key={i}>
-              <td className="py-1.5 pr-3 tabular-nums whitespace-nowrap">{when(e.at)}</td>
-              <td className="py-1.5 pr-3">{e.what}</td>
-              <td className="py-1.5 pr-3 tabular-nums">{e.ip ?? "—"}</td>
-              <td className="py-1.5 pr-3">{e.device ?? "—"}</td>
-              <td className="py-1.5">{e.location ?? "—"}</td>
+    <div>
+      {/* Stacked cards on mobile (< md) so 5-column audit logs never overflow 375px */}
+      <ul className="md:hidden divide-y divide-[var(--neutral-200)] border-y border-[var(--neutral-200)] list-none p-0 text-xs">
+        {events.map((e, i) => (
+          <li key={i} className="py-2.5 space-y-1">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <span className="font-medium text-[var(--neutral-900)]">{e.what}</span>
+              <span className="text-[var(--neutral-500)] tabular-nums">{when(e.at)}</span>
+            </div>
+            <p className="text-[var(--neutral-600)] [overflow-wrap:anywhere]">
+              IP: <span className="tabular-nums">{e.ip ?? "—"}</span> · {e.device ?? "—"} ·{" "}
+              {e.location ?? "—"}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-[var(--neutral-500)]">
+              <th className="py-1.5 pr-3 font-medium">When</th>
+              <th className="py-1.5 pr-3 font-medium">What</th>
+              <th className="py-1.5 pr-3 font-medium">IP address</th>
+              <th className="py-1.5 pr-3 font-medium">Device</th>
+              <th className="py-1.5 font-medium">Location</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-[var(--neutral-200)]">
+            {events.map((e, i) => (
+              <tr key={i}>
+                <td className="py-1.5 pr-3 tabular-nums whitespace-nowrap">{when(e.at)}</td>
+                <td className="py-1.5 pr-3">{e.what}</td>
+                <td className="py-1.5 pr-3 tabular-nums">{e.ip ?? "—"}</td>
+                <td className="py-1.5 pr-3">{e.device ?? "—"}</td>
+                <td className="py-1.5">{e.location ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -165,7 +183,7 @@ export default async function PaymentEvidencePage({ params }: { params: Promise<
   const openDispute = ev.reversals.find((r) => r.kind === "dispute" && !r.resolvedAt);
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[980px]">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[1240px]">
       <article className="space-y-8 print:space-y-6">
         <header className="border-b border-[var(--neutral-200)] pb-5 flex flex-wrap items-end justify-between gap-3">
           <div>

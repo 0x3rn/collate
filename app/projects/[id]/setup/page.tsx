@@ -29,7 +29,7 @@ export default async function ProjectSetupPage({ params }: { params: Promise<{ i
   const allowDevPreview = runtimeEnv.APP_ENV?.trim() === "dev";
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[860px]">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[1160px]">
       <div className="space-y-6">
         <div className="space-y-3">
           <Link

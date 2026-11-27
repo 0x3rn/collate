@@ -359,7 +359,7 @@ export function ChangeEmailButton({ currentEmail }: { currentEmail: string }) {
         {step === "done" ? (
           <div className="space-y-4">
             <FormAlert tone="success">
-              Your email is now {newEmail.trim().toLowerCase()}. We let your old address know.
+              Your email has been updated to {newEmail.trim().toLowerCase()}.
             </FormAlert>
             <Button type="button" fullWidth onClick={() => setOpen(false)}>
               Done

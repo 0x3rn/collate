@@ -497,7 +497,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
               aria-selected={mode === "read"}
               disabled={!hasDraft}
               onClick={() => setMode("read")}
-              className={`min-h-[34px] px-3 sm:px-3.5 py-1.5 text-sm font-medium rounded-[4px] whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 ${
+              className={`min-h-[40px] sm:min-h-[36px] px-3 sm:px-3.5 py-1.5 text-sm font-medium rounded-[4px] whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 ${
                 mode === "read"
                   ? "bg-[var(--accent-600)] text-white shadow-xs"
                   : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
@@ -514,7 +514,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 setPreviewVersion(null);
                 setMode("edit");
               }}
-              className={`min-h-[34px] px-3 sm:px-3.5 py-1.5 text-sm font-medium rounded-[4px] whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 ${
+              className={`min-h-[40px] sm:min-h-[36px] px-3 sm:px-3.5 py-1.5 text-sm font-medium rounded-[4px] whitespace-nowrap transition-colors cursor-pointer disabled:opacity-50 ${
                 mode === "edit"
                   ? "bg-[var(--accent-600)] text-white shadow-xs"
                   : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"

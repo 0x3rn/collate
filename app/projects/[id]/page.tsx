@@ -136,7 +136,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   });
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[980px]">
+    <WorkspaceShell user={user} maxWidthClassName="max-w-[1280px]">
       <div className="space-y-7">
         {/* Clean separated breadcrumb + structured project header */}
         <header className="space-y-4 border-b border-[var(--neutral-200)] pb-6">
@@ -179,7 +179,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 ) : null}
               </div>
 
-              <h1 className="text-2xl sm:text-[1.875rem] font-medium leading-[1.25] text-[var(--neutral-900)]">
+              <h1 className="text-xl sm:text-2xl lg:text-[1.75rem] font-medium leading-[1.25] text-[var(--neutral-900)] [overflow-wrap:anywhere]">
                 {project.title}
               </h1>
 

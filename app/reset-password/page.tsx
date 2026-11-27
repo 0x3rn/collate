@@ -24,10 +24,12 @@ export default async function ResetPasswordPage({
   return (
     <>
       <SiteHeader user={user} />
-      <main className="flex-1 mx-auto w-full max-w-[420px] px-4 sm:px-0 py-14 sm:py-20">
-        <div className="space-y-7">
+      <main className="flex-1 w-full flex items-center justify-center px-4 sm:px-6 py-10 sm:py-16">
+        <div className="w-full max-w-[460px] bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 sm:p-8 shadow-[var(--shadow-subtle)] space-y-6">
           <div className="space-y-1.5">
-            <h1 className="text-[2rem] font-medium leading-tight">Choose a new password</h1>
+            <h1 className="text-[1.875rem] sm:text-[2rem] font-medium leading-tight">
+              Choose a new password
+            </h1>
             <p className="text-sm text-[var(--neutral-600)]">
               Updating your password signs out existing sessions on all devices.
             </p>

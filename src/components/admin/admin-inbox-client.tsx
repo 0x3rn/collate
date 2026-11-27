@@ -103,11 +103,11 @@ export function AdminInboxClient({ addresses }: { addresses: Record<Tab, string>
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       <div
         role="tablist"
         aria-label="Email"
-        className="flex gap-1 overflow-x-auto border-b border-[var(--neutral-200)] -mx-4 px-4 sm:mx-0 sm:px-0"
+        className="flex flex-wrap gap-x-1 gap-y-0.5 border-b border-[var(--neutral-200)]"
       >
         {TABS.map((t) => {
           const count = t.id in unread ? unread[t.id as Mailbox] : 0;
@@ -119,7 +119,7 @@ export function AdminInboxClient({ addresses }: { addresses: Record<Tab, string>
               role="tab"
               aria-selected={active}
               onClick={() => setTab(t.id)}
-              className={`shrink-0 inline-flex items-center gap-2 px-3 py-2.5 text-sm border-b-2 -mb-px transition-colors ${
+              className={`shrink-0 inline-flex items-center gap-1.5 min-h-[42px] px-2.5 sm:px-3 py-2 text-xs sm:text-sm border-b-2 -mb-px transition-colors cursor-pointer ${
                 active
                   ? "border-[var(--accent-600)] text-[var(--neutral-900)] font-medium"
                   : "border-transparent text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"
@@ -187,18 +187,18 @@ function MailboxView({
   }, [load]);
 
   return (
-    <div className="grid lg:grid-cols-[340px_1fr] gap-5 items-start">
+    <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)] gap-5 items-start min-w-0">
       <section
-        className={`${selected ? "hidden lg:block" : ""} space-y-3`}
+        className={`${selected ? "hidden xl:block" : ""} space-y-3 min-w-0 w-full overflow-hidden`}
         aria-label="Conversations"
       >
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1.5">
           {(["open", "closed", "all"] as const).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setStatus(s)}
-              className={`px-3 py-1.5 text-xs rounded-full border ${
+              className={`min-h-[36px] px-3 py-1.5 text-xs rounded-full border cursor-pointer ${
                 status === s
                   ? "bg-[var(--neutral-900)] text-white border-[var(--neutral-900)]"
                   : "border-[var(--neutral-300)] text-[var(--neutral-700)] hover:bg-[var(--neutral-100)]"
@@ -215,23 +215,23 @@ function MailboxView({
         {threads?.length === 0 && (
           <p className="text-sm text-[var(--neutral-500)] py-6">No conversations here.</p>
         )}
-        <ul className="divide-y divide-[var(--neutral-200)] border-y border-[var(--neutral-200)]">
+        <ul className="divide-y divide-[var(--neutral-200)] border-y border-[var(--neutral-200)] list-none p-0 min-w-0">
           {threads?.map((t) => (
-            <li key={t.id}>
+            <li key={t.id} className="min-w-0">
               <button
                 type="button"
                 onClick={() => setSelected(t.id)}
-                className={`w-full text-left py-3 px-2 -mx-2 rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] ${
+                className={`w-full min-w-0 overflow-hidden text-left py-3 px-2 rounded-[var(--radius-sm)] hover:bg-[var(--neutral-100)] cursor-pointer ${
                   selected === t.id ? "bg-[var(--neutral-100)]" : ""
                 }`}
               >
-                <div className="flex items-baseline justify-between gap-3">
+                <div className="flex items-baseline justify-between gap-2 min-w-0">
                   <span
-                    className={`text-sm truncate ${t.unread ? "font-semibold text-[var(--neutral-900)]" : "text-[var(--neutral-800)]"}`}
+                    className={`min-w-0 flex-1 text-sm truncate ${t.unread ? "font-semibold text-[var(--neutral-900)]" : "text-[var(--neutral-800)]"}`}
                   >
                     {t.contactName || t.contactEmail}
                   </span>
-                  <span className="text-xs text-[var(--neutral-500)] shrink-0">
+                  <span className="text-xs text-[var(--neutral-500)] shrink-0 tabular-nums">
                     {formatWhen(t.lastMessageAt)}
                   </span>
                 </div>
@@ -246,8 +246,10 @@ function MailboxView({
                   )}
                   {t.subject}
                 </p>
-                <div className="flex items-center justify-between gap-2 mt-0.5">
-                  <p className="text-xs text-[var(--neutral-500)] truncate">{t.preview}</p>
+                <div className="flex items-center justify-between gap-2 mt-0.5 min-w-0">
+                  <p className="min-w-0 flex-1 text-xs text-[var(--neutral-500)] truncate">
+                    {t.preview}
+                  </p>
                   {t.attachmentCount && t.attachmentCount > 0 ? (
                     <span className="text-[11px] text-[var(--neutral-500)] shrink-0">
                       {t.attachmentCount} file{t.attachmentCount === 1 ? "" : "s"}
@@ -260,7 +262,7 @@ function MailboxView({
         </ul>
       </section>
 
-      <section className={selected ? "" : "hidden lg:block"} aria-label="Conversation">
+      <section className={`${selected ? "" : "hidden xl:block"} min-w-0`} aria-label="Conversation">
         {selected ? (
           <ThreadView
             key={selected}
@@ -377,7 +379,7 @@ function ThreadView({
         <button
           type="button"
           onClick={onBack}
-          className="lg:hidden text-sm text-[var(--accent-700)] shrink-0 py-1"
+          className="xl:hidden min-h-[36px] text-sm font-medium text-[var(--accent-700)] shrink-0 py-1 cursor-pointer"
         >
           Back
         </button>
@@ -733,8 +735,8 @@ function BroadcastView({ kind }: { kind: BroadcastKind }) {
 
       {error && <FormAlert tone="error">{error}</FormAlert>}
 
-      <div className="grid lg:grid-cols-2 gap-6 items-start">
-        <div className="space-y-3">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+        <div className="space-y-3 min-w-0">
           <div className="space-y-1.5">
             <label htmlFor="bc-subject" className="text-sm font-medium text-[var(--neutral-800)]">
               Subject

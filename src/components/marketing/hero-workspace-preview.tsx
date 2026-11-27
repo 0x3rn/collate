@@ -112,7 +112,7 @@ export function HeroWorkspacePreview() {
               role="tab"
               aria-selected={active}
               onClick={() => handleSelectTab(item.id)}
-              className={`min-h-[42px] px-2 sm:px-3 py-2 text-center transition-colors duration-150 cursor-pointer border-b-2 ${
+              className={`min-h-[44px] px-2 sm:px-3 py-2 text-center transition-colors duration-150 cursor-pointer border-b-2 ${
                 active
                   ? "border-[var(--accent-600)] text-[var(--accent-600)] bg-white font-semibold"
                   : "border-transparent text-[var(--neutral-600)] hover:text-[var(--neutral-900)]"
@@ -136,23 +136,31 @@ export function HeroWorkspacePreview() {
                 : "opacity-0 invisible pointer-events-none select-none"
             }`}
           >
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                <p className="text-[11px] text-[var(--neutral-600)]">Sources verified</p>
-                <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums">
+            <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
+              <div className="p-2.5 sm:p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)] min-w-0">
+                <p className="text-[11px] text-[var(--neutral-600)] leading-tight">
+                  Sources verified
+                </p>
+                <p className="text-sm sm:text-base font-semibold text-[var(--neutral-900)] tabular-nums mt-0.5">
                   38{" "}
-                  <span className="text-xs font-normal text-[var(--neutral-500)]">/ 30 needed</span>
+                  <span className="block sm:inline text-[11px] sm:text-xs font-normal text-[var(--neutral-500)]">
+                    / 30 needed
+                  </span>
                 </p>
               </div>
-              <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                <p className="text-[11px] text-[var(--neutral-600)]">Ideal length</p>
-                <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums">
+              <div className="p-2.5 sm:p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)] min-w-0">
+                <p className="text-[11px] text-[var(--neutral-600)] leading-tight">Ideal length</p>
+                <p className="text-sm sm:text-base font-semibold text-[var(--neutral-900)] tabular-nums mt-0.5">
                   80 pages
                 </p>
               </div>
-              <div className="p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)]">
-                <p className="text-[11px] text-[var(--neutral-600)]">Citation style</p>
-                <p className="text-base font-semibold text-[var(--neutral-900)]">APA 7th ed.</p>
+              <div className="p-2.5 sm:p-3 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)] min-w-0">
+                <p className="text-[11px] text-[var(--neutral-600)] leading-tight">
+                  Citation style
+                </p>
+                <p className="text-sm sm:text-base font-semibold text-[var(--neutral-900)] mt-0.5">
+                  APA 7th ed.
+                </p>
               </div>
             </div>
 
