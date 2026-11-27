@@ -29,8 +29,26 @@ export interface EvidenceEvent {
   location: string | null;
 }
 
+export interface ProviderPaymentDetails {
+  /** Provider-assigned transaction / order identifier (Paystack transaction ID or Polar order ID). */
+  providerTransactionId: string | null;
+  /** Human label matching the provider ("Paystack transaction ID", "Polar order", etc.). */
+  providerTransactionIdLabel: string | null;
+  /** Payment channel and card/bank summary when present in the webhook record. */
+  paymentMethod: string | null;
+  /** Gateway authorization response (e.g. Paystack "Successful"). */
+  gatewayResponse: string | null;
+  /** Provider customer reference (e.g. Paystack CUS_... or Polar customer ID). */
+  providerCustomerId: string | null;
+  /** Provider mode when reported ("live" or "test"). */
+  environment: "live" | "test" | null;
+  /** Provider settlement timestamp when reported. */
+  paidAt: Date | null;
+}
+
 export interface DisputeEvidence {
   payment: typeof payments.$inferSelect;
+  providerDetails: ProviderPaymentDetails;
   customer: {
     id: string;
     name: string;
@@ -121,6 +139,124 @@ const fmtDate = (d: Date) =>
   }) + " UTC";
 const money = (currency: string, minor: number) =>
   `${currency.toUpperCase()} ${(minor / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+
+/** Clean display name for a payment provider. */
+export function formatPaymentProvider(provider: string): string {
+  const p = provider.trim().toLowerCase();
+  if (p === "polar") return "Polar";
+  if (p === "paystack") return "Paystack";
+  if (p === "stripe") return "Stripe";
+  return provider;
+}
+
+function readStr(v: unknown): string | null {
+  if (typeof v === "string" && v.trim()) return v.trim();
+  if (typeof v === "number" && Number.isFinite(v)) return String(v);
+  return null;
+}
+
+function readIsoDate(v: unknown): Date | null {
+  if (typeof v !== "string" || !v.trim()) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function titleChannel(channel: string): string {
+  return channel
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
+/**
+ * Extracts provider-specific transaction identifiers and payment method metadata from
+ * the payment row and its stored webhook payload (works for Paystack, Polar, and Stripe).
+ */
+export function extractProviderPaymentDetails(
+  payment: typeof payments.$inferSelect
+): ProviderPaymentDetails {
+  let raw: Record<string, unknown> | null = null;
+  if (payment.rawEventJson) {
+    try {
+      const parsed = JSON.parse(payment.rawEventJson);
+      if (parsed && typeof parsed === "object") raw = parsed as Record<string, unknown>;
+    } catch {
+      raw = null;
+    }
+  }
+  const data =
+    raw && raw.data && typeof raw.data === "object" ? (raw.data as Record<string, unknown>) : null;
+
+  if (payment.provider === "paystack") {
+    const auth =
+      data?.authorization && typeof data.authorization === "object"
+        ? (data.authorization as Record<string, unknown>)
+        : data?.card && typeof data.card === "object"
+          ? (data.card as Record<string, unknown>)
+          : null;
+    const customer =
+      data?.customer && typeof data.customer === "object"
+        ? (data.customer as Record<string, unknown>)
+        : null;
+    const channel = readStr(data?.channel) ?? readStr(auth?.channel);
+    const brand = readStr(auth?.brand) ?? readStr(auth?.card_type);
+    const last4 = readStr(auth?.last4);
+    const bank = readStr(auth?.bank);
+    const details = [
+      brand ? brand.trim() : null,
+      last4 ? `ending ${last4}` : null,
+      bank ? bank.trim() : null,
+    ].filter(Boolean);
+    const paymentMethod = channel
+      ? details.length > 0
+        ? `${titleChannel(channel)} (${details.join(" · ")})`
+        : titleChannel(channel)
+      : details.length > 0
+        ? details.join(" · ")
+        : null;
+    const domain = readStr(data?.domain)?.toLowerCase();
+    return {
+      providerTransactionId: payment.providerOrderId ?? readStr(data?.id),
+      providerTransactionIdLabel: "Paystack transaction ID",
+      paymentMethod,
+      gatewayResponse: readStr(data?.gateway_response),
+      providerCustomerId: readStr(customer?.customer_code) ?? readStr(customer?.id),
+      environment: domain === "test" ? "test" : domain === "live" ? "live" : null,
+      paidAt: readIsoDate(data?.paid_at) ?? readIsoDate(data?.paidAt),
+    };
+  }
+
+  if (payment.provider === "polar") {
+    const customer =
+      data?.customer && typeof data.customer === "object"
+        ? (data.customer as Record<string, unknown>)
+        : null;
+    return {
+      providerTransactionId: payment.providerOrderId ?? readStr(data?.id),
+      providerTransactionIdLabel: "Polar order",
+      paymentMethod: null,
+      gatewayResponse: null,
+      providerCustomerId: readStr(data?.customer_id) ?? readStr(customer?.id),
+      environment: null,
+      paidAt: readIsoDate(data?.created_at),
+    };
+  }
+
+  const stripeObj =
+    data?.object && typeof data.object === "object"
+      ? (data.object as Record<string, unknown>)
+      : null;
+  return {
+    providerTransactionId: payment.providerOrderId ?? readStr(stripeObj?.payment_intent),
+    providerTransactionIdLabel:
+      payment.provider === "stripe" ? "Stripe payment intent" : "Provider ID",
+    paymentMethod: null,
+    gatewayResponse: null,
+    providerCustomerId: readStr(stripeObj?.customer),
+    environment: null,
+    paidAt: null,
+  };
+}
 
 /** Only settled payments that actually completed have an enforceable transaction record. */
 export function isSettledPaymentStatus(status: string): boolean {
@@ -339,8 +475,11 @@ export async function buildDisputeEvidence(
     ),
   ];
 
+  const providerDetails = extractProviderPaymentDetails(payment);
+
   const summary = buildSummary({
     payment,
+    providerDetails,
     user,
     checkout,
     accountCreated,
@@ -349,12 +488,12 @@ export async function buildDisputeEvidence(
     chaptersDelivered,
     downloads,
     signInCount: signIns.length,
-    supportThreadCount: supportThreads.length,
     otherPayments,
   });
 
   return {
     payment,
+    providerDetails,
     customer: {
       id: user.id,
       name: user.name,
@@ -383,6 +522,7 @@ export async function buildDisputeEvidence(
 /** A plain statement to paste into Polar's or Paystack's dispute form. */
 function buildSummary(p: {
   payment: typeof payments.$inferSelect;
+  providerDetails: ProviderPaymentDetails;
   user: typeof users.$inferSelect;
   checkout: DisputeEvidence["checkout"];
   accountCreated: DisputeEvidence["accountCreated"];
@@ -391,13 +531,19 @@ function buildSummary(p: {
   chaptersDelivered: DisputeEvidence["chaptersDelivered"];
   downloads: EvidenceEvent[];
   signInCount: number;
-  supportThreadCount: number;
   otherPayments: DisputeEvidence["otherPayments"];
 }): string {
   const parts: string[] = [];
+  const providerName = formatPaymentProvider(p.payment.provider);
+  const idParts = [
+    `reference ${p.payment.providerReference}`,
+    p.providerDetails.providerTransactionId && p.providerDetails.providerTransactionIdLabel
+      ? `${p.providerDetails.providerTransactionIdLabel} ${p.providerDetails.providerTransactionId}`
+      : null,
+  ].filter(Boolean);
   parts.push(
     `${LEGAL_CONFIG.serviceName} (${LEGAL_CONFIG.siteUrl}) sells prepaid credits that are spent to generate academic chapter drafts. ` +
-      `On ${fmtDate(p.payment.createdAt)}, ${p.user.name} (${p.user.email}) paid ${money(p.payment.currency, p.payment.amountMinor)} via ${p.payment.provider === "polar" ? "Polar" : "Paystack"} (reference ${p.payment.providerReference}) for ${p.payment.creditsGranted} credits.`
+      `On ${fmtDate(p.payment.createdAt)}, ${p.user.name} (${p.user.email}) paid ${money(p.payment.currency, p.payment.amountMinor)} via ${providerName} (${idParts.join(", ")}) for ${p.payment.creditsGranted} credits.`
   );
   if (p.checkout.termsAccepted) {
     parts.push(
@@ -468,14 +614,6 @@ function buildSummary(p: {
   if (p.creditsUsedSincePayment > 0 || p.chaptersDelivered.length > 0) {
     parts.push(
       "The service was delivered as described. Section 5.5 of our Refund Policy states that credits already spent on completed chapters are not refundable."
-    );
-  }
-  parts.push(
-    "Section 5.7 of our Refund Policy asks customers to contact support before filing a chargeback."
-  );
-  if (p.supportThreadCount === 0) {
-    parts.push(
-      "We have no record of this customer contacting our support, billing or general addresses."
     );
   }
   return parts.join(" ");

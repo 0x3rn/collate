@@ -7,13 +7,14 @@ import { ModalCard } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
 import { renderBroadcastHtml } from "@/lib/inbox/broadcast-format";
 
-type Mailbox = "support" | "billing" | "general";
+type Mailbox = "support" | "billing" | "disputes" | "general";
 type BroadcastKind = "announcement" | "promotion";
 type Tab = Mailbox | BroadcastKind;
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "support", label: "Support" },
   { id: "billing", label: "Billing" },
+  { id: "disputes", label: "Disputes" },
   { id: "general", label: "General inquiry" },
   { id: "announcement", label: "Announcements" },
   { id: "promotion", label: "Promotions" },
@@ -29,6 +30,7 @@ interface ThreadSummary {
   unread: boolean;
   lastMessageAt: string;
   preview: string;
+  attachmentCount?: number;
 }
 
 interface ThreadMessage {
@@ -82,11 +84,21 @@ async function readJson<T>(res: Response): Promise<T & { ok?: boolean; error?: s
   return (await res.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
 }
 
+function isInlinePreviewImage(contentType: string): boolean {
+  return /^image\/(png|jpe?g|gif|webp)$/i.test(contentType.split(";")[0]?.trim() ?? "");
+}
+
+function isPdfAttachment(contentType: string, filename: string): boolean {
+  const mime = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  return mime === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
+}
+
 export function AdminInboxClient({ addresses }: { addresses: Record<Tab, string> }) {
   const [tab, setTab] = useState<Tab>("support");
   const [unread, setUnread] = useState<Record<Mailbox, number>>({
     support: 0,
     billing: 0,
+    disputes: 0,
     general: 0,
   });
 
@@ -125,7 +137,7 @@ export function AdminInboxClient({ addresses }: { addresses: Record<Tab, string>
       </div>
       <p className="text-xs text-[var(--neutral-500)] -mt-3">{addresses[tab]}</p>
 
-      {tab === "support" || tab === "billing" || tab === "general" ? (
+      {tab === "support" || tab === "billing" || tab === "disputes" || tab === "general" ? (
         <MailboxView key={tab} mailbox={tab} onUnread={setUnread} />
       ) : (
         <BroadcastView key={tab} kind={tab} />
@@ -234,7 +246,14 @@ function MailboxView({
                   )}
                   {t.subject}
                 </p>
-                <p className="text-xs text-[var(--neutral-500)] truncate mt-0.5">{t.preview}</p>
+                <div className="flex items-center justify-between gap-2 mt-0.5">
+                  <p className="text-xs text-[var(--neutral-500)] truncate">{t.preview}</p>
+                  {t.attachmentCount && t.attachmentCount > 0 ? (
+                    <span className="text-[11px] text-[var(--neutral-500)] shrink-0">
+                      {t.attachmentCount} file{t.attachmentCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                </div>
               </button>
             </li>
           ))}
@@ -385,33 +404,100 @@ function ThreadView({
           const mine = m.direction === "outbound";
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] sm:max-w-[75%] space-y-1 ${mine ? "items-end" : ""}`}>
-                <div
-                  className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${
-                    mine
-                      ? "bg-[var(--accent-600)] text-white rounded-br-md"
-                      : "bg-[var(--neutral-100)] text-[var(--neutral-900)] rounded-bl-md"
-                  }`}
-                >
-                  {m.text || <span className="italic opacity-70">(no text)</span>}
-                </div>
+              <div className={`max-w-[85%] sm:max-w-[75%] space-y-1.5 ${mine ? "items-end" : ""}`}>
+                {(m.text || m.attachments.length === 0) && (
+                  <div
+                    className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere] ${
+                      mine
+                        ? "bg-[var(--accent-600)] text-white rounded-br-md"
+                        : "bg-[var(--neutral-100)] text-[var(--neutral-900)] rounded-bl-md"
+                    }`}
+                  >
+                    {m.text || <span className="italic opacity-70">(no text)</span>}
+                  </div>
+                )}
                 {m.attachments.length > 0 && (
                   <ul className={`flex flex-wrap gap-2 ${mine ? "justify-end" : ""}`}>
-                    {m.attachments.map((a) => (
-                      <li key={a.id}>
-                        <a
-                          href={`/api/admin/inbox/attachments/${encodeURIComponent(a.id)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs border border-[var(--neutral-300)] rounded-full px-3 py-1 hover:bg-[var(--neutral-100)] max-w-[240px]"
+                    {m.attachments.map((a) => {
+                      const viewUrl = `/api/admin/inbox/attachments/${encodeURIComponent(a.id)}`;
+                      const downloadUrl = `${viewUrl}?download=1`;
+                      const isImage = isInlinePreviewImage(a.contentType);
+                      const isPdf = isPdfAttachment(a.contentType, a.filename);
+                      if (isImage) {
+                        return (
+                          <li
+                            key={a.id}
+                            className="border border-[var(--neutral-200)] rounded-[var(--radius-sm)] bg-[var(--neutral-50)] overflow-hidden max-w-[260px]"
+                          >
+                            <a
+                              href={viewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block bg-white"
+                              title={`Open ${a.filename}`}
+                            >
+                              <img
+                                src={viewUrl}
+                                alt={a.filename}
+                                loading="lazy"
+                                className="max-h-[180px] w-full object-contain bg-[var(--neutral-50)]"
+                              />
+                            </a>
+                            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs border-t border-[var(--neutral-200)]">
+                              <span
+                                className="truncate text-[var(--neutral-800)]"
+                                title={a.filename}
+                              >
+                                {a.filename}
+                              </span>
+                              <span className="text-[var(--neutral-500)] shrink-0">
+                                {formatSize(a.size)}
+                              </span>
+                              <a
+                                href={downloadUrl}
+                                download={a.filename}
+                                className="text-[var(--accent-700)] underline underline-offset-2 shrink-0"
+                              >
+                                Download
+                              </a>
+                            </div>
+                          </li>
+                        );
+                      }
+                      return (
+                        <li
+                          key={a.id}
+                          className="inline-flex items-center gap-2 text-xs border border-[var(--neutral-300)] bg-white rounded-[var(--radius-sm)] px-3 py-1.5 max-w-[320px]"
                         >
-                          <span className="truncate">{a.filename}</span>
+                          <span
+                            className="truncate font-medium text-[var(--neutral-900)]"
+                            title={a.filename}
+                          >
+                            {a.filename}
+                          </span>
                           <span className="text-[var(--neutral-500)] shrink-0">
                             {formatSize(a.size)}
                           </span>
-                        </a>
-                      </li>
-                    ))}
+                          {isPdf && (
+                            <a
+                              href={viewUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[var(--accent-700)] underline underline-offset-2 shrink-0"
+                            >
+                              View
+                            </a>
+                          )}
+                          <a
+                            href={downloadUrl}
+                            download={a.filename}
+                            className="text-[var(--accent-700)] underline underline-offset-2 shrink-0"
+                          >
+                            Download
+                          </a>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
                 <p className={`text-[11px] text-[var(--neutral-500)] ${mine ? "text-right" : ""}`}>

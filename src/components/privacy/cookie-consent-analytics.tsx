@@ -303,7 +303,7 @@ export function CookieConsentAnalytics({ measurementId }: { measurementId?: stri
             className="!min-h-[36px] !px-3.5 text-xs"
             onClick={() => void handleChoice("accepted")}
           >
-            Accept analytics
+            Accept
           </Button>
         </div>
       </div>

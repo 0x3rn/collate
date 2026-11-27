@@ -45,7 +45,7 @@ export default {
   },
 
   /**
-   * Incoming mail for support@, billing@ and hello@ (routed here by Cloudflare Email Routing).
+   * Incoming mail for support@, billing@, disputes@ and hello@ (routed here by Cloudflare Email Routing).
    * Each email is stored in the admin inbox tab for its address.
    */
   async email(message: IncomingEmail, env: Env): Promise<void> {
@@ -55,8 +55,10 @@ export default {
     }
     const runtimeEnv = env as unknown as Record<string, unknown>;
     try {
+      // Buffer message.raw once before parsing (Cloudflare's raw stream is single-use).
+      const rawBuffer = await new Response(message.raw).arrayBuffer();
       await receiveInboundEmail(
-        { from: message.from, to: message.to, raw: message.raw },
+        { from: message.from, to: message.to, raw: rawBuffer },
         {
           db: createDb(env.DB),
           bucket: runtimeEnv.FILES as unknown as InboxBucket,

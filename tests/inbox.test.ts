@@ -259,6 +259,109 @@ describe("admin email inbox", () => {
       "billing@collateresearch.app"
     );
     expect(billing.mailbox).toBe("billing");
+
+    const dispute = await receive(
+      rawEmail({
+        from: "ada@gmail.com",
+        to: "disputes@collateresearch.app",
+        subject: "Chargeback inquiry",
+        body: "Checking on a charge.",
+        messageId: "<d1@gmail.com>",
+      }),
+      "ada@gmail.com",
+      "disputes@collateresearch.app"
+    );
+    expect(dispute.mailbox).toBe("disputes");
+    expect(alerts[alerts.length - 1]).toContain("Disputes");
+  });
+
+  it("keeps inline Gmail images and Apple Mail inline PDFs while ignoring tiny unnamed pixels", async () => {
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+    const pdfBytes = new TextEncoder().encode("%PDF-1.4\n1 0 obj<<>>endobj\n%%EOF");
+    const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
+    const raw = [
+      "From: Ada Obi <ada@gmail.com>",
+      "To: support@collateresearch.app",
+      "Subject: Payment receipt",
+      "Message-ID: <inline-test@gmail.com>",
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/mixed; boundary="outer"',
+      "",
+      "--outer",
+      'Content-Type: multipart/related; boundary="rel"',
+      "",
+      "--rel",
+      "Content-Type: text/html; charset=utf-8",
+      "",
+      '<p>See screenshot below:</p><img src="cid:ii_shot1">',
+      "--rel",
+      'Content-Type: image/png; name="receipt.png"',
+      'Content-Disposition: inline; filename="receipt.png"',
+      "Content-ID: <ii_shot1>",
+      "Content-Transfer-Encoding: base64",
+      "",
+      b64(pngBytes),
+      "--rel",
+      "Content-Type: image/gif",
+      "Content-Disposition: inline",
+      "Content-ID: <pixel_1>",
+      "Content-Transfer-Encoding: base64",
+      "",
+      b64(new Uint8Array([71, 73, 70, 56, 57, 97])), // 6-byte unnamed related pixel -> skipped
+      "--rel--",
+      "--outer",
+      'Content-Type: application/pdf; name="bank-slip.pdf"',
+      'Content-Disposition: inline; filename="bank-slip.pdf"',
+      "Content-ID: <apple_pdf_1>",
+      "Content-Transfer-Encoding: base64",
+      "",
+      b64(pdfBytes),
+      "--outer--",
+      "",
+    ].join("\r\n");
+
+    const { threadId } = await receive(raw, "ada@gmail.com");
+    const admin = await account(ADMIN);
+
+    const listRes = await handleListThreads(
+      get("/api/admin/inbox/threads?mailbox=support", admin.cookie),
+      deps
+    );
+    const listBody = (await listRes.json()) as {
+      threads: Array<{ id: string; attachmentCount: number }>;
+    };
+    expect(listBody.threads.find((t) => t.id === threadId)?.attachmentCount).toBe(2);
+
+    const detailRes = await handleGetThread(
+      get(`/api/admin/inbox/threads/${threadId}`, admin.cookie),
+      threadId,
+      deps
+    );
+    const detail = (await detailRes.json()) as {
+      messages: Array<{
+        attachments: Array<{ id: string; filename: string; contentType: string; size: number }>;
+      }>;
+    };
+    const atts = detail.messages[0]!.attachments;
+    expect(atts.map((a) => a.filename).sort()).toEqual(["bank-slip.pdf", "receipt.png"]);
+
+    const pdfAtt = atts.find((a) => a.filename === "bank-slip.pdf")!;
+    const pdfView = await handleDownloadAttachment(
+      get(`/api/admin/inbox/attachments/${pdfAtt.id}`, admin.cookie),
+      pdfAtt.id,
+      deps
+    );
+    expect(pdfView.status).toBe(200);
+    expect(pdfView.headers.get("content-type")).toBe("application/pdf");
+    expect(pdfView.headers.get("content-disposition")).toMatch(/^inline;/);
+    expect(new Uint8Array(await pdfView.arrayBuffer())).toEqual(pdfBytes);
+
+    const pdfDl = await handleDownloadAttachment(
+      get(`/api/admin/inbox/attachments/${pdfAtt.id}?download=1`, admin.cookie),
+      pdfAtt.id,
+      deps
+    );
+    expect(pdfDl.headers.get("content-disposition")).toMatch(/^attachment;/);
   });
 
   it("never lets a forged From line join someone else's conversation", async () => {
@@ -311,7 +414,7 @@ describe("admin email inbox", () => {
     expect(stripQuotedReply("Thanks!\n\nOn Tue, 3 Nov, Collate wrote:\n> earlier")).toBe("Thanks!");
   });
 
-  it("sends a threaded reply with attachments and records it", async () => {
+  it("sends a reply from Collate with raw binary attachments and preserves admin thread continuity", async () => {
     const { threadId } = await receive(
       rawEmail({
         from: "ada@gmail.com",
@@ -322,6 +425,13 @@ describe("admin email inbox", () => {
       }),
       "ada@gmail.com"
     );
+    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+    const customMailer: EmailSender = {
+      async send(m) {
+        sent.push(m);
+        return { ok: true, provider: "cloudflare", messageId: "cf_reply_1@collateresearch.app" };
+      },
+    };
     const res = await sendThreadReply(
       {
         threadId,
@@ -330,29 +440,74 @@ describe("admin email inbox", () => {
           {
             filename: "guide.pdf",
             contentType: "application/pdf",
-            bytes: new Uint8Array([1, 2, 3]),
+            bytes: pdfBytes,
           },
         ],
       },
-      { db, bucket: deps.bucket, mailer: deps.mailer, mailboxes }
+      { db, bucket: deps.bucket, mailer: customMailer, mailboxes }
     );
     expect(res.ok).toBe(true);
     const mail = sent[sent.length - 1]!;
     expect(mail.to).toBe("ada@gmail.com");
-    expect(mail.subject).toBe("Re: Help");
+    expect(mail.from).toBe("Collate <support@collateresearch.app>");
+    expect(mail.subject).toBe("[Collate] Help");
     expect(mail.replyTo).toBe("support@collateresearch.app");
-    expect(mail.headers?.["In-Reply-To"]).toBe("<h1@gmail.com>");
-    // The person’s message is quoted under the reply, like a normal mail app reply.
+    // Outbound replies omit In-Reply-To/References so Gmail displays "Collate" instead of "me, Collate".
+    expect(mail.headers).toBeUndefined();
+    // The person’s message is quoted under the reply for context.
     expect(mail.text).toMatch(/^Here is the file\.\n\nOn .+ UTC, ada@gmail\.com wrote:\n> Hi$/);
     expect(mail.html).toContain('<blockquote class="gmail_quote"');
-    // Cloudflare refuses a custom Message-ID, so it must never be sent.
-    expect(Object.keys(mail.headers ?? {})).toEqual(["In-Reply-To", "References"]);
-    expect(mail.attachments?.[0]).toMatchObject({ filename: "guide.pdf", content: "AQID" });
+    // Attachments must be raw binary bytes (Uint8Array), not a base64 string.
+    expect(mail.attachments?.[0]?.filename).toBe("guide.pdf");
+    expect(mail.attachments?.[0]?.content).toBeInstanceOf(Uint8Array);
+    expect(Array.from(mail.attachments?.[0]?.content as Uint8Array)).toEqual(Array.from(pdfBytes));
+
     const outbound = await db
       .select()
       .from(emailMessages)
       .where(eq(emailMessages.direction, "outbound"));
     expect(outbound).toHaveLength(1);
+    expect(outbound[0]!.messageIdHeader).toBe("<cf_reply_1@collateresearch.app>");
+
+    // Customer replying to Collate's email still threads back into the same admin conversation,
+    // both by In-Reply-To (matching Cloudflare's Message-ID) and by normalized subject fallback.
+    const followUp = await receive(
+      rawEmail({
+        from: "ada@gmail.com",
+        to: "support@collateresearch.app",
+        subject: "Re: [Collate] Help",
+        body: "Got it, thanks!",
+        messageId: "<h2@gmail.com>",
+        inReplyTo: "<cf_reply_1@collateresearch.app>",
+      }),
+      "ada@gmail.com"
+    );
+    expect(followUp.threadId).toBe(threadId);
+    expect(followUp.isNewThread).toBe(false);
+
+    const followUpBySubjectOnly = await receive(
+      rawEmail({
+        from: "ada@gmail.com",
+        to: "support@collateresearch.app",
+        subject: "Re: [Collate] Help",
+        body: "One more question.",
+        messageId: "<h3@gmail.com>",
+      }),
+      "ada@gmail.com"
+    );
+    expect(followUpBySubjectOnly.threadId).toBe(threadId);
+    expect(followUpBySubjectOnly.isNewThread).toBe(false);
+
+    // Attachment-only reply works cleanly; empty text + no files is rejected.
+    const fileOnly = await sendThreadReply(
+      {
+        threadId,
+        text: "  ",
+        files: [{ filename: "shot.png", contentType: "image/png", bytes: new Uint8Array([1, 2]) }],
+      },
+      { db, bucket: deps.bucket, mailer: customMailer, mailboxes }
+    );
+    expect(fileOnly.ok).toBe(true);
 
     const empty = await sendThreadReply(
       { threadId, text: "  ", files: [] },

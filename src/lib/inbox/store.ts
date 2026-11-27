@@ -30,9 +30,11 @@ export interface InboxBucket {
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_ATTACHMENTS_PER_MESSAGE = 10;
 
-/** "Re: Re:  Fwd: Hello" -> "hello", for matching a reply to its thread. */
+/** "Re: Re:  Fwd: [Collate] Hello" -> "hello", for matching a reply to its thread. */
 export function normalizeSubject(subject: string): string {
   return subject
+    .replace(/^\s*((re|fw|fwd|aw|sv)\s*:\s*)+/i, "")
+    .replace(/^\s*\[collate[^\]]*\]\s*/i, "")
     .replace(/^\s*((re|fw|fwd|aw|sv)\s*:\s*)+/i, "")
     .replace(/\s+/g, " ")
     .trim()
@@ -69,12 +71,63 @@ export function htmlToPlainText(html: string): string {
     .trim();
 }
 
-function safeFilename(name: string | null | undefined): string {
-  const cleaned = (name ?? "attachment")
+const MIME_EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
+  "text/plain": "txt",
+  "text/csv": "csv",
+  "application/msword": "doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+  "application/vnd.ms-excel": "xls",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/zip": "zip",
+};
+
+function safeFilename(
+  name: string | null | undefined,
+  mimeType?: string | null,
+  fallbackIndex = 1
+): string {
+  const raw = (name ?? "").trim();
+  const cleaned = raw
     .replace(/[^\w.\- ]+/g, "_")
     .trim()
     .slice(0, 120);
-  return cleaned || "attachment";
+  if (cleaned) return cleaned;
+  const normalizedMime = (mimeType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  const ext = MIME_EXTENSIONS[normalizedMime];
+  if (ext) {
+    const base = normalizedMime.startsWith("image/") ? "image" : "attachment";
+    return `${base}-${fallbackIndex}.${ext}`;
+  }
+  return fallbackIndex > 1 ? `attachment-${fallbackIndex}` : "attachment";
+}
+
+function buildReplySubject(threadSubject: string): string {
+  const base = threadSubject
+    .replace(/^\s*((re|fw|fwd|aw|sv)\s*:\s*)+/i, "")
+    .replace(/^\s*\[collate[^\]]*\]\s*/i, "")
+    .replace(/^\s*((re|fw|fwd|aw|sv)\s*:\s*)+/i, "")
+    .trim();
+  return `[Collate] ${base || "Your message"}`;
+}
+function toAttachmentBytes(content: unknown): Uint8Array {
+  if (typeof content === "string") {
+    return new TextEncoder().encode(content);
+  }
+  if (content instanceof Uint8Array) {
+    return new Uint8Array(content.buffer, content.byteOffset, content.byteLength);
+  }
+  if (ArrayBuffer.isView(content)) {
+    return new Uint8Array(content.buffer, content.byteOffset, content.byteLength);
+  }
+  if (content instanceof ArrayBuffer) {
+    return new Uint8Array(content);
+  }
+  return new Uint8Array(0);
 }
 
 function domainOf(address: string): string {
@@ -107,17 +160,22 @@ async function saveAttachments(
   }
 ): Promise<number> {
   let saved = 0;
+  let index = 0;
   for (const file of params.files.slice(0, MAX_ATTACHMENTS_PER_MESSAGE)) {
+    index++;
     if (file.bytes.byteLength === 0 || file.bytes.byteLength > MAX_ATTACHMENT_BYTES) continue;
     const id = newId("att");
-    const filename = safeFilename(file.filename);
+    const contentType =
+      file.contentType.split(";")[0]?.trim().toLowerCase().slice(0, 120) ||
+      "application/octet-stream";
+    const filename = safeFilename(file.filename, contentType, index);
     const r2Key = `inbox/${params.threadId}/${params.messageId}/${id}-${filename}`;
-    await bucket.put(r2Key, file.bytes, { httpMetadata: { contentType: file.contentType } });
+    await bucket.put(r2Key, file.bytes, { httpMetadata: { contentType } });
     await db.insert(emailAttachments).values({
       id,
       messageId: params.messageId,
       filename,
-      contentType: file.contentType.slice(0, 120) || "application/octet-stream",
+      contentType,
       sizeBytes: file.bytes.byteLength,
       r2Key,
       createdAt: params.now,
@@ -230,17 +288,35 @@ export async function receiveInboundEmail(
     createdAt: now,
   });
 
+  // Keep all real attachments — including inline screenshots pasted into Gmail or inline PDFs/images
+  // from Apple Mail (which set disposition="inline" + Content-ID). Only drop empty payloads or tiny
+  // unnamed tracking pixels (< 256 bytes).
   const files = (parsed.attachments ?? [])
-    .filter((a) => a.disposition !== "inline" || !a.contentId)
-    .map((a) => ({
-      filename: a.filename ?? "attachment",
-      contentType: a.mimeType ?? "application/octet-stream",
-      bytes:
-        typeof a.content === "string"
-          ? new TextEncoder().encode(a.content)
-          : new Uint8Array(a.content as ArrayBuffer),
-    }));
-  await saveAttachments(deps.db, deps.bucket, { threadId, messageId, files, now });
+    .map((a, idx) => {
+      const contentType =
+        (a.mimeType ?? "application/octet-stream").split(";")[0]?.trim().toLowerCase() ||
+        "application/octet-stream";
+      const bytes = toAttachmentBytes(a.content);
+      return {
+        filename: safeFilename(a.filename, contentType, idx + 1),
+        hasExplicitFilename: Boolean(a.filename?.trim()),
+        related: Boolean(a.related),
+        contentType,
+        bytes,
+      };
+    })
+    .filter((f) => {
+      if (f.bytes.byteLength === 0) return false;
+      if (f.related && !f.hasExplicitFilename && f.bytes.byteLength < 256) return false;
+      return true;
+    })
+    .map(({ filename, contentType, bytes }) => ({ filename, contentType, bytes }));
+  const savedAttachments = await saveAttachments(deps.db, deps.bucket, {
+    threadId,
+    messageId,
+    files,
+    now,
+  });
 
   if (deps.notifier) {
     await deps.notifier.send(
@@ -248,8 +324,13 @@ export async function receiveInboundEmail(
         `📨 <b>New email · ${escapeTelegramHtml(MAILBOX_LABELS[mailbox])}</b>`,
         `From: ${escapeTelegramHtml(fromName ? `${fromName} <${fromEmail}>` : fromEmail)}`,
         `Subject: ${escapeTelegramHtml(subject)}`,
+        ...(savedAttachments > 0
+          ? [`Attachments: ${savedAttachments} file${savedAttachments === 1 ? "" : "s"}`]
+          : []),
         escapeTelegramHtml(textBody.slice(0, 280)),
-      ].join("\n")
+      ]
+        .filter(Boolean)
+        .join("\n")
     );
   }
 
@@ -306,15 +387,13 @@ export function buildQuotedHistory(history: QuotedMessage[]): { text: string; ht
   return { text, html };
 }
 
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-}
-
-/** Sends the admin's reply into the conversation, threaded under the person's last email. */
+/**
+ * Sends the admin's reply to the customer with quoted context underneath.
+ * Outbound replies intentionally do not link to the customer's Sent Message-ID via
+ * In-Reply-To / References so Gmail displays the sender cleanly as "Collate" rather than
+ * merging into the user's Sent conversation ("me, Collate"). We still store Cloudflare's
+ * outbound Message-ID so any future reply from the customer threads back into this admin thread.
+ */
 export async function sendThreadReply(
   params: {
     threadId: string;
@@ -337,7 +416,9 @@ export async function sendThreadReply(
     .limit(1);
   if (!thread) return { ok: false, error: "Conversation not found.", status: 404 };
   const text = params.text.trim();
-  if (!text) return { ok: false, error: "Write a reply first.", status: 400 };
+  if (!text && params.files.length === 0) {
+    return { ok: false, error: "Write a reply or attach a file first.", status: 400 };
+  }
   if (params.files.some((f) => f.bytes.byteLength > MAX_ATTACHMENT_BYTES)) {
     return { ok: false, error: "Each attachment must be 10 MB or smaller.", status: 400 };
   }
@@ -357,9 +438,8 @@ export async function sendThreadReply(
     .where(eq(emailMessages.threadId, thread.id))
     .orderBy(desc(emailMessages.createdAt))
     .limit(20);
-  const ids = history.map((h) => h.messageIdHeader).filter((h): h is string => Boolean(h));
   const sender = senderFor(thread.mailbox, deps.mailboxes);
-  const subject = /^re:/i.test(thread.subject) ? thread.subject : `Re: ${thread.subject}`;
+  const subject = buildReplySubject(thread.subject);
   const senderName = sender.replace(/\s*<[^>]*>\s*$/, "").trim() || deps.mailboxes[thread.mailbox];
   const quoted = buildQuotedHistory(
     history.map((h) => ({
@@ -374,23 +454,30 @@ export async function sendThreadReply(
     }))
   );
 
-  const attachments: EmailAttachment[] = params.files.map((f) => ({
-    filename: f.filename,
-    content: toBase64(f.bytes),
-    type: f.contentType || "application/octet-stream",
-  }));
+  const emailBodyText =
+    text ||
+    (params.files.length === 1
+      ? `Attached file: ${params.files[0]!.filename}`
+      : `Attached ${params.files.length} files.`);
+
+  // Pass raw binary bytes (Uint8Array) — mailer converts to ArrayBuffer for Cloudflare send_email.
+  // Passing a base64 string causes Cloudflare's Workers binding to encode it as UTF-8 text.
+  const attachments: EmailAttachment[] = params.files.map((f, idx) => {
+    const contentType =
+      f.contentType.split(";")[0]?.trim().toLowerCase() || "application/octet-stream";
+    return {
+      filename: safeFilename(f.filename, contentType, idx + 1),
+      content: f.bytes,
+      type: contentType,
+    };
+  });
   const result = await deps.mailer.send({
     to: thread.contactEmail,
     from: sender,
     replyTo: deps.mailboxes[thread.mailbox],
     subject,
-    text: quoted.text ? `${text}\n\n${quoted.text}` : text,
-    html: `${textToHtml(text)}${quoted.html}`,
-    // Cloudflare sets Message-ID itself (a custom one is refused); only threading headers here.
-    headers: {
-      ...(ids[0] ? { "In-Reply-To": ids[0] } : {}),
-      ...(ids.length ? { References: ids.slice().reverse().join(" ") } : {}),
-    },
+    text: quoted.text ? `${emailBodyText}\n\n${quoted.text}` : emailBodyText,
+    html: `${textToHtml(emailBodyText)}${quoted.html}`,
     attachments,
   });
   if (!result.ok) {
@@ -437,7 +524,7 @@ export async function unreadCounts(db: AppDb): Promise<Record<InboxMailbox, numb
     .from(emailThreads)
     .where(eq(emailThreads.unread, true))
     .groupBy(emailThreads.mailbox);
-  const out: Record<InboxMailbox, number> = { support: 0, billing: 0, general: 0 };
+  const out: Record<InboxMailbox, number> = { support: 0, billing: 0, disputes: 0, general: 0 };
   for (const r of rows) out[r.mailbox] = Number(r.n);
   return out;
 }

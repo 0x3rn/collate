@@ -2,8 +2,13 @@ import { buttonHtml, codeBlockHtml, escapeEmailHtml, wrapEmailHtml } from "./lay
 
 export interface EmailAttachment {
   filename: string;
-  /** Base64-encoded content. */
-  content: string;
+  /**
+   * Raw binary bytes (ArrayBuffer / Uint8Array) for binary files like PDFs and images,
+   * or a plain UTF-8 string for text attachments. Cloudflare's Workers send_email binding
+   * encodes ArrayBuffer/ArrayBufferView as binary MIME parts, while string values are treated
+   * as UTF-8 text (so passing a pre-base64-encoded binary string would double-encode it).
+   */
+  content: Uint8Array | ArrayBuffer | string;
   type: string;
   disposition?: "attachment" | "inline";
   contentId?: string;
@@ -46,13 +51,30 @@ export interface CloudflareEmailBinding {
     replyTo?: string;
     headers?: Record<string, string>;
     attachments?: Array<{
-      content: string;
+      content: string | ArrayBuffer | ArrayBufferView;
       filename: string;
       type: string;
       disposition: "attachment" | "inline";
       contentId?: string;
     }>;
   }): Promise<{ messageId?: string } | void>;
+}
+
+function toBindingAttachmentContent(
+  content: Uint8Array | ArrayBuffer | string
+): ArrayBuffer | string {
+  if (typeof content === "string") return content;
+  if (content instanceof ArrayBuffer) return content;
+  if (
+    content.byteOffset === 0 &&
+    content.byteLength === content.buffer.byteLength &&
+    content.buffer instanceof ArrayBuffer
+  ) {
+    return content.buffer;
+  }
+  const copy = new Uint8Array(content.byteLength);
+  copy.set(content);
+  return copy.buffer;
 }
 
 /** "Collate <noreply@x.app>" -> { email, name }; a bare address stays as is. */
@@ -112,7 +134,7 @@ export function createEmailSender(env: {
             ...(message.attachments?.length
               ? {
                   attachments: message.attachments.map((a) => ({
-                    content: a.content,
+                    content: toBindingAttachmentContent(a.content),
                     filename: a.filename,
                     type: a.type,
                     disposition: a.disposition ?? "attachment",

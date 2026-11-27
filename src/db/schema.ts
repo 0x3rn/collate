@@ -1047,10 +1047,10 @@ export type NewProjectRecord = typeof projects.$inferInsert;
 export type ProjectSettingsRecord = typeof projectSettings.$inferSelect;
 // ── Admin email inbox ───────────────────────────────────────────────────────
 
-export const INBOX_MAILBOXES = ["support", "billing", "general"] as const;
+export const INBOX_MAILBOXES = ["support", "billing", "disputes", "general"] as const;
 export type InboxMailbox = (typeof INBOX_MAILBOXES)[number];
 
-/** One conversation with one person in one mailbox (Support, Billing or General). */
+/** One conversation with one person in one mailbox (Support, Billing, Disputes or General). */
 export const emailThreads = sqliteTable(
   "email_threads",
   {

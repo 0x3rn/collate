@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Email | Collate admin",
-  description: "Support, billing and general email, announcements and promotions.",
+  description: "Support, billing, disputes and general email, announcements and promotions.",
   robots: { index: false, follow: false },
 };
 
@@ -49,6 +49,7 @@ export default async function AdminInboxPage() {
           addresses={{
             support: mailboxes.support,
             billing: mailboxes.billing,
+            disputes: mailboxes.disputes,
             general: mailboxes.general,
             announcement: `Sent from ${mailboxes.announcements}`,
             promotion: `Sent from ${mailboxes.promotions}`,

@@ -16,6 +16,7 @@ import {
   buildDisputeEvidence,
   describeCheckoutAgreement,
   describeSignupAgreement,
+  formatPaymentProvider,
   isSettledPaymentStatus,
   type EvidenceEvent,
 } from "@/lib/billing/evidence-report";
@@ -159,7 +160,8 @@ export default async function PaymentEvidencePage({ params }: { params: Promise<
       </WorkspaceShell>
     );
   }
-  const { payment, customer } = ev;
+  const { payment, customer, providerDetails } = ev;
+  const providerLabel = formatPaymentProvider(payment.provider);
   const openDispute = ev.reversals.find((r) => r.kind === "dispute" && !r.resolvedAt);
 
   return (
@@ -216,10 +218,32 @@ export default async function PaymentEvidencePage({ params }: { params: Promise<
             <Row label="Customer" value={`${customer.name} <${customer.email}>`} />
             <Row label="Amount" value={money(payment.currency, payment.amountMinor)} />
             <Row label="Credits bought" value={payment.creditsGranted} />
-            <Row label="Paid through" value={payment.provider === "polar" ? "Polar" : "Paystack"} />
+            <Row
+              label="Paid through"
+              value={
+                providerDetails.environment === "test"
+                  ? `${providerLabel} (test mode)`
+                  : providerLabel
+              }
+            />
             <Row label="Reference" value={payment.providerReference} />
-            {payment.providerOrderId && <Row label="Polar order" value={payment.providerOrderId} />}
-            <Row label="Date" value={when(payment.createdAt)} />
+            {providerDetails.providerTransactionId &&
+              providerDetails.providerTransactionIdLabel && (
+                <Row
+                  label={providerDetails.providerTransactionIdLabel}
+                  value={providerDetails.providerTransactionId}
+                />
+              )}
+            {providerDetails.paymentMethod && (
+              <Row label="Payment method" value={providerDetails.paymentMethod} />
+            )}
+            {providerDetails.gatewayResponse && (
+              <Row label="Gateway response" value={providerDetails.gatewayResponse} />
+            )}
+            {providerDetails.providerCustomerId && (
+              <Row label={`${providerLabel} customer`} value={providerDetails.providerCustomerId} />
+            )}
+            <Row label="Date" value={when(providerDetails.paidAt ?? payment.createdAt)} />
             <Row label="Status" value={payment.status} />
           </dl>
         </Section>
@@ -332,7 +356,7 @@ export default async function PaymentEvidencePage({ params }: { params: Promise<
         <Section title="Messages with support">
           {ev.supportThreads.length === 0 ? (
             <p className="text-sm text-[var(--neutral-500)]">
-              No emails from this customer to support, billing or general inquiries.
+              No emails from this customer to support, billing, disputes or general inquiries.
             </p>
           ) : (
             <ul className="text-sm divide-y divide-[var(--neutral-200)] border-y border-[var(--neutral-200)]">

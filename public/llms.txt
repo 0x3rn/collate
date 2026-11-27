@@ -36,3 +36,4 @@ Pay-as-you-go prepaid credit packs with no recurring subscription (one credit pe
 - General inquiries: hello@collateresearch.app
 - Support: support@collateresearch.app
 - Billing: billing@collateresearch.app
+- Disputes: disputes@collateresearch.app

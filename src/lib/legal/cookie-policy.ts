@@ -33,7 +33,7 @@ export const COOKIE_POLICY: LegalDocumentData = {
           title: "Zero Advertising Cookies and Opt-In Analytics Only",
           runs: [
             t(
-              "Collate never deploys advertising pixels, behavioral retargeting tags, or social tracking widgets. Optional Google Analytics 4 measurement stays completely off unless you explicitly click Accept analytics in the cookie preferences popup."
+              "Collate never deploys advertising pixels, behavioral retargeting tags, or social tracking widgets. Optional Google Analytics 4 measurement stays completely off unless you explicitly click Accept in the cookie preferences popup."
             ),
           ],
         },
@@ -153,7 +153,7 @@ export const COOKIE_POLICY: LegalDocumentData = {
               "_ga and _ga_* (Google Analytics 4)",
               "Google Analytics (Optional Analytics Partner)",
               "Optional Analytics (Opt-In Only)",
-              "Measures aggregate page views and site traffic trends strictly after you click Accept analytics. Never loaded or set if you decline or have not opted in",
+              "Measures aggregate page views and site traffic trends strictly after you click Accept. Never loaded or set if you decline or have not opted in",
               "Loaded only after explicit opt-in consent; cleared immediately if you switch to Decline",
             ],
           ],
@@ -287,7 +287,7 @@ export const COOKIE_POLICY: LegalDocumentData = {
           runs: [
             b("Opt-In Analytics Consent & Periodic Renewal: "),
             t(
-              "Optional Google Analytics 4 scripts and cookies never load until you actively choose Accept analytics in our bottom cookie preferences popup. For signed-in users, accepting is saved permanently on your account across sessions until you change it, while declining is kept for 7 days and then automatically discarded so we ask you again. For visitors who are not signed in, accepting is remembered unless your browser clears site data, while declining applies only to the current visit so you are asked again on subsequent visits. You can also reopen Cookie preferences at any time from the site footer."
+              "Optional Google Analytics 4 scripts and cookies never load until you actively choose Accept in our bottom cookie preferences popup. For signed-in users, accepting is saved permanently on your account across sessions until you change it, while declining is kept for 7 days and then automatically discarded so we ask you again. For visitors who are not signed in, accepting is remembered unless your browser clears site data, while declining applies only to the current visit so you are asked again on subsequent visits. You can also reopen Cookie preferences at any time from the site footer."
             ),
           ],
         },

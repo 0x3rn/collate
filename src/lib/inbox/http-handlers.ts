@@ -93,9 +93,12 @@ export async function handleListThreads(request: Request, deps: InboxDeps): Prom
 
   const ids = threads.map((t) => t.id);
   const previews = new Map<string, string>();
+  const attachmentCounts = new Map<string, number>();
+  const firstAttachmentName = new Map<string, string>();
   if (ids.length > 0) {
     const msgs = await deps.db
       .select({
+        id: emailMessages.id,
         threadId: emailMessages.threadId,
         text: emailMessages.textBody,
         at: emailMessages.createdAt,
@@ -103,25 +106,55 @@ export async function handleListThreads(request: Request, deps: InboxDeps): Prom
       .from(emailMessages)
       .where(inArray(emailMessages.threadId, ids))
       .orderBy(desc(emailMessages.createdAt));
-    for (const m of msgs)
+    const msgToThread = new Map<string, string>();
+    for (const m of msgs) {
+      msgToThread.set(m.id, m.threadId);
       if (!previews.has(m.threadId)) previews.set(m.threadId, m.text.slice(0, 140));
+    }
+    if (msgs.length > 0) {
+      const atts = await deps.db
+        .select({
+          messageId: emailAttachments.messageId,
+          filename: emailAttachments.filename,
+        })
+        .from(emailAttachments)
+        .where(
+          inArray(
+            emailAttachments.messageId,
+            msgs.map((m) => m.id)
+          )
+        );
+      for (const a of atts) {
+        const tid = msgToThread.get(a.messageId);
+        if (!tid) continue;
+        attachmentCounts.set(tid, (attachmentCounts.get(tid) ?? 0) + 1);
+        if (!firstAttachmentName.has(tid)) firstAttachmentName.set(tid, a.filename);
+      }
+    }
   }
 
   return jsonNoStore(
     {
       ok: true,
       unread: await unreadCounts(deps.db),
-      threads: threads.map((t) => ({
-        id: t.id,
-        subject: t.subject,
-        contactEmail: t.contactEmail,
-        contactName: t.contactName,
-        hasAccount: Boolean(t.userId),
-        status: t.status,
-        unread: t.unread,
-        lastMessageAt: t.lastMessageAt.toISOString(),
-        preview: previews.get(t.id) ?? "",
-      })),
+      threads: threads.map((t) => {
+        const attCount = attachmentCounts.get(t.id) ?? 0;
+        const preview =
+          previews.get(t.id)?.trim() ||
+          (attCount > 0 ? `Attachment: ${firstAttachmentName.get(t.id) ?? "file"}` : "");
+        return {
+          id: t.id,
+          subject: t.subject,
+          contactEmail: t.contactEmail,
+          contactName: t.contactName,
+          hasAccount: Boolean(t.userId),
+          status: t.status,
+          unread: t.unread,
+          lastMessageAt: t.lastMessageAt.toISOString(),
+          preview,
+          attachmentCount: attCount,
+        };
+      }),
     },
     200
   );
@@ -266,17 +299,25 @@ export async function handleDownloadAttachment(
   if (!att) return jsonNoStore({ ok: false, error: "File not found." }, 404);
   const obj = await deps.bucket.get(att.r2Key);
   if (!obj) return jsonNoStore({ ok: false, error: "File not found." }, 404);
-  const isImage = /^image\/(png|jpe?g|gif|webp)$/i.test(att.contentType);
+  const url = new URL(request.url);
+  const forceDownload = url.searchParams.get("download") === "1";
+  const normalizedType = att.contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  const isSafeImage = /^image\/(png|jpe?g|gif|webp)$/.test(normalizedType);
+  const isPdf = normalizedType === "application/pdf";
+  const canInline = !forceDownload && (isSafeImage || isPdf);
+  const safeName = att.filename.replace(/["\\\r\n]/g, "");
   return new Response(await obj.arrayBuffer(), {
     status: 200,
     headers: {
-      // Only plain images may display inline; everything else downloads, so an attached HTML or
-      // SVG file can never run in the admin's session.
-      "content-type": isImage ? att.contentType : "application/octet-stream",
-      "content-disposition": `${isImage ? "inline" : "attachment"}; filename="${att.filename.replace(/"/g, "")}"`,
+      // Only plain raster images and PDFs may display inline; active/scriptable types (HTML, SVG,
+      // etc.) always download as application/octet-stream so they can never execute in the admin session.
+      "content-type": isSafeImage || isPdf ? normalizedType : "application/octet-stream",
+      "content-disposition": `${canInline ? "inline" : "attachment"}; filename="${safeName}"`,
       "x-content-type-options": "nosniff",
       "cache-control": "private, no-store",
-      "content-security-policy": "default-src 'none'; img-src 'self'; sandbox",
+      "content-security-policy": isPdf
+        ? "default-src 'none'; object-src 'self'; frame-ancestors 'self'"
+        : "default-src 'none'; img-src 'self'; sandbox",
     },
   });
 }

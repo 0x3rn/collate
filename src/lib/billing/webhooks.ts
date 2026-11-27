@@ -98,6 +98,7 @@ export interface NormalizedPaymentWebhook {
 const PaystackEventSchema = z.object({
   event: z.string(),
   data: z.object({
+    id: z.union([z.number().int().positive(), z.string().min(1)]).optional(),
     reference: z.string().min(1),
     amount: z.number().int().positive(),
     currency: z.string().min(3).default("NGN"),
@@ -164,11 +165,15 @@ export async function verifyPaystackWebhook(params: {
     return { valid: false, reason: "Invalid credits value in Paystack metadata." };
   }
 
+  const paystackTxId =
+    parsed.data.data.id !== undefined ? String(parsed.data.data.id).trim() : undefined;
+
   return {
     valid: true,
     payment: {
       provider: "paystack",
       providerReference: parsed.data.data.reference,
+      ...(paystackTxId ? { providerOrderId: paystackTxId } : {}),
       userId: meta.userId,
       currency: parsed.data.data.currency.toUpperCase(),
       amountMinor: parsed.data.data.amount,
@@ -578,6 +583,7 @@ export function parsePaystackReversal(raw: unknown): ParsedReversal | null {
   if (name.startsWith("charge.dispute.")) {
     const tx = (data.transaction ?? {}) as Record<string, unknown>;
     const ref = str(tx.reference) ?? str(data.transaction_reference);
+    const txId = str(tx.id);
     const id = str(data.id);
     const amount = toMinor(data.refund_amount) ?? toMinor(tx.amount);
     if (!ref || !id || !amount) return null;
@@ -588,7 +594,7 @@ export function parsePaystackReversal(raw: unknown): ParsedReversal | null {
       provider: "paystack",
       kind: "dispute",
       providerReversalId: id,
-      payment: { providerReference: ref },
+      payment: { providerReference: ref, ...(txId ? { providerOrderId: txId } : {}) },
       amountMinor: amount,
       currency: str(data.currency) ?? str(tx.currency) ?? "NGN",
       status: str(data.status) ?? "open",

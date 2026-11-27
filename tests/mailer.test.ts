@@ -49,21 +49,39 @@ describe("createEmailSender (Cloudflare Email Sending)", () => {
     expect(calls[0]!.html).toContain("<p>Verify</p>");
   });
 
-  it("uses the binding when EMAIL_PROVIDER is unset, and passes per-message sender and attachments", async () => {
+  it("uses the binding when EMAIL_PROVIDER is unset, and passes per-message sender and binary attachments as ArrayBuffer", async () => {
     const { binding, calls } = fakeBinding();
     const sender = createEmailSender({ binding });
+    const fullBuf = new Uint8Array([0, 0x89, 0x50, 0x4e, 0x47, 0xff]);
+    const pngSubView = fullBuf.subarray(1, 5); // exact PNG magic bytes with non-zero byteOffset
     await sender.send({
       ...sampleMessage,
-      from: "Collate Support <support@collateresearch.app>",
-      headers: { "In-Reply-To": "<abc@mail>" },
-      attachments: [{ filename: "a.txt", content: "aGk=", type: "text/plain" }],
+      from: "Collate <support@collateresearch.app>",
+      headers: { "X-Custom": "1" },
+      attachments: [
+        { filename: "shot.png", content: pngSubView, type: "image/png" },
+        { filename: "note.txt", content: "hello", type: "text/plain" },
+      ],
     });
     expect(calls[0]).toMatchObject({
-      from: { email: "support@collateresearch.app", name: "Collate Support" },
-      headers: { "In-Reply-To": "<abc@mail>" },
-      attachments: [
-        { filename: "a.txt", content: "aGk=", type: "text/plain", disposition: "attachment" },
-      ],
+      from: { email: "support@collateresearch.app", name: "Collate" },
+      headers: { "X-Custom": "1" },
+    });
+    const [pngAtt, txtAtt] = calls[0]!.attachments!;
+    expect(pngAtt).toMatchObject({
+      filename: "shot.png",
+      type: "image/png",
+      disposition: "attachment",
+    });
+    expect(pngAtt!.content).toBeInstanceOf(ArrayBuffer);
+    expect(Array.from(new Uint8Array(pngAtt!.content as ArrayBuffer))).toEqual([
+      0x89, 0x50, 0x4e, 0x47,
+    ]);
+    expect(txtAtt).toMatchObject({
+      filename: "note.txt",
+      content: "hello",
+      type: "text/plain",
+      disposition: "attachment",
     });
   });
 

@@ -4,6 +4,7 @@ import {
   describeCheckoutAgreement,
   describeSignupAgreement,
   type EvidenceEvent,
+  formatPaymentProvider,
 } from "./evidence-report";
 
 /**
@@ -22,8 +23,8 @@ function events(list: EvidenceEvent[], empty: string): string {
 }
 
 export function renderEvidenceHtml(ev: DisputeEvidence, generatedAt: Date): string {
-  const { payment, customer } = ev;
-  const provider = payment.provider === "polar" ? "Polar" : "Paystack";
+  const { payment, customer, providerDetails } = ev;
+  const provider = formatPaymentProvider(payment.provider);
 
   const agreement = rows([
     ["At checkout", describeCheckoutAgreement(ev)],
@@ -70,7 +71,7 @@ export function renderEvidenceHtml(ev: DisputeEvidence, generatedAt: Date): stri
 
   const support =
     ev.supportThreads.length === 0
-      ? `<p class="muted">No emails from this customer to support, billing or general inquiries.</p>`
+      ? `<p class="muted">No emails from this customer to support, billing, disputes or general inquiries.</p>`
       : `<table class="grid"><thead><tr><th>Subject</th><th>Mailbox</th><th>Date</th></tr></thead><tbody>${ev.supportThreads
           .map(
             (t) =>
@@ -78,24 +79,42 @@ export function renderEvidenceHtml(ev: DisputeEvidence, generatedAt: Date): stri
           )
           .join("")}</tbody></table>`;
 
+  const providerIdSuffix =
+    providerDetails.providerTransactionId && providerDetails.providerTransactionIdLabel
+      ? ` · ${providerDetails.providerTransactionIdLabel} ${providerDetails.providerTransactionId}`
+      : "";
+
+  const paymentRows: Array<[string, string]> = [
+    ["Customer", `${customer.name} <${customer.email}>`],
+    ["Amount", money(payment.currency, payment.amountMinor)],
+    ["Credits bought", String(payment.creditsGranted)],
+    ["Paid through", providerDetails.environment === "test" ? `${provider} (test mode)` : provider],
+    ["Reference", payment.providerReference],
+    ...(providerDetails.providerTransactionId && providerDetails.providerTransactionIdLabel
+      ? ([
+          [providerDetails.providerTransactionIdLabel, providerDetails.providerTransactionId],
+        ] as Array<[string, string]>)
+      : []),
+    ...(providerDetails.paymentMethod
+      ? ([["Payment method", providerDetails.paymentMethod]] as Array<[string, string]>)
+      : []),
+    ...(providerDetails.gatewayResponse
+      ? ([["Gateway response", providerDetails.gatewayResponse]] as Array<[string, string]>)
+      : []),
+    ...(providerDetails.providerCustomerId
+      ? ([[`${provider} customer`, providerDetails.providerCustomerId]] as Array<[string, string]>)
+      : []),
+    ["Date", when(providerDetails.paidAt ?? payment.createdAt)],
+  ];
+
   const bodyHtml = `<h1>${esc(customer.name)} · ${esc(money(payment.currency, payment.amountMinor))}</h1>
-<p class="sub">${esc(provider)} reference ${esc(payment.providerReference)} · ${esc(when(payment.createdAt))}</p>
+<p class="sub">${esc(provider)} reference ${esc(payment.providerReference)}${esc(providerIdSuffix)} · ${esc(when(providerDetails.paidAt ?? payment.createdAt))}</p>
 
 <h2>Statement</h2>
 <div class="statement">${esc(ev.summary)}</div>
 
 <h2>Payment</h2>
-${rows([
-  ["Customer", `${customer.name} <${customer.email}>`],
-  ["Amount", money(payment.currency, payment.amountMinor)],
-  ["Credits bought", String(payment.creditsGranted)],
-  ["Paid through", provider],
-  ["Reference", payment.providerReference],
-  ...(payment.providerOrderId
-    ? ([["Polar order", payment.providerOrderId]] as Array<[string, string]>)
-    : []),
-  ["Date", when(payment.createdAt)],
-])}
+${rows(paymentRows)}
 
 <h2>Agreement to the Terms</h2>
 ${agreement}

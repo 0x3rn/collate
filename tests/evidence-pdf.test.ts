@@ -9,7 +9,9 @@ import {
   type BillingHttpDeps,
   handleAdminEvidencePdf,
   handleAdminSearchPayments,
+  handlePaystackWebhook,
 } from "@/lib/billing/http-handlers";
+import { computeHmacHex } from "@/lib/billing/webhooks";
 import { grantPaymentCreditsIdempotent } from "@/lib/billing/ledger";
 import { applyPaymentReversal } from "@/lib/billing/reversals";
 import type { EmailMessage } from "@/lib/email/mailer";
@@ -115,7 +117,7 @@ describe("evidence PDF and payment search", () => {
     expect(ev.summary).toContain("chose to buy more credits 1 more time");
     // Nothing was used, so the statement must not claim the service was delivered.
     expect(ev.summary).not.toContain("delivered as described");
-    expect(ev.summary).toContain("Section 5.7");
+    expect(ev.summary).not.toContain("Section 5.7");
   });
 
   it("escapes customer text in the PDF and shows the Collate logo at the top", async () => {
@@ -182,5 +184,88 @@ describe("evidence PDF and payment search", () => {
     expect((await search("ada", ada.cookie)).status).toBe(403);
     const [u] = await db.select().from(users).where(eq(users.id, ada.userId));
     expect(u?.email).toBe("ada@uni.edu.ng");
+  });
+
+  it("captures Paystack transaction ID and payment details in the transaction record, PDF, and search", async () => {
+    const ada = await account("ada@uni.edu.ng");
+    const boss = await account("boss@collateresearch.app", "Boss");
+    const secret = "sk_test_paystack_unit_key";
+    const paystackDeps: BillingHttpDeps & { browser?: BrowserRunPdfBinding } = {
+      ...deps,
+      paystackSecretKey: secret,
+    };
+
+    const rawBody = JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 482910384,
+        domain: "test",
+        status: "success",
+        reference: "psk_test_991122",
+        amount: 3_500_000,
+        currency: "NGN",
+        channel: "card",
+        gateway_response: "Successful",
+        paid_at: "2026-11-26T15:30:00.000Z",
+        authorization: {
+          last4: "4081",
+          brand: "visa",
+          bank: "TEST BANK",
+          channel: "card",
+        },
+        customer: {
+          id: 91204,
+          email: "ada@uni.edu.ng",
+          customer_code: "CUS_test9911",
+        },
+        metadata: {
+          userId: ada.userId,
+          credits: 100,
+          packId: "pack_project_60",
+        },
+      },
+    });
+    const sig = await computeHmacHex("SHA-512", secret, rawBody);
+    const webhookRes = await handlePaystackWebhook(
+      new Request(`${APP}/api/webhooks/paystack`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-paystack-signature": sig,
+        },
+        body: rawBody,
+      }),
+      paystackDeps
+    );
+    expect(webhookRes.status).toBe(200);
+    const { paymentId } = (await webhookRes.json()) as { paymentId: string };
+
+    // Searchable by Paystack transaction ID in admin payments search
+    const searchRes = await handleAdminSearchPayments(
+      get("/api/admin/payments?q=482910384", boss.cookie),
+      paystackDeps
+    );
+    const searchBody = (await searchRes.json()) as { payments: Array<{ id: string }> };
+    expect(searchBody.payments.map((p) => p.id)).toEqual([paymentId]);
+
+    const ev = (await buildDisputeEvidence(db, paymentId))!;
+    expect(ev.providerDetails).toMatchObject({
+      providerTransactionId: "482910384",
+      providerTransactionIdLabel: "Paystack transaction ID",
+      paymentMethod: "Card (visa · ending 4081 · TEST BANK)",
+      gatewayResponse: "Successful",
+      providerCustomerId: "CUS_test9911",
+      environment: "test",
+    });
+    expect(ev.summary).toContain("via Paystack");
+    expect(ev.summary).toContain("Paystack transaction ID 482910384");
+
+    const html = renderEvidenceHtml(ev, new Date("2026-11-27T00:00:00Z"));
+    expect(html).toContain("Paystack (test mode)");
+    expect(html).toContain("Paystack transaction ID");
+    expect(html).toContain("482910384");
+    expect(html).toContain("Card (visa · ending 4081 · TEST BANK)");
+    expect(html).toContain("CUS_test9911");
+    expect(html).not.toContain("Polar order");
   });
 });

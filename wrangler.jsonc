@@ -21,6 +21,7 @@
     // Worker in Cloudflare Email Routing. Announcements and promotions are sent from their address.
     "EMAIL_SUPPORT_ADDRESS": "support@collateresearch.app",
     "EMAIL_BILLING_ADDRESS": "billing@collateresearch.app",
+    "EMAIL_DISPUTES_ADDRESS": "disputes@collateresearch.app",
     "EMAIL_GENERAL_ADDRESS": "hello@collateresearch.app",
     "EMAIL_ANNOUNCEMENTS_ADDRESS": "news@collateresearch.app",
     "EMAIL_PROMOTIONS_ADDRESS": "offers@collateresearch.app",
