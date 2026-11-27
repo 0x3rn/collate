@@ -11,7 +11,7 @@ export const BASE_SECURITY_HEADERS: ReadonlyArray<readonly [string, string]> = [
       "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://www.googletagmanager.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://upload.wikimedia.org https://thumb.wikimedia.org https://www.google-analytics.com https://www.googletagmanager.com",
+      "img-src 'self' data: blob: https://upload.wikimedia.org https://thumb.wikimedia.org https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
       "connect-src 'self' https://challenges.cloudflare.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
       "frame-src https://challenges.cloudflare.com",
       "object-src 'none'",

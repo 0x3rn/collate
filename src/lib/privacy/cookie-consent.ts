@@ -98,3 +98,19 @@ export function shouldLoadAnalytics(
 ): boolean {
   return status === "accepted" && isValidGaMeasurementId(measurementId) !== null;
 }
+
+/**
+ * Builds the global `gtag` queue stub expected by Google's gtag.js loader.
+ *
+ * CRITICAL: gtag.js checks entries in `dataLayer` using native `[object Arguments]`;
+ * pushing a rest-parameter `Array` (`(...args) => dataLayer.push(args)`) causes gtag.js
+ * to silently ignore every queued `js`, `config`, and `event` call and send zero hits.
+ */
+export function createGtagDispatcher(
+  getDataLayer: () => unknown[] | undefined
+): (...args: unknown[]) => void {
+  return function gtag() {
+    // eslint-disable-next-line prefer-rest-params
+    getDataLayer()?.push(arguments);
+  };
+}

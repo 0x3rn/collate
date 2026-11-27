@@ -5,6 +5,7 @@ import { auditLog, users } from "@/db/schema";
 import { createEmailSender } from "@/lib/email/mailer";
 import { signInUser, signUpUser, verifyEmailToken } from "@/lib/auth/service";
 import {
+  createGtagDispatcher,
   isValidGaMeasurementId,
   resolveGaMeasurementId,
   resolveSignedInConsent,
@@ -92,8 +93,32 @@ describe("Cookie consent domain rules and Google Analytics guardrails", () => {
     expect(csp).toContain("https://www.googletagmanager.com");
     expect(csp).toContain("https://www.google-analytics.com");
     expect(csp).toContain("https://*.google-analytics.com");
+    expect(csp).toContain("https://*.analytics.google.com");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("frame-ancestors 'none'");
+  });
+
+  it("queues native Arguments objects (not plain Arrays) into dataLayer so gtag.js processes events", () => {
+    const dataLayer: unknown[] = [];
+    const gtag = createGtagDispatcher(() => dataLayer);
+
+    gtag("js", new Date("2026-11-27T00:00:00.000Z"));
+    gtag("config", "G-G788RL6915", { anonymize_ip: true, send_page_view: false });
+    gtag("event", "page_view", { page_path: "/" });
+
+    expect(dataLayer).toHaveLength(3);
+    for (const entry of dataLayer) {
+      expect(Object.prototype.toString.call(entry)).toBe("[object Arguments]");
+      expect(Array.isArray(entry)).toBe(false);
+    }
+    const first = dataLayer[0] as IArguments;
+    const second = dataLayer[1] as IArguments;
+    const third = dataLayer[2] as IArguments;
+    expect(first[0]).toBe("js");
+    expect(second[0]).toBe("config");
+    expect(second[1]).toBe("G-G788RL6915");
+    expect(third[0]).toBe("event");
+    expect(third[1]).toBe("page_view");
   });
 });
 

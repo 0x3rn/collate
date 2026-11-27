@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   type AnalyticsConsentChoice,
+  createGtagDispatcher,
   type EffectiveConsentStatus,
   isValidGaMeasurementId,
   OPEN_COOKIE_PREFERENCES_EVENT,
@@ -106,9 +107,7 @@ function ensureGtagInitialized(measurementId: string): void {
   window[`ga-disable-${measurementId}`] = false;
   window.dataLayer = window.dataLayer ?? [];
   if (typeof window.gtag !== "function") {
-    window.gtag = function gtag(...args: unknown[]) {
-      window.dataLayer?.push(args);
-    };
+    window.gtag = createGtagDispatcher(() => window.dataLayer);
   }
 
   if (!document.getElementById(GA_SCRIPT_ELEMENT_ID)) {
@@ -219,6 +218,7 @@ export function CookieConsentAnalytics({ measurementId }: { measurementId?: stri
         window.gtag("event", "page_view", {
           page_path: cleanPath,
           page_title: document.title,
+          page_location: window.location.href,
         });
       }
     } else {
