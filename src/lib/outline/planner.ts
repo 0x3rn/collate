@@ -8,6 +8,12 @@ import {
   type ChapterType,
 } from "@/config/outline";
 import type { LineSpacing, ProjectType } from "@/db/schema";
+import {
+  formatUnitShortLabel,
+  getDefaultStructureForWork,
+  getPureLiteratureSectionsForType,
+  unitNounSingular,
+} from "./structures";
 
 export interface ClassifiedChapter {
   chapterType: ChapterType;
@@ -48,6 +54,8 @@ export const AssignmentQuestionPlanSchema = z.object({
 
 export const ProjectOutlinePlanSchema = z.object({
   projectType: z.enum(["project", "research", "thesis", "assignment"]),
+  useChapters: z.boolean().default(true),
+  isExperimental: z.boolean().default(false),
   targetPages: z.number().int().min(1).max(300),
   wordsPerPage: z.number().int().min(150).max(700),
   chapters: z.array(OutlineChapterPlanSchema),
@@ -65,9 +73,16 @@ export function calculateWordsPerPage(lineSpacing: LineSpacing, fontSizePt = 12)
   return Math.round(base * fontScale);
 }
 
-export function classifyChapterTitle(title: string, projectType: ProjectType): ClassifiedChapter {
+export function classifyChapterTitle(
+  title: string,
+  projectType: ProjectType,
+  options: { isExperimental?: boolean; useChapters?: boolean } = {}
+): ClassifiedChapter {
   const clean = title.trim();
   const lower = clean.toLowerCase();
+  const isExperimental = options.isExperimental ?? true;
+  const useChapters = options.useChapters ?? true;
+  const unitWord = unitNounSingular(useChapters);
 
   const matches = (keywords: string[]) => keywords.some((k) => lower.includes(k));
 
@@ -77,10 +92,45 @@ export function classifyChapterTitle(title: string, projectType: ProjectType): C
     detected = "references";
   } else if (matches(["introduction", "background of the study", "introductory"])) {
     detected = "introduction";
-  } else if (matches(["theoretical framework", "conceptual framework"])) {
+  } else if (
+    matches([
+      "theoretical framework",
+      "conceptual framework",
+      "conceptual and theoretical",
+      "theoretical and analytical",
+      "theoretical foundation",
+    ])
+  ) {
     detected = "theoretical_framework";
-  } else if (matches(["literature", "prior work", "related work", "review of"])) {
+  } else if (
+    matches(["literature", "prior work", "related work", "review of", "state of the art"])
+  ) {
     detected = "literature_review";
+  } else if (
+    matches([
+      "thematic analysis",
+      "thematic and contextual",
+      "contextual analysis",
+      "historical analysis",
+      "textual analysis",
+      "legal and institutional",
+      "statutory framework",
+      "doctrinal analysis",
+      "policy analysis",
+    ])
+  ) {
+    detected = "thematic_analysis";
+  } else if (
+    matches([
+      "critical evaluation",
+      "critical analysis",
+      "critical discussion",
+      "comparative analysis",
+      "synthesis and implications",
+      "critical synthesis",
+    ])
+  ) {
+    detected = "critical_analysis";
   } else if (projectType === "project" && matches(["system analysis", "requirement"])) {
     detected = "system_analysis";
   } else if (projectType === "project" && matches(["system design", "architecture"])) {
@@ -97,9 +147,9 @@ export function classifyChapterTitle(title: string, projectType: ProjectType): C
   ) {
     detected = "methodology";
   } else if (matches(["result", "finding", "data analysis", "data presentation"])) {
-    detected = "results";
+    detected = isExperimental ? "results" : "critical_analysis";
   } else if (matches(["discussion", "interpretation"])) {
-    detected = "discussion";
+    detected = isExperimental ? "discussion" : "critical_analysis";
   } else if (matches(["conclusion", "recommendation", "summary and conclusion"])) {
     detected = "conclusion";
   }
@@ -109,18 +159,32 @@ export function classifyChapterTitle(title: string, projectType: ProjectType): C
       chapterType: "custom",
       confidence: "ambiguous",
       needsConfirmation: true,
-      inferredPurpose: `This chapter will examine "${clean}" using verified sources, organized into context, core evidence-based analysis, synthesis, and summary.`,
+      inferredPurpose: `This ${unitWord} will examine "${clean}" using verified sources, organized into context, core evidence-based analysis, synthesis, and summary.`,
       defaultSections: [...CHAPTER_TYPE_TEMPLATES.custom.requiredSections],
     };
   }
 
   const template = CHAPTER_TYPE_TEMPLATES[detected];
+  const pureLitSections = !isExperimental
+    ? getPureLiteratureSectionsForType(detected, projectType, useChapters)
+    : null;
+  const defaultSections = pureLitSections ?? [...template.requiredSections];
+
+  let purposeText = template.defaultPurpose;
+  if (!isExperimental && detected === "methodology") {
+    purposeText =
+      "Detail the qualitative, desktop, or documentary literature review approach, source selection criteria, analytical framework, and methodological boundaries.";
+  } else if (!isExperimental && detected === "introduction") {
+    purposeText =
+      "Introduce the scholarly context, problem statement, objectives, research questions, scope, and overall structure without primary experiments.";
+  }
+
   return {
     chapterType: detected,
     confidence: "high",
     needsConfirmation: false,
-    inferredPurpose: `This chapter will ${template.defaultPurpose.charAt(0).toLowerCase()}${template.defaultPurpose.slice(1)}`,
-    defaultSections: [...template.requiredSections],
+    inferredPurpose: `This ${unitWord} will ${purposeText.charAt(0).toLowerCase()}${purposeText.slice(1)}`,
+    defaultSections,
   };
 }
 
@@ -149,10 +213,22 @@ export function buildProjectOutlinePlan(input: {
   targetPages: number;
   lineSpacing: LineSpacing;
   fontSizePt?: number;
-  chapters: Array<{ id?: string; number: number; title: string; isAutoReferences?: boolean }>;
+  isExperimental?: boolean;
+  useChapters?: boolean;
+  chapters: Array<{
+    id?: string;
+    number: number;
+    title: string;
+    chapterType?: string;
+    brief?: string | null;
+    existingSections?: string[];
+    isAutoReferences?: boolean;
+  }>;
   questions?: Array<{ id: string; orderIndex: number; text: string }>;
 }): ProjectOutlinePlan {
   const wordsPerPage = calculateWordsPerPage(input.lineSpacing, input.fontSizePt ?? 12);
+  const isExperimental = input.isExperimental ?? false;
+  const useChapters = input.useChapters ?? true;
 
   if (input.projectType === "assignment") {
     const qList = input.questions ?? [];
@@ -176,6 +252,8 @@ export function buildProjectOutlinePlan(input: {
 
     return {
       projectType: "assignment",
+      useChapters: false,
+      isExperimental: false,
       targetPages: input.targetPages,
       wordsPerPage,
       chapters: [],
@@ -187,11 +265,75 @@ export function buildProjectOutlinePlan(input: {
     .filter((c) => !c.isAutoReferences)
     .sort((a, b) => a.number - b.number);
   const autoRefChapter = input.chapters.find((c) => c.isAutoReferences);
+  const defaultTemplateByTitle = new Map(
+    getDefaultStructureForWork({
+      type: input.projectType,
+      isExperimental,
+      useChapters,
+    }).map((tpl) => [tpl.title.trim().toLowerCase(), tpl])
+  );
+  const validChapterTypes = new Set<string>(CHAPTER_TYPES);
 
   const classified = contentChapters.map((ch) => {
-    const cls = classifyChapterTitle(ch.title, input.projectType);
-    const weight = CHAPTER_TYPE_TEMPLATES[cls.chapterType].defaultWeight || 12;
-    return { ...ch, cls, weight };
+    const matchedDefault = defaultTemplateByTitle.get(ch.title.trim().toLowerCase());
+    if (matchedDefault) {
+      const weight = CHAPTER_TYPE_TEMPLATES[matchedDefault.chapterType].defaultWeight || 12;
+      return {
+        ...ch,
+        cls: {
+          chapterType: matchedDefault.chapterType,
+          confidence: "high" as const,
+          needsConfirmation: false,
+          inferredPurpose: ch.brief?.trim() || matchedDefault.purpose,
+          defaultSections:
+            ch.existingSections && ch.existingSections.length > 0
+              ? ch.existingSections
+              : [...matchedDefault.sections],
+        },
+        weight,
+      };
+    }
+
+    const cls = classifyChapterTitle(ch.title, input.projectType, {
+      isExperimental,
+      useChapters,
+    });
+    const storedType =
+      ch.chapterType && validChapterTypes.has(ch.chapterType)
+        ? (ch.chapterType as ChapterType)
+        : null;
+    const resolvedType: ChapterType =
+      cls.chapterType !== "custom"
+        ? cls.chapterType
+        : storedType && storedType !== "custom" && (isExperimental || storedType !== "results")
+          ? storedType
+          : "custom";
+    const hasCustomTailoredBrief = Boolean(
+      ch.brief?.trim() && ch.existingSections && ch.existingSections.length > 0
+    );
+    const effectiveCls =
+      resolvedType !== cls.chapterType || hasCustomTailoredBrief
+        ? {
+            chapterType: resolvedType,
+            confidence: "high" as const,
+            needsConfirmation: false,
+            inferredPurpose: ch.brief?.trim() || cls.inferredPurpose,
+            defaultSections:
+              ch.existingSections && ch.existingSections.length > 0
+                ? ch.existingSections
+                : cls.defaultSections,
+          }
+        : {
+            ...cls,
+            inferredPurpose: ch.brief?.trim() || cls.inferredPurpose,
+            defaultSections:
+              ch.existingSections && ch.existingSections.length > 0
+                ? ch.existingSections
+                : cls.defaultSections,
+          };
+
+    const weight = CHAPTER_TYPE_TEMPLATES[effectiveCls.chapterType].defaultWeight || 12;
+    return { ...ch, cls: effectiveCls, weight };
   });
 
   const totalWeight = classified.reduce((sum, item) => sum + item.weight, 0) || 1;
@@ -241,6 +383,8 @@ export function buildProjectOutlinePlan(input: {
 
   return {
     projectType: input.projectType,
+    useChapters,
+    isExperimental,
     targetPages: input.targetPages,
     wordsPerPage,
     chapters: plannedChapters,
@@ -279,15 +423,19 @@ export function validateConfirmedOutline(outline: ProjectOutlinePlan): OutlineVa
     return { valid: errors.length === 0, errors, allocatedPages, varianceRatio };
   }
 
+  const useChapters = outline.useChapters ?? true;
+  const unitLabel = (num: number) => formatUnitShortLabel(num, useChapters);
+  const unitLower = unitNounSingular(useChapters);
+
   const contentChapters = outline.chapters.filter((c) => !c.isAutoReferences);
   if (contentChapters.length === 0) {
-    errors.push("Outline must include at least one content chapter.");
+    errors.push(`Outline must include at least one content ${unitLower}.`);
   }
 
   const seenNumbers = new Set<number>();
   for (const ch of outline.chapters) {
     if (seenNumbers.has(ch.number)) {
-      errors.push(`Duplicate chapter number: Chapter ${ch.number}.`);
+      errors.push(`Duplicate ${unitLower} number: ${unitLabel(ch.number)}.`);
     }
     seenNumbers.add(ch.number);
   }
@@ -295,17 +443,17 @@ export function validateConfirmedOutline(outline: ProjectOutlinePlan): OutlineVa
   for (const ch of contentChapters) {
     if (ch.needsConfirmation && !ch.purposeConfirmed) {
       errors.push(
-        `Confirm or edit the purpose of Chapter ${ch.number} ("${ch.title}") before locking the outline.`
+        `Confirm or edit the purpose of ${unitLabel(ch.number)} ("${ch.title}") before locking the outline.`
       );
     }
     if (ch.pageBudget < 1) {
       errors.push(
-        `Chapter ${ch.number} ("${ch.title}") must have a page budget of at least 1 page.`
+        `${unitLabel(ch.number)} ("${ch.title}") must have a page budget of at least 1 page.`
       );
     }
     if (ch.sections.length === 0) {
       errors.push(
-        `Chapter ${ch.number} ("${ch.title}") must include at least one section heading.`
+        `${unitLabel(ch.number)} ("${ch.title}") must include at least one ${useChapters ? "section" : "subsection"} heading.`
       );
     }
   }
@@ -322,7 +470,7 @@ export function validateConfirmedOutline(outline: ProjectOutlinePlan): OutlineVa
 
   if (diff > allowedPages) {
     errors.push(
-      `Chapter page budgets sum to ${allocatedPages} pages, outside the 2% tolerance for target ${outline.targetPages} pages.`
+      `${useChapters ? "Chapter" : "Section"} page budgets sum to ${allocatedPages} pages, outside the 2% tolerance for target ${outline.targetPages} pages.`
     );
   }
 

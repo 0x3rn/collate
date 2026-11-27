@@ -1,13 +1,17 @@
+import { z } from "zod";
 import {
   getProjectOutlineForUser,
   OutlineError,
   saveConfirmedOutlineForUser,
   setOutlineLockForUser,
+  suggestAndPersistOutlineForUser,
 } from "@/db/queries/outline";
+import type { CallLLMContext } from "@/lib/ai/call-llm";
 import { isAllowedOrigin, jsonNoStore, readSessionTokenFromRequest } from "@/lib/auth/cookies";
 import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { getSessionFromToken } from "@/lib/auth/service";
 import { logEvent } from "@/lib/observability/logger";
+import { serializeWizardState } from "@/lib/wizard/http-handlers";
 
 async function requireSession(request: Request, deps: HttpAuthDeps) {
   const isProd = deps.appEnv === "prod";
@@ -95,5 +99,72 @@ export async function handleUnlockOutline(
     return jsonNoStore({ ok: true, ...res }, 200);
   } catch (err) {
     return handleOutlineError(err, "unlock_outline");
+  }
+}
+
+const SuggestOutlineBodySchema = z
+  .object({
+    resetToDefault: z.boolean().optional(),
+    desiredUnitCount: z.number().int().min(3).max(8).optional(),
+  })
+  .optional();
+
+export interface OutlineSuggestHttpDeps extends HttpAuthDeps {
+  llmCtx?: CallLLMContext;
+}
+
+export async function handleSuggestOutline(
+  request: Request,
+  projectId: string,
+  deps: OutlineSuggestHttpDeps
+): Promise<Response> {
+  if (!isAllowedOrigin(request, deps.appUrl)) {
+    return jsonNoStore({ ok: false, error: "Forbidden cross-origin request." }, 403);
+  }
+
+  const session = await requireSession(request, deps);
+  if (!session) {
+    return jsonNoStore({ ok: false, error: "Authentication required." }, 401);
+  }
+
+  let body: z.infer<typeof SuggestOutlineBodySchema> = undefined;
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      const rawText = await request.text();
+      if (rawText.trim()) {
+        const parsed = SuggestOutlineBodySchema.safeParse(JSON.parse(rawText));
+        if (!parsed.success) {
+          return jsonNoStore(
+            { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid request body." },
+            400
+          );
+        }
+        body = parsed.data;
+      }
+    } catch {
+      return jsonNoStore({ ok: false, error: "Invalid JSON request body." }, 400);
+    }
+  }
+
+  try {
+    const now = (deps.nowFn ?? (() => new Date()))();
+    const result = await suggestAndPersistOutlineForUser(deps.db, session.user.id, projectId, {
+      resetToDefault: body?.resetToDefault,
+      desiredUnitCount: body?.desiredUnitCount,
+      llmCtx: deps.llmCtx,
+      now,
+    });
+    return jsonNoStore(
+      {
+        ok: true,
+        usedAi: result.usedAi,
+        outline: result.outline,
+        wizard: serializeWizardState(result.wizard),
+      },
+      200
+    );
+  } catch (err) {
+    return handleOutlineError(err, "suggest_outline");
   }
 }

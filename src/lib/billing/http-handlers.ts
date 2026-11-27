@@ -1,4 +1,4 @@
-import { desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { findCreditPack } from "@/config/pricing";
 import { auditLog, creditLedger, jobsLog, payments, users } from "@/db/schema";
@@ -53,6 +53,7 @@ export interface PolarProductIdMap {
 
 export interface BillingHttpDeps extends HttpAuthDeps {
   paystackSecretKey?: string;
+  paystackWebhookSecret?: string;
   polarAccessToken?: string;
   polarWebhookSecret?: string;
   polarEnvironment?: string;
@@ -197,6 +198,14 @@ export async function handleCreateCheckout(
           userId: session.user.id,
           credits: pack.credits,
           packId: pack.id,
+          cancel_action: `${appUrl}/billing?payment=cancelled`,
+          custom_fields: [
+            {
+              display_name: "Credit Pack",
+              variable_name: "credit_pack",
+              value: pack.label,
+            },
+          ],
         },
       }),
     });
@@ -424,6 +433,234 @@ function formatMinorAmount(currency: string, amountMinor: number): string {
   return `${currency.toUpperCase()} ${major}`;
 }
 
+async function notifySettledPayment(
+  payment: {
+    userId: string;
+    provider: string;
+    providerReference: string;
+    currency: string;
+    amountMinor: number;
+    creditsGranted: number;
+  },
+  deps: Pick<BillingHttpDeps, "db" | "mailer" | "appUrl" | "adminNotifier">
+): Promise<void> {
+  const [usr] = await deps.db.select().from(users).where(eq(users.id, payment.userId)).limit(1);
+
+  await deps.adminNotifier?.send(
+    buildPaymentAlert({
+      amountFormatted: formatMinorAmount(payment.currency, payment.amountMinor),
+      creditsAdded: payment.creditsGranted,
+      provider: payment.provider,
+      customerName: usr?.name,
+      customerEmail: usr?.email,
+    })
+  );
+
+  if (usr) {
+    let appUrl = deps.appUrl.trim();
+    while (appUrl.endsWith("/")) appUrl = appUrl.slice(0, -1);
+    await dispatchUserNotification(deps.db, deps.mailer, {
+      userId: usr.id,
+      kind: "receipt",
+      message: buildPaymentReceiptEmail({
+        name: usr.name,
+        amountFormatted: formatMinorAmount(payment.currency, payment.amountMinor),
+        creditsAdded: payment.creditsGranted,
+        reference: payment.providerReference,
+        accountUrl: `${appUrl}/billing`,
+      }),
+    });
+  }
+}
+
+const PaystackVerifyResponseSchema = z.object({
+  status: z.boolean(),
+  data: z
+    .object({
+      id: z.union([z.number().int().positive(), z.string().min(1)]).optional(),
+      reference: z.string().min(1),
+      amount: z.number().int().positive(),
+      currency: z.string().min(3).default("NGN"),
+      status: z.string().min(1),
+      metadata: z.unknown().optional(),
+    })
+    .passthrough()
+    .optional(),
+});
+
+export interface PaystackCallbackVerifyResult {
+  status: "succeeded" | "pending" | "failed" | "cancelled" | "ignored";
+  alreadyProcessed?: boolean;
+  newBalance?: number;
+}
+
+/**
+ * Verifies a returning Paystack checkout reference server-side via Paystack's Verify Transaction
+ * API and settles credits idempotently. Ensures users immediately see their updated credits on
+ * redirect even before the webhook arrives, while deduplicating cleanly when the webhook fires.
+ */
+export async function verifyAndSettlePaystackCallback(
+  params: { reference: string; userId: string },
+  deps: Pick<
+    BillingHttpDeps,
+    "db" | "mailer" | "appUrl" | "adminNotifier" | "paystackSecretKey" | "fetchFn" | "nowFn"
+  >
+): Promise<PaystackCallbackVerifyResult> {
+  const reference = params.reference.trim();
+  const secret = deps.paystackSecretKey?.trim();
+  if (!reference || reference.length > 120 || !secret) {
+    return { status: "ignored" };
+  }
+
+  const [existing] = await deps.db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.provider, "paystack"),
+        eq(payments.providerReference, reference),
+        eq(payments.userId, params.userId)
+      )
+    )
+    .limit(1);
+
+  if (!existing) {
+    return { status: "ignored" };
+  }
+  if (existing.status === "succeeded") {
+    return { status: "succeeded", alreadyProcessed: true };
+  }
+  if (existing.status !== "pending") {
+    return { status: existing.status === "failed" ? "failed" : "cancelled" };
+  }
+
+  const fetchFn = deps.fetchFn ?? globalThis.fetch;
+  const now = (deps.nowFn ?? (() => new Date()))();
+  let verifyRes: Response;
+  try {
+    verifyRes = await fetchFn(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      {
+        method: "GET",
+        headers: {
+          authorization: `Bearer ${secret}`,
+          accept: "application/json",
+        },
+        signal: AbortSignal.timeout(10_000),
+      }
+    );
+  } catch (err) {
+    logEvent("warn", "billing.paystack_verify_network_error", {
+      data: { reference, reason: err instanceof Error ? err.message : String(err) },
+    });
+    return { status: "pending" };
+  }
+
+  if (!verifyRes.ok) {
+    logEvent("warn", "billing.paystack_verify_http_error", {
+      data: { reference, status: verifyRes.status },
+    });
+    return { status: "pending" };
+  }
+
+  let rawJson: unknown;
+  try {
+    rawJson = await verifyRes.json();
+  } catch {
+    return { status: "pending" };
+  }
+
+  const parsed = PaystackVerifyResponseSchema.safeParse(rawJson);
+  if (!parsed.success || !parsed.data.status || !parsed.data.data) {
+    return { status: "pending" };
+  }
+
+  const tx = parsed.data.data;
+  if (tx.reference !== reference) {
+    return { status: "pending" };
+  }
+
+  const txStatus = tx.status.trim().toLowerCase();
+  const wrappedRawEvent = JSON.stringify({ event: "charge.success", data: tx });
+
+  if (txStatus === "failed") {
+    await markPendingPaymentTerminal(deps.db, {
+      provider: "paystack",
+      providerReference: reference,
+      status: "failed",
+      rawEventJson: JSON.stringify({ event: "charge.failed", data: tx }),
+      now,
+    });
+    return { status: "failed" };
+  }
+
+  if (txStatus === "abandoned") {
+    await markPendingPaymentTerminal(deps.db, {
+      provider: "paystack",
+      providerReference: reference,
+      status: "cancelled",
+      rawEventJson: JSON.stringify({ event: "charge.abandoned", data: tx }),
+      now,
+    });
+    return { status: "cancelled" };
+  }
+
+  if (txStatus !== "success") {
+    return { status: "pending" };
+  }
+
+  let metaObj: Record<string, unknown> | null = null;
+  if (typeof tx.metadata === "string") {
+    try {
+      const m = JSON.parse(tx.metadata);
+      if (m && typeof m === "object") metaObj = m as Record<string, unknown>;
+    } catch {
+      metaObj = null;
+    }
+  } else if (tx.metadata && typeof tx.metadata === "object") {
+    metaObj = tx.metadata as Record<string, unknown>;
+  }
+
+  if (typeof metaObj?.userId === "string" && metaObj.userId.trim() !== existing.userId) {
+    logEvent("warn", "billing.paystack_verify_user_mismatch", { data: { reference } });
+    return { status: "ignored" };
+  }
+
+  const paystackTxId = tx.id !== undefined ? String(tx.id).trim() : undefined;
+  const normalizedPayment = {
+    provider: "paystack" as const,
+    providerReference: reference,
+    ...(paystackTxId ? { providerOrderId: paystackTxId } : {}),
+    userId: existing.userId,
+    currency: tx.currency.toUpperCase(),
+    amountMinor: tx.amount,
+    creditsGranted: existing.creditsGranted,
+    eventType: "charge.success",
+  };
+
+  try {
+    const granted = await grantPaymentCreditsIdempotent(
+      deps.db,
+      normalizedPayment,
+      wrappedRawEvent,
+      now
+    );
+    if (!granted.alreadyProcessed) {
+      await notifySettledPayment(normalizedPayment, deps);
+    }
+    return {
+      status: "succeeded",
+      alreadyProcessed: granted.alreadyProcessed,
+      newBalance: granted.newBalance,
+    };
+  } catch (err) {
+    logEvent("error", "billing.paystack_verify_settle_error", {
+      data: { reference, reason: err instanceof Error ? err.message : String(err) },
+    });
+    return { status: "pending" };
+  }
+}
+
 /** Refund and dispute events from a payment provider (signature already checked). */
 async function handleReversalWebhook(
   parsed: ParsedReversal | null,
@@ -463,16 +700,21 @@ export async function handlePaystackWebhook(
   request: Request,
   deps: BillingHttpDeps
 ): Promise<Response> {
-  const secret = deps.paystackSecretKey?.trim();
-  if (!secret) {
+  const secretKey = deps.paystackSecretKey?.trim();
+  const webhookSecret = deps.paystackWebhookSecret?.trim();
+  if (!secretKey && !webhookSecret) {
     return jsonNoStore({ ok: false, error: "Paystack webhook secret is not configured." }, 503);
   }
 
   const rawBody = await request.text();
+  const now = (deps.nowFn ?? (() => new Date()))();
   const verified = await verifyPaystackWebhook({
     rawBody,
+    paystackSignatureHeader: request.headers.get("paystack-signature"),
     signatureHeader: request.headers.get("x-paystack-signature"),
-    secretKey: secret,
+    webhookSecret,
+    secretKey,
+    nowMs: now.getTime(),
   });
 
   if (!verified.valid) {
@@ -481,7 +723,6 @@ export async function handlePaystackWebhook(
   if (verified.ignored || !verified.payment) {
     const failed = parsePaystackChargeFailure(verified.rawEvent);
     if (failed) {
-      const now = (deps.nowFn ?? (() => new Date()))();
       const res = await markPendingPaymentTerminal(deps.db, {
         provider: failed.provider,
         providerReference: failed.providerReference,
@@ -494,48 +735,11 @@ export async function handlePaystackWebhook(
     return handleReversalWebhook(parsePaystackReversal(verified.rawEvent), deps);
   }
 
-  const now = (deps.nowFn ?? (() => new Date()))();
   try {
     const granted = await grantPaymentCreditsIdempotent(deps.db, verified.payment, rawBody, now);
 
     if (!granted.alreadyProcessed) {
-      const [usr] = await deps.db
-        .select()
-        .from(users)
-        .where(eq(users.id, verified.payment.userId))
-        .limit(1);
-
-      await deps.adminNotifier?.send(
-        buildPaymentAlert({
-          amountFormatted: formatMinorAmount(
-            verified.payment.currency,
-            verified.payment.amountMinor
-          ),
-          creditsAdded: verified.payment.creditsGranted,
-          provider: verified.payment.provider,
-          customerName: usr?.name,
-          customerEmail: usr?.email,
-        })
-      );
-
-      if (usr) {
-        let appUrl = deps.appUrl.trim();
-        while (appUrl.endsWith("/")) appUrl = appUrl.slice(0, -1);
-        await dispatchUserNotification(deps.db, deps.mailer, {
-          userId: usr.id,
-          kind: "receipt",
-          message: buildPaymentReceiptEmail({
-            name: usr.name,
-            amountFormatted: formatMinorAmount(
-              verified.payment.currency,
-              verified.payment.amountMinor
-            ),
-            creditsAdded: verified.payment.creditsGranted,
-            reference: verified.payment.providerReference,
-            accountUrl: `${appUrl}/account`,
-          }),
-        });
-      }
+      await notifySettledPayment(verified.payment, deps);
     }
 
     return jsonNoStore({ ok: true, ...granted }, 200);

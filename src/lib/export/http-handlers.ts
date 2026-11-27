@@ -261,6 +261,7 @@ export async function handleCreateExport(
     projectTitle: wizard.project.title,
     workTypeLabel: formatProjectType(wizard.project.type),
     level: wizard.project.level,
+    useChapters: wizard.settings.useChapters,
     abstractText: abstractText || undefined,
     formatting: {
       font: wizard.settings.font,

@@ -477,7 +477,11 @@ export function StepLengthForm({
           Back
         </Button>
         <Button type="submit" loading={saving} loadingLabel="Saving length...">
-          {wizard.project.type === "assignment" ? "Continue to citations" : "Continue to chapters"}
+          {wizard.project.type === "assignment"
+            ? "Continue to citations"
+            : (wizard.settings?.useChapters ?? true)
+              ? "Continue to chapters"
+              : "Continue to sections"}
         </Button>
       </div>
     </form>

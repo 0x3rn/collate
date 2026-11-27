@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { WRITING_CONFIG } from "@/config/writing";
-import type { ClaimVerdict, SpellingVariant } from "@/db/schema";
+import type { ClaimVerdict, ProjectType, SpellingVariant } from "@/db/schema";
 import { callLLM, type CallLLMContext } from "@/lib/ai/call-llm";
+import { formatUnitHeading, unitNounSingular } from "@/lib/outline/structures";
 import type { RetrievedEvidencePassage } from "./retrieval";
 import { writingStyleForLevel } from "./level-style";
 
@@ -149,15 +150,85 @@ export interface DraftFigureContext {
 }
 
 export function isWorkStructureSection(sectionHeading: string): boolean {
-  return /\b(structure|organi[sz]ation|outline|overview|layout)\b.*\b(work|study|thesis|dissertation|paper|report|project|chapters?)\b|\bchapter\s+(overview|breakdown|summaries?|organisation|organization)\b/i.test(
+  return /\b(structure|organi[sz]ation|outline|overview|layout)\b.*\b(work|study|thesis|dissertation|paper|report|project|chapters?|sections?)\b|\b(chapter|section)\s+(overview|breakdown|summaries?|organisation|organization)\b/i.test(
     sectionHeading
   );
+}
+
+/**
+ * Produces explicit document-format and study-mode instructions so the drafting model
+ * respects work type (research paper vs project vs thesis), chapter vs continuous-section
+ * layout, and pure-literature vs experimental scope.
+ */
+export function buildDocumentModePromptGuidance(params: {
+  projectType?: ProjectType;
+  useChapters?: boolean;
+  isExperimental?: boolean;
+  hasEmpiricalData?: boolean;
+  chapterTitle: string;
+  sectionHeading: string;
+}): string[] {
+  const projectType = params.projectType ?? "project";
+  const useChapters = params.useChapters ?? true;
+  const isExperimental = params.isExperimental ?? false;
+  const isExplicitResultsUnit = /\b(results?|findings?|data\s+presentation)\b/i.test(
+    params.chapterTitle
+  );
+  const lines: string[] = [];
+
+  if (projectType === "research") {
+    if (!useChapters) {
+      lines.push(
+        `DOCUMENT FORMAT (CONTINUOUS RESEARCH PAPER — NO CHAPTERS): You are drafting subsection "${params.sectionHeading}" inside top-level paper section "${params.chapterTitle}". Write crisp, cohesive journal-article prose. NEVER refer to "Chapter 1", "this chapter", or "subsequent chapters"; refer to "this paper", "this section", or "subsequent sections" instead.`
+      );
+    } else {
+      lines.push(
+        `DOCUMENT FORMAT (CHAPTERED RESEARCH PAPER): You are drafting section "${params.sectionHeading}" within chapter "${params.chapterTitle}" of a chaptered research paper.`
+      );
+    }
+  } else if (projectType === "thesis") {
+    if (!useChapters) {
+      lines.push(
+        `DOCUMENT FORMAT (CONTINUOUS SECTION-BASED THESIS — NO CHAPTERS): You are drafting subsection "${params.sectionHeading}" within top-level section "${params.chapterTitle}". NEVER refer to "Chapter 1", "this chapter", or "the next chapter"; refer to "this thesis", "this section", and numbered sections instead.`
+      );
+    } else {
+      lines.push(
+        `DOCUMENT FORMAT (FORMAL ACADEMIC THESIS): You are drafting section "${params.sectionHeading}" within chapter "${params.chapterTitle}" of an academic thesis.`
+      );
+    }
+  } else if (projectType === "project") {
+    if (!useChapters) {
+      lines.push(
+        `DOCUMENT FORMAT (CONTINUOUS PROJECT REPORT — NO CHAPTERS): You are drafting subsection "${params.sectionHeading}" within top-level section "${params.chapterTitle}". NEVER refer to "Chapter 1" or "this chapter"; refer to "this study", "this report", and numbered sections instead.`
+      );
+    } else {
+      lines.push(
+        `DOCUMENT FORMAT (ACADEMIC PROJECT): You are drafting section "${params.sectionHeading}" within chapter "${params.chapterTitle}" of an academic project.`
+      );
+    }
+  }
+
+  if (
+    projectType !== "assignment" &&
+    !isExperimental &&
+    !params.hasEmpiricalData &&
+    !isExplicitResultsUnit
+  ) {
+    lines.push(
+      "STUDY MODE (PURE LITERATURE / NON-EXPERIMENTAL DESK RESEARCH): This study is built strictly from published scholarship, conceptual frameworks, legal/policy documents, and secondary literature. There are NO primary laboratory experiments, NO field surveys, NO questionnaires, NO original sample sizes, and NO primary empirical datasets. NEVER invent sample sizes, survey respondents, questionnaires, laboratory assays, SPSS tests, or experimental results; develop rigorous conceptual, thematic, comparative, and critical analysis strictly grounded in the verified passages."
+    );
+  }
+
+  return lines;
 }
 
 export async function draftAndVerifySection(
   input: {
     workflowId: string;
     projectId: string;
+    projectType?: ProjectType;
+    useChapters?: boolean;
+    isExperimental?: boolean;
     topic: string;
     chapterTitle: string;
     sectionHeading: string;
@@ -274,6 +345,9 @@ export async function draftAndVerifySection(
           .join("\n\n")
       : "";
 
+  const useChapters = input.useChapters ?? true;
+  const unitCap = unitNounSingular(useChapters, true);
+  const unitLower = unitNounSingular(useChapters, false);
   const hasChapterGuidance = Boolean(!isSurgicalRevision && input.chapterGuidance?.trim());
   const isStructureSection = Boolean(
     !omitChapterWideContext &&
@@ -281,12 +355,19 @@ export async function draftAndVerifySection(
     isWorkStructureSection(input.sectionHeading)
   );
   const systemRules: string[] = isStructureSection
-    ? [
-        "1. STRUCTURE OF THE WORK (CHAPTER ROADMAP): Write a clear, concise academic roadmap of the entire document in continuous prose (do NOT use bullet lists unless explicitly requested by the author). State the exact number of chapters listed in PROJECT CHAPTER OUTLINE and walk sequentially from Chapter 1 through the final chapter using each chapter's exact number, exact title, and planned section scope.",
-        "2. Explain briefly in 1 to 3 sentences per chapter what each chapter does using precise academic verbs (for example: introduces, reviews, details, examines, presents, discusses, concludes) and how each chapter connects to the research topic.",
-        "3. Ground this roadmap strictly in PROJECT CHAPTER OUTLINE and the study topic. Never invent chapters outside the outline, never fabricate empirical results, sample sizes, or findings for later chapters, and do NOT force unrelated external citations into this structural overview (return an empty claims array when no external sources are cited).",
-        "4. Write in original academic prose. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
-      ]
+    ? useChapters
+      ? [
+          "1. STRUCTURE OF THE WORK (CHAPTER ROADMAP): Write a clear, concise academic roadmap of the entire document in continuous prose (do NOT use bullet lists unless explicitly requested by the author). State the exact number of chapters listed in PROJECT CHAPTER OUTLINE and walk sequentially from Chapter 1 through the final chapter using each chapter's exact number, exact title, and planned section scope.",
+          "2. Explain briefly in 1 to 3 sentences per chapter what each chapter does using precise academic verbs (for example: introduces, reviews, details, examines, presents, discusses, concludes) and how each chapter connects to the research topic.",
+          "3. Ground this roadmap strictly in PROJECT CHAPTER OUTLINE and the study topic. Never invent chapters outside the outline, never fabricate empirical results, sample sizes, or findings for later chapters, and do NOT force unrelated external citations into this structural overview (return an empty claims array when no external sources are cited).",
+          "4. Write in original academic prose. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
+        ]
+      : [
+          "1. STRUCTURE OF THE PAPER (SECTION ROADMAP): Write a clear, concise academic roadmap of the paper in continuous prose (do NOT use bullet lists unless explicitly requested). Walk sequentially from Section 1 through the final section listed in DOCUMENT SECTION OUTLINE using each section's exact number, exact title, and planned scope. NEVER call sections 'Chapters'.",
+          "2. Explain briefly in 1 to 2 sentences per section what each section accomplishes using precise academic verbs (introduces, establishes, synthesizes, evaluates, concludes) and how it advances the argument.",
+          "3. Ground this roadmap strictly in DOCUMENT SECTION OUTLINE and the study topic. Never invent sections outside the outline, never fabricate empirical results or data, and do NOT force unrelated external citations into this overview (return an empty claims array when no external sources are cited).",
+          "4. Write in original academic prose. Do not use em-dashes (\u2014) or spaced en-dashes as sentence punctuation; use commas, colons, parentheses, or separate sentences instead.",
+        ]
     : [
         "1. Use ONLY the provided passages, verified data tables, and any explicit experimental measurements supplied by the author below. Never invent statistics, quotes, or sources.",
         `2. You may cite ONLY these registered citation keys using [@key] syntax: ${allowedKeys.map((k) => `@${k}`).join(", ") || "(none)"}. Attach [@key] citations strictly to claims supported by the provided scholarly passages.`,
@@ -299,7 +380,7 @@ export async function draftAndVerifySection(
   }
   if (hasChapterGuidance) {
     systemRules.push(
-      `${systemRules.length + 1}. AUTHOR PRE-START INSTRUCTIONS & NOTES (APPENDED — STAY ON THE MAIN CHAPTER PLAN): You MUST still fully draft the planned section "${input.sectionHeading}" according to its academic purpose, target word budget, and verified scholarly passages. Do NOT deviate from or abandon the section's main academic scope. Alongside the main plan, apply every instruction from AUTHOR PRE-START INSTRUCTIONS that fits this section (specific focus points, frameworks, terminology, formatting, or experimental details). Treat any numbers, measurements, or tables explicitly supplied by the author as verified primary data (Rule NN-4: report them accurately without altering or fabricating additional figures).`
+      `${systemRules.length + 1}. AUTHOR PRE-START INSTRUCTIONS & NOTES (APPENDED — STAY ON THE MAIN ${useChapters ? "CHAPTER" : "SECTION"} PLAN): You MUST still fully draft the planned ${useChapters ? "section" : "subsection"} "${input.sectionHeading}" according to its academic purpose, target word budget, and verified scholarly passages. Do NOT deviate from or abandon its main academic scope. Alongside the main plan, apply every instruction from AUTHOR PRE-START INSTRUCTIONS that fits this part (specific focus points, frameworks, terminology, formatting, or supplied details). Treat any numbers, measurements, or tables explicitly supplied by the author as verified primary data (Rule NN-4: report them accurately without altering or fabricating additional figures).`
     );
   }
   if (hasChapterGuidance && input.extraDataContext?.trim()) {
@@ -316,27 +397,37 @@ export async function draftAndVerifySection(
     `${systemRules.length + 1}. Return ONLY a valid JSON object: { "prose": "...", "claims": [{ "text": "...", "citeKey": "bare_key_without_at", "passageId": "..." }] }.`
   );
 
+  const documentModeGuidance = buildDocumentModePromptGuidance({
+    projectType: input.projectType,
+    useChapters: input.useChapters,
+    isExperimental: input.isExperimental,
+    hasEmpiricalData: Boolean(input.extraDataContext?.trim()),
+    chapterTitle: input.chapterTitle,
+    sectionHeading: input.sectionHeading,
+  });
+
   const systemPrompt = [
-    `You are an academic researcher ${isSurgicalRevision ? "performing a surgical revision of" : "drafting"} a section of "${input.chapterTitle}" (${WRITING_CONFIG.promptVersion}).`,
+    `You are an academic researcher ${isSurgicalRevision ? "performing a surgical revision of" : "drafting"} a ${useChapters ? "section" : "subsection"} of "${input.chapterTitle}" (${WRITING_CONFIG.promptVersion}).`,
     `Academic level: ${input.level || "University"}. Spelling: ${input.spelling.toUpperCase()} English.`,
     writingStyleForLevel(input.level),
     "STRICT EVIDENCE RULES (NON-NEGOTIABLE):",
     ...systemRules,
+    ...documentModeGuidance,
   ].join("\n");
 
   const baseUserPrompt = [
     `Topic: ${input.topic}`,
-    `Section heading: ${input.sectionHeading}`,
+    `${useChapters ? "Section heading" : "Subsection heading"}: ${input.sectionHeading}`,
     `Target length: approximately ${input.wordBudget} words.`,
     isStructureSection && input.projectOutlineText?.trim()
-      ? `PROJECT CHAPTER OUTLINE:\n${input.projectOutlineText.trim()}`
+      ? `${useChapters ? "PROJECT CHAPTER OUTLINE" : "DOCUMENT SECTION OUTLINE"}:\n${input.projectOutlineText.trim()}`
       : "",
     !omitChapterWideContext && input.priorSummaryText
-      ? `Prior chapter memory:\n${input.priorSummaryText}`
+      ? `Prior ${unitLower} memory:\n${input.priorSummaryText}`
       : "",
     !omitChapterWideContext && input.glossaryText ? `Glossary terms:\n${input.glossaryText}` : "",
     input.existingSectionProse
-      ? `CURRENT SECTION TEXT (preserve untouched sentences verbatim):\n${input.existingSectionProse}`
+      ? `CURRENT ${unitCap.toUpperCase()} TEXT (preserve untouched sentences verbatim):\n${input.existingSectionProse}`
       : "",
     hasChapterGuidance
       ? `AUTHOR PRE-START INSTRUCTIONS & NOTES (apply alongside the main plan without deviating from "${input.sectionHeading}"):\n${input.chapterGuidance!.trim()}`
@@ -579,6 +670,7 @@ export async function enforceChapterLengthBand(
     workflowId: string;
     projectId: string;
     chapterTitle: string;
+    useChapters?: boolean;
     assembledMarkdown: string;
     targetPages: number;
     wordsPerPage: number;
@@ -589,6 +681,9 @@ export async function enforceChapterLengthBand(
   llmCtx: CallLLMContext
 ): Promise<{ markdown: string; wordCount: number; pageCount: number; adjustments: number }> {
   const measure = params.measurePagesFn ?? defaultMeasurePages;
+  const useChapters = params.useChapters ?? true;
+  const unitLower = unitNounSingular(useChapters, false);
+  const unitUpper = unitLower.toUpperCase();
   const minPages = Math.max(1, Math.floor(params.targetPages * WRITING_CONFIG.lengthBand.minRatio));
   const maxPages = Math.max(
     minPages + 1,
@@ -608,8 +703,8 @@ export async function enforceChapterLengthBand(
     const targetWords = params.targetPages * params.wordsPerPage;
 
     const instruction = isShort
-      ? `The chapter currently measures ${pageCount} pages, below the minimum target band (${minPages}-${maxPages} pages; ~${targetWords} words). Expand the analysis using ONLY the verified evidence passages below: add deeper synthesis and comparisons, never filler or repetition. Keep all existing [@citeKey] markers intact and avoid em-dashes (\u2014).`
-      : `The chapter currently measures ${pageCount} pages, above the maximum target band (${minPages}-${maxPages} pages; ~${targetWords} words). Tighten wordy prose while keeping every cited factual claim and [@citeKey] intact, and avoid em-dashes (\u2014).`;
+      ? `The ${unitLower} currently measures ${pageCount} pages, below the minimum target band (${minPages}-${maxPages} pages; ~${targetWords} words). Expand the analysis using ONLY the verified evidence passages below: add deeper synthesis and comparisons, never filler or repetition. Keep all existing [@citeKey] markers intact and avoid em-dashes (\u2014).`
+      : `The ${unitLower} currently measures ${pageCount} pages, above the maximum target band (${minPages}-${maxPages} pages; ~${targetWords} words). Tighten wordy prose while keeping every cited factual claim and [@citeKey] intact, and avoid em-dashes (\u2014).`;
 
     const res = await callLLM(
       {
@@ -617,14 +712,13 @@ export async function enforceChapterLengthBand(
         projectId: params.projectId,
         step: isShort ? `length_expand_${adjustments}` : `length_trim_${adjustments}`,
         task: "draft",
-        system:
-          "You are an academic editor calibrating chapter depth strictly from verified evidence passages. Do not use em-dashes (\u2014) as sentence punctuation. Output ONLY the revised chapter Markdown.",
+        system: `You are an academic editor calibrating ${unitLower} depth strictly from verified evidence passages. Preserve the exact top-level Markdown heading format${useChapters ? "" : " (do NOT add 'Chapter' labels)"}. Do not use em-dashes (\u2014) as sentence punctuation. Output ONLY the revised Markdown.`,
         messages: [
           {
             role: "user",
             content: [
               instruction,
-              `CHAPTER (${params.chapterTitle}):\n${markdown}`,
+              `${unitUpper} (${params.chapterTitle}):\n${markdown}`,
               isShort
                 ? `ADDITIONAL VERIFIED PASSAGES:\n${buildEvidenceBlock(params.passages)}`
                 : "",
@@ -662,11 +756,15 @@ export async function summarizeChapterForMemory(
     projectId: string;
     chapterNumber: number;
     chapterTitle: string;
+    useChapters?: boolean;
     chapterMarkdown: string;
     spendCapUsd: number;
   },
   llmCtx: CallLLMContext
 ): Promise<{ summary: string; glossaryTerms: Array<{ term: string; definition: string }> }> {
+  const useChapters = params.useChapters ?? true;
+  const unitLower = unitNounSingular(useChapters, false);
+  const unitHeading = formatUnitHeading(params.chapterNumber, params.chapterTitle, useChapters);
   try {
     const res = await callLLM(
       {
@@ -674,12 +772,13 @@ export async function summarizeChapterForMemory(
         projectId: params.projectId,
         step: `memory_summary_ch${params.chapterNumber}`,
         task: "extract",
-        system:
-          'Summarize the chapter for project memory so later chapters stay consistent. Return ONLY JSON: { "summary": "3-5 sentence summary", "glossaryTerms": [{ "term": "...", "definition": "..." }] }.',
+        system: useChapters
+          ? 'Summarize the chapter for project memory so later chapters stay consistent. Return ONLY JSON: { "summary": "3-5 sentence summary", "glossaryTerms": [{ "term": "...", "definition": "..." }] }.'
+          : 'Summarize this paper section for document memory so later sections stay consistent (do not refer to chapters). Return ONLY JSON: { "summary": "3-5 sentence summary", "glossaryTerms": [{ "term": "...", "definition": "..." }] }.',
         messages: [
           {
             role: "user",
-            content: `Chapter ${params.chapterNumber}: ${params.chapterTitle}\n\n${params.chapterMarkdown.slice(0, 12000)}`,
+            content: `${unitHeading}\n\n${params.chapterMarkdown.slice(0, 12000)}`,
           },
         ],
         maxTokens: 1000,
@@ -711,7 +810,7 @@ export async function summarizeChapterForMemory(
   }
 
   return {
-    summary: `Completed Chapter ${params.chapterNumber} (${params.chapterTitle}) with ${countWords(params.chapterMarkdown)} verified words.`,
+    summary: `Completed ${unitLower === "chapter" ? `Chapter ${params.chapterNumber}` : `Section ${params.chapterNumber}`} (${params.chapterTitle}) with ${countWords(params.chapterMarkdown)} verified words.`,
     glossaryTerms: [],
   };
 }

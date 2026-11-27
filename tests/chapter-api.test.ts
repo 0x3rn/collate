@@ -434,7 +434,8 @@ describe("Phase 7 — Chapter & CSV Dataset HTTP API (NN-8 gating, idempotency &
       alice.userId,
       "thesis",
       now,
-      "Effect of Beta vulgaris on Oxidative Stress Biomarkers"
+      "Effect of Beta vulgaris on Oxidative Stress Biomarkers",
+      { isExperimental: true }
     );
     const projectId = draft.project.id;
     const ch1 = draft.chapters.find((c) => c.number === 1)!;

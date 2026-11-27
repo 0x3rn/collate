@@ -134,22 +134,28 @@ export function buildChapterReadyEmail(params: {
   chapterUrl: string;
   wordCount: number;
   pageCount: number;
+  useChapters?: boolean;
 }): Omit<EmailMessage, "to"> {
   const safeName = params.name.trim() || "there";
+  const useChapters = params.useChapters ?? true;
+  const unitLabel = useChapters
+    ? `Chapter ${params.chapterNumber}`
+    : `Section ${params.chapterNumber}`;
+  const unitLower = useChapters ? "chapter" : "section";
   return {
-    subject: `Chapter ${params.chapterNumber} is ready: ${params.chapterTitle}`,
+    subject: `${unitLabel} is ready: ${params.chapterTitle}`,
     text: [
       `Hi ${safeName},`,
       "",
-      `Chapter ${params.chapterNumber} ("${params.chapterTitle}") for "${params.projectTitle}" is ready for your review.`,
+      `${unitLabel} ("${params.chapterTitle}") for "${params.projectTitle}" is ready for your review.`,
       `Length: ${params.wordCount.toLocaleString()} words (~${params.pageCount} pages).`,
       "",
-      `Open and review Chapter ${params.chapterNumber}:`,
+      `Open and review ${unitLabel}:`,
       params.chapterUrl,
       "",
-      "You can read, make light edits, download the PDF, or start the next chapter whenever you are ready.",
+      `You can read, make light edits, download the PDF, or start the next ${unitLower} whenever you are ready.`,
     ].join("\n"),
-    html: `<p>Hi ${escapeHtml(safeName)},</p><p>Chapter ${params.chapterNumber} (<strong>${escapeHtml(params.chapterTitle)}</strong>) for "${escapeHtml(params.projectTitle)}" is ready for your review.</p><p>Length: ${params.wordCount.toLocaleString()} words (~${params.pageCount} pages).</p><p><a href="${escapeHtml(params.chapterUrl)}">Open Chapter ${params.chapterNumber}</a></p><p>Review your similarity report, make edits, download the PDF, or start the next chapter when ready.</p>`,
+    html: `<p>Hi ${escapeHtml(safeName)},</p><p>${escapeHtml(unitLabel)} (<strong>${escapeHtml(params.chapterTitle)}</strong>) for "${escapeHtml(params.projectTitle)}" is ready for your review.</p><p>Length: ${params.wordCount.toLocaleString()} words (~${params.pageCount} pages).</p><p><a href="${escapeHtml(params.chapterUrl)}">Open ${escapeHtml(unitLabel)}</a></p><p>Review your similarity report, make edits, download the PDF, or start the next ${unitLower} when ready.</p>`,
   };
 }
 
@@ -161,39 +167,44 @@ export function buildChapterNeedsAttentionEmail(params: {
   projectUrl: string;
   reason: string;
   kind?: "technical_error" | "user_input_required";
+  useChapters?: boolean;
 }): Omit<EmailMessage, "to"> {
   const safeName = params.name.trim() || "there";
   const isTechnical = params.kind === "technical_error";
+  const useChapters = params.useChapters ?? true;
+  const unitLabel = useChapters
+    ? `Chapter ${params.chapterNumber}`
+    : `Section ${params.chapterNumber}`;
 
   if (isTechnical) {
     return {
-      subject: `Chapter ${params.chapterNumber} paused temporarily: ${params.projectTitle}`,
+      subject: `${unitLabel} paused temporarily: ${params.projectTitle}`,
       text: [
         `Hi ${safeName},`,
         "",
-        `Drafting for Chapter ${params.chapterNumber} ("${params.chapterTitle}") in "${params.projectTitle}" paused due to a temporary service issue.`,
+        `Drafting for ${unitLabel} ("${params.chapterTitle}") in "${params.projectTitle}" paused due to a temporary service issue.`,
         "",
         params.reason,
         "",
-        `Open your project to resume Chapter ${params.chapterNumber}:`,
+        `Open your workspace to resume ${unitLabel}:`,
         params.projectUrl,
       ].join("\n"),
-      html: `<p>Hi ${escapeHtml(safeName)},</p><p>Drafting for Chapter ${params.chapterNumber} (<strong>${escapeHtml(params.chapterTitle)}</strong>) in "${escapeHtml(params.projectTitle)}" paused due to a temporary service issue.</p><p>${escapeHtml(params.reason)}</p><p><a href="${escapeHtml(params.projectUrl)}">Open project to resume Chapter ${params.chapterNumber}</a></p>`,
+      html: `<p>Hi ${escapeHtml(safeName)},</p><p>Drafting for ${escapeHtml(unitLabel)} (<strong>${escapeHtml(params.chapterTitle)}</strong>) in "${escapeHtml(params.projectTitle)}" paused due to a temporary service issue.</p><p>${escapeHtml(params.reason)}</p><p><a href="${escapeHtml(params.projectUrl)}">Open workspace to resume ${escapeHtml(unitLabel)}</a></p>`,
     };
   }
 
   return {
-    subject: `Chapter ${params.chapterNumber} needs your input: ${params.projectTitle}`,
+    subject: `${unitLabel} needs your input: ${params.projectTitle}`,
     text: [
       `Hi ${safeName},`,
       "",
-      `Chapter ${params.chapterNumber} ("${params.chapterTitle}") for "${params.projectTitle}" paused and needs a few details from you before continuing.`,
+      `${unitLabel} ("${params.chapterTitle}") for "${params.projectTitle}" paused and needs a few details from you before continuing.`,
       `What is needed: ${params.reason}`,
       "",
-      "All completed section progress has been saved safely. Open your project to provide details and resume:",
+      "All completed section progress has been saved safely. Open your workspace to provide details and resume:",
       params.projectUrl,
     ].join("\n"),
-    html: `<p>Hi ${escapeHtml(safeName)},</p><p>Chapter ${params.chapterNumber} (<strong>${escapeHtml(params.chapterTitle)}</strong>) for "${escapeHtml(params.projectTitle)}" paused and needs a few details from you before continuing.</p><p><strong>What is needed:</strong> ${escapeHtml(params.reason)}</p><p>All completed progress has been preserved. <a href="${escapeHtml(params.projectUrl)}">Open project to provide details</a></p>`,
+    html: `<p>Hi ${escapeHtml(safeName)},</p><p>${escapeHtml(unitLabel)} (<strong>${escapeHtml(params.chapterTitle)}</strong>) for "${escapeHtml(params.projectTitle)}" paused and needs a few details from you before continuing.</p><p><strong>What is needed:</strong> ${escapeHtml(params.reason)}</p><p>All completed progress has been preserved. <a href="${escapeHtml(params.projectUrl)}">Open workspace to provide details</a></p>`,
   };
 }
 
@@ -201,17 +212,21 @@ export function buildProjectCompleteEmail(params: {
   name: string;
   projectTitle: string;
   projectUrl: string;
+  workTypeLabel?: string;
+  useChapters?: boolean;
 }): Omit<EmailMessage, "to"> {
   const safeName = params.name.trim() || "there";
+  const workNoun = (params.workTypeLabel ?? "project").toLowerCase();
+  const unitsLower = params.useChapters === false ? "sections" : "chapters";
   return {
-    subject: `Your full project is ready to download: ${params.projectTitle}`,
+    subject: `Your full ${workNoun} is ready to download: ${params.projectTitle}`,
     text: [
       `Hi ${safeName},`,
       "",
-      `All chapters for "${params.projectTitle}" are complete. You can now export the full typeset PDF and editable Word (.docx) document:`,
+      `All ${unitsLower} for "${params.projectTitle}" are complete. You can now export the full typeset PDF and editable Word (.docx) document:`,
       params.projectUrl,
     ].join("\n"),
-    html: `<p>Hi ${escapeHtml(safeName)},</p><p>All chapters for <strong>${escapeHtml(params.projectTitle)}</strong> are complete.</p><p><a href="${escapeHtml(params.projectUrl)}">Download full project (PDF &amp; Word)</a></p>`,
+    html: `<p>Hi ${escapeHtml(safeName)},</p><p>All ${unitsLower} for <strong>${escapeHtml(params.projectTitle)}</strong> are complete.</p><p><a href="${escapeHtml(params.projectUrl)}">Download full ${escapeHtml(workNoun)} (PDF &amp; Word)</a></p>`,
   };
 }
 

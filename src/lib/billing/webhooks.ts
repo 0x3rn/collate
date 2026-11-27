@@ -95,6 +95,28 @@ export interface NormalizedPaymentWebhook {
   eventType: string;
 }
 
+const PaystackMetadataSchema = z.preprocess(
+  (raw) => {
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      if (!trimmed) return undefined;
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        return undefined;
+      }
+    }
+    return raw;
+  },
+  z
+    .object({
+      userId: z.string().min(1),
+      credits: z.union([z.number().int().positive(), z.string().regex(/^[0-9]+$/)]),
+    })
+    .passthrough()
+    .optional()
+);
+
 const PaystackEventSchema = z.object({
   event: z.string(),
   data: z.object({
@@ -103,31 +125,102 @@ const PaystackEventSchema = z.object({
     amount: z.number().int().positive(),
     currency: z.string().min(3).default("NGN"),
     status: z.string().optional(),
-    metadata: z
-      .object({
-        userId: z.string().min(1),
-        credits: z.union([z.number().int().positive(), z.string().regex(/^[0-9]+$/)]),
-      })
-      .optional(),
+    metadata: PaystackMetadataSchema,
   }),
 });
 
+/**
+ * Parses Paystack's modern `Paystack-Signature` header:
+ * `t=<unix_seconds>,v1=<whk_id>:<hex>` (or `v1=<hex>`, with optional multiple `v1=` entries during secret rotation).
+ */
+export function parsePaystackSignatureHeader(
+  header: string | null | undefined
+): { timestamp: number; signatures: string[] } | null {
+  if (!header) return null;
+  let timestamp: number | null = null;
+  const signatures: string[] = [];
+
+  for (const part of header.split(",")) {
+    const eqIdx = part.indexOf("=");
+    if (eqIdx <= 0) continue;
+    const key = part.slice(0, eqIdx).trim();
+    const val = part.slice(eqIdx + 1).trim();
+    if (!key || !val) continue;
+
+    if (key === "t") {
+      const n = Number(val);
+      if (Number.isInteger(n) && n > 0) timestamp = n;
+    } else if (key === "v1") {
+      const colonIdx = val.indexOf(":");
+      const hex = colonIdx > 0 ? val.slice(colonIdx + 1).trim() : val;
+      if (hex.length > 0) {
+        signatures.push(hex);
+      }
+    }
+  }
+
+  if (!timestamp || signatures.length === 0) return null;
+  return { timestamp, signatures };
+}
+
 export async function verifyPaystackWebhook(params: {
   rawBody: string;
+  paystackSignatureHeader?: string | null;
   signatureHeader: string | null;
-  secretKey: string;
+  webhookSecret?: string | null;
+  secretKey?: string | null;
+  nowMs?: number;
 }): Promise<
   | { valid: false; reason: string }
   | { valid: true; ignored?: true; payment?: NormalizedPaymentWebhook; rawEvent?: unknown }
 > {
-  const sig = params.signatureHeader?.trim();
-  if (!sig) {
-    return { valid: false, reason: "Missing x-paystack-signature header." };
-  }
+  const modernHeader = params.paystackSignatureHeader?.trim();
+  const legacyHeader = params.signatureHeader?.trim();
+  const webhookSecret = params.webhookSecret?.trim();
+  const secretKey = params.secretKey?.trim();
 
-  const expected = await computeHmacHex("SHA-512", params.secretKey, params.rawBody);
-  if (!timingSafeEqualString(sig.toLowerCase(), expected.toLowerCase())) {
-    return { valid: false, reason: "Invalid Paystack webhook signature." };
+  if (modernHeader) {
+    if (!webhookSecret) {
+      return {
+        valid: false,
+        reason: "PAYSTACK_WEBHOOK_SECRET is required to verify Paystack-Signature headers.",
+      };
+    }
+
+    const parsedSig = parsePaystackSignatureHeader(modernHeader);
+    if (!parsedSig) {
+      return { valid: false, reason: "Malformed Paystack-Signature header." };
+    }
+
+    const nowSec = Math.floor((params.nowMs ?? Date.now()) / 1000);
+    if (Math.abs(nowSec - parsedSig.timestamp) > BILLING_POLICY.webhookReplayWindowSeconds) {
+      return { valid: false, reason: "Paystack webhook timestamp outside replay window." };
+    }
+
+    const signedPayload = `${parsedSig.timestamp}.${params.rawBody}`;
+    const expected = await computeHmacHex("SHA-512", webhookSecret, signedPayload);
+    const matched = parsedSig.signatures.some((sig) =>
+      timingSafeEqualString(sig.toLowerCase(), expected.toLowerCase())
+    );
+    if (!matched) {
+      return { valid: false, reason: "Invalid Paystack webhook signature." };
+    }
+  } else if (legacyHeader) {
+    if (!secretKey) {
+      return {
+        valid: false,
+        reason: "PAYSTACK_SECRET_KEY is required to verify x-paystack-signature headers.",
+      };
+    }
+    const expected = await computeHmacHex("SHA-512", secretKey, params.rawBody);
+    if (!timingSafeEqualString(legacyHeader.toLowerCase(), expected.toLowerCase())) {
+      return { valid: false, reason: "Invalid Paystack webhook signature." };
+    }
+  } else {
+    return {
+      valid: false,
+      reason: "Missing Paystack-Signature or x-paystack-signature header.",
+    };
   }
 
   let parsedJson: unknown;

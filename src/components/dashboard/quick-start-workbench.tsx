@@ -7,6 +7,7 @@ import { ArrowRightIcon } from "@/components/layout/workspace-icons";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import type { ProjectType } from "@/db/schema";
+import { defaultUseChaptersForType } from "@/lib/outline/structures";
 
 const WORKBENCH_TYPES: Array<{
   type: ProjectType;
@@ -35,7 +36,7 @@ const WORKBENCH_TYPES: Array<{
       "Enter your research paper title to jump straight into setup, or leave it blank to refine it next.",
     inputLabel: "Research paper title",
     placeholder: "e.g. Mobile money and smallholder farm incomes",
-    footerNote: "Sources are verified against research indexes before any chapter drafting starts.",
+    footerNote: "Sources are verified against research indexes before any drafting starts.",
   },
   {
     type: "thesis",
@@ -74,7 +75,12 @@ export function QuickStartWorkbench({ initialType = "project" }: { initialType?:
     setSubmitting(true);
 
     try {
-      const payload: { type: ProjectType; title?: string } = { type: selectedType };
+      const payload: { type: ProjectType; title?: string; useChapters?: boolean } = {
+        type: selectedType,
+        ...(selectedType !== "assignment"
+          ? { useChapters: defaultUseChaptersForType(selectedType) }
+          : {}),
+      };
       const cleanedTopic = topic.trim();
       if (cleanedTopic.length > 0) {
         payload.title = cleanedTopic;

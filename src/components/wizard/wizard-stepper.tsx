@@ -7,12 +7,12 @@ export interface StepMeta {
   label: string;
 }
 
-export function getStepsForType(type: ProjectType): StepMeta[] {
+export function getStepsForType(type: ProjectType, useChapters = true): StepMeta[] {
   const all: StepMeta[] = [
     { number: 2, label: type === "assignment" ? "Questions" : "Topic" },
     { number: 3, label: "Source check" },
     { number: 4, label: "Length" },
-    { number: 5, label: "Chapters" },
+    { number: 5, label: useChapters ? "Chapters" : "Sections" },
     { number: 6, label: "Citations" },
     { number: 7, label: "Formatting" },
     { number: 8, label: "Outline" },
@@ -22,16 +22,18 @@ export function getStepsForType(type: ProjectType): StepMeta[] {
 
 export function WizardStepper({
   projectType,
+  useChapters = true,
   currentStep,
   maxReachedStep,
   onSelectStep,
 }: {
   projectType: ProjectType;
+  useChapters?: boolean;
   currentStep: number;
   maxReachedStep: number;
   onSelectStep: (stepNum: number) => void;
 }) {
-  const steps = getStepsForType(projectType);
+  const steps = getStepsForType(projectType, useChapters);
   const currentIndex = Math.max(
     0,
     steps.findIndex((s) => s.number === currentStep)

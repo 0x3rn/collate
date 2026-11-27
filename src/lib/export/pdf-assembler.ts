@@ -219,6 +219,7 @@ export async function buildThesisPdfTwoPass(
 ): Promise<TwoPassPdfResult> {
   const includeFrontMatter = options.includeFrontMatter ?? true;
   const includeReferences = options.includeReferences ?? true;
+  const useChapters = doc.useChapters ?? true;
   const sleepFn = options.sleepFn ?? defaultSleep;
   const needsExactTocPageNumbers = includeFrontMatter && doc.formatting.frontMatter.tableOfContents;
 
@@ -240,7 +241,7 @@ export async function buildThesisPdfTwoPass(
     bodyPdfs.push(bytes);
   } else {
     for (const ch of doc.chapters) {
-      const html = buildChapterHtmlDocument(ch, doc.formatting, doc.resolvedFigures);
+      const html = buildChapterHtmlDocument(ch, doc.formatting, doc.resolvedFigures, useChapters);
       const bytes = await renderHtmlViaBrowserRun(
         browser,
         html,
@@ -251,7 +252,7 @@ export async function buildThesisPdfTwoPass(
       const pages = await countPdfPages(bytes);
 
       tocEntries.push({
-        label: `Chapter ${ch.number}`,
+        label: useChapters ? `Chapter ${ch.number}` : `${ch.number}.`,
         title: ch.title,
         pageNumber: runningArabicPage,
       });

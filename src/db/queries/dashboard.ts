@@ -16,6 +16,7 @@ import {
 } from "@/db/schema";
 import { countUserNonFailedSweeps } from "@/lib/billing/ledger";
 import { signExportDownloadParams } from "@/lib/export/signed-urls";
+import { formatOpenWorkLabel } from "@/lib/ui/formatters";
 import { loadChapterAttentionMap, type ChapterAttentionInfo } from "@/lib/writing/attention";
 
 export const SETUP_PROJECT_STATUSES = new Set<ProjectStatus>([
@@ -46,6 +47,7 @@ export interface DashboardProjectSummary {
   targetPages: number | null;
   idealPages: number | null;
   citationStyle: CitationStyle;
+  useChapters: boolean;
   chaptersTotal: number;
   chaptersReady: number;
   chaptersApproved: number;
@@ -77,6 +79,7 @@ export interface UserExportItem {
   projectId: string;
   projectTitle: string;
   projectType: ProjectType;
+  useChapters?: boolean;
   chapterId: string | null;
   chapterNumber: number | null;
   chapterTitle: string | null;
@@ -122,10 +125,13 @@ export function deriveProjectNextAction(params: {
   type: ProjectType;
   status: ProjectStatus;
   wizardStep: number;
+  useChapters?: boolean;
   chapters: Array<{ id: string; number: number; status: ChapterStatus; isAutoReferences: boolean }>;
   attentionByChapterId?: Map<string, ChapterAttentionInfo>;
 }): ProjectNextAction {
   const { id, type, status, wizardStep } = params;
+  const useChapters = params.useChapters ?? true;
+  const unitLabel = (num: number) => (useChapters ? `Chapter ${num}` : `Section ${num}`);
 
   if (SETUP_PROJECT_STATUSES.has(status)) {
     if (status === "researching") {
@@ -152,7 +158,8 @@ export function deriveProjectNextAction(params: {
     }
     return {
       href: `/projects/${id}`,
-      label: type === "assignment" ? "Resume assignment" : `Resume Chapter ${pausedChapter.number}`,
+      label:
+        type === "assignment" ? "Resume assignment" : `Resume ${unitLabel(pausedChapter.number)}`,
     };
   }
 
@@ -160,7 +167,8 @@ export function deriveProjectNextAction(params: {
   if (readyChapter) {
     return {
       href: `/projects/${id}/chapters/${readyChapter.id}`,
-      label: type === "assignment" ? "Review assignment" : `Review Chapter ${readyChapter.number}`,
+      label:
+        type === "assignment" ? "Review assignment" : `Review ${unitLabel(readyChapter.number)}`,
     };
   }
 
@@ -168,7 +176,7 @@ export function deriveProjectNextAction(params: {
     return { href: `/projects/${id}`, label: "Open & download" };
   }
 
-  return { href: `/projects/${id}`, label: "Open project" };
+  return { href: `/projects/${id}`, label: formatOpenWorkLabel(type) };
 }
 
 export function resolveExportSigningSecret(params: {
@@ -215,6 +223,7 @@ export async function listEnrichedProjectsForUser(
       .select({
         projectId: projectSettings.projectId,
         citationStyle: projectSettings.citationStyle,
+        useChapters: projectSettings.useChapters,
       })
       .from(projectSettings)
       .where(inArray(projectSettings.projectId, projectIds)),
@@ -250,9 +259,15 @@ export async function listEnrichedProjectsForUser(
       .groupBy(exportsTable.projectId),
   ]);
 
-  const settingsByProject = new Map<string, CitationStyle>();
+  const settingsByProject = new Map<
+    string,
+    { citationStyle: CitationStyle; useChapters: boolean }
+  >();
   for (const row of settingsRows) {
-    settingsByProject.set(row.projectId, row.citationStyle);
+    settingsByProject.set(row.projectId, {
+      citationStyle: row.citationStyle,
+      useChapters: row.useChapters,
+    });
   }
 
   const chaptersByProject = new Map<string, typeof chapterRows>();
@@ -289,6 +304,9 @@ export async function listEnrichedProjectsForUser(
   const summaries: DashboardProjectSummary[] = projectRows.map((project) => {
     const projectChapters = chaptersByProject.get(project.id) ?? [];
     const writableChapters = projectChapters.filter((ch) => !ch.isAutoReferences);
+    const projectSetting = settingsByProject.get(project.id);
+    const useChapters = projectSetting?.useChapters ?? true;
+    const unitLabel = (num: number) => (useChapters ? `Chapter ${num}` : `Section ${num}`);
 
     let chaptersReady = 0;
     let chaptersApproved = 0;
@@ -321,14 +339,14 @@ export async function listEnrichedProjectsForUser(
                     ? "Assignment needs your details"
                     : "Assignment paused temporarily"
                   : needsUserDetails
-                    ? `Chapter ${ch.number} needs your details`
-                    : `Chapter ${ch.number} paused temporarily`,
+                    ? `${unitLabel(ch.number)} needs your details`
+                    : `${unitLabel(ch.number)} paused temporarily`,
               detail: att?.title ? `${ch.title}: ${att.title}` : ch.title,
               actionLabel: needsUserDetails
                 ? "Provide Details"
                 : project.type === "assignment"
                   ? "Resume assignment"
-                  : `Resume Chapter ${ch.number}`,
+                  : `Resume ${unitLabel(ch.number)}`,
               href: `/projects/${project.id}`,
               updatedAt: ch.updatedAt.toISOString(),
             },
@@ -347,7 +365,7 @@ export async function listEnrichedProjectsForUser(
               title:
                 project.type === "assignment"
                   ? "Assignment ready to review"
-                  : `Chapter ${ch.number} is ready for approval`,
+                  : `${unitLabel(ch.number)} is ready for approval`,
               detail: ch.title,
               actionLabel: "Read & approve",
               href: `/projects/${project.id}/chapters/${ch.id}`,
@@ -411,7 +429,8 @@ export async function listEnrichedProjectsForUser(
       wizardStep: project.wizardStep,
       targetPages: project.targetPages,
       idealPages: project.idealPages,
-      citationStyle: settingsByProject.get(project.id) ?? "apa7",
+      citationStyle: projectSetting?.citationStyle ?? "apa7",
+      useChapters,
       chaptersTotal: writableChapters.length,
       chaptersReady,
       chaptersApproved,
@@ -424,6 +443,7 @@ export async function listEnrichedProjectsForUser(
         type: project.type,
         status: project.status,
         wizardStep: project.wizardStep,
+        useChapters,
         chapters: projectChapters,
         attentionByChapterId,
       }),
@@ -467,6 +487,7 @@ export async function listExportsForUser(
       projectId: exportsTable.projectId,
       projectTitle: projects.title,
       projectType: projects.type,
+      useChapters: projectSettings.useChapters,
       chapterId: exportsTable.chapterId,
       chapterNumber: chapters.number,
       chapterTitle: chapters.title,
@@ -479,6 +500,7 @@ export async function listExportsForUser(
     })
     .from(exportsTable)
     .innerJoin(projects, eq(exportsTable.projectId, projects.id))
+    .leftJoin(projectSettings, eq(exportsTable.projectId, projectSettings.projectId))
     .leftJoin(chapters, eq(exportsTable.chapterId, chapters.id))
     .where(eq(projects.userId, userId))
     .orderBy(desc(exportsTable.createdAt))
@@ -506,6 +528,7 @@ export async function listExportsForUser(
       projectId: row.projectId,
       projectTitle: row.projectTitle,
       projectType: row.projectType,
+      useChapters: row.useChapters ?? true,
       chapterId: row.chapterId,
       chapterNumber: row.chapterNumber,
       chapterTitle: row.chapterTitle,

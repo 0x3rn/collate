@@ -212,7 +212,11 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
 
           <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
             {filtered.map((project) => {
-              const status = resolveProjectDisplayStatus(project);
+              const status = resolveProjectDisplayStatus({
+                ...project,
+                projectType: project.type,
+                useChapters: project.useChapters,
+              });
               const inSetup = SETUP_PROJECT_STATUSES.has(project.status);
               const completedChapters = project.chaptersApproved + project.chaptersReady;
               const progressPct = inSetup
@@ -229,7 +233,7 @@ export function ProjectsDirectoryClient({ projects }: { projects: DashboardProje
                     ? completedChapters > 0
                       ? "Draft ready"
                       : "Ready to draft"
-                    : `${completedChapters} of ${project.chaptersTotal} chapters drafted`
+                    : `${completedChapters} of ${project.chaptersTotal} ${project.useChapters ? "chapters" : "sections"} drafted`
                   : "Outline ready";
               const projectOverviewHref = inSetup
                 ? `/projects/${project.id}/setup`

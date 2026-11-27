@@ -327,6 +327,7 @@ export const projectSettings = sqliteTable(
     experimentalDataMode: text("experimental_data_mode", { enum: EXPERIMENTAL_DATA_MODES })
       .notNull()
       .default("user_provided"),
+    useChapters: integer("use_chapters", { mode: "boolean" }).notNull().default(true),
     frontMatterJson: text("front_matter_json").notNull(),
     coverJson: text("cover_json").notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),

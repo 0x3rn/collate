@@ -16,7 +16,11 @@ export const STATUS_BADGE_CLASSES = {
 } as const;
 
 export function ProjectCard({ project }: { project: DashboardProjectSummary }) {
-  const status = resolveProjectDisplayStatus(project);
+  const status = resolveProjectDisplayStatus({
+    ...project,
+    projectType: project.type,
+    useChapters: project.useChapters,
+  });
   const inSetup = SETUP_PROJECT_STATUSES.has(project.status);
 
   const completedChapters = project.chaptersApproved + project.chaptersReady;
@@ -37,7 +41,7 @@ export function ProjectCard({ project }: { project: DashboardProjectSummary }) {
           : project.chaptersWriting > 0
             ? "Drafting answers"
             : "Ready to draft"
-        : `${completedChapters} of ${project.chaptersTotal} chapters drafted`
+        : `${completedChapters} of ${project.chaptersTotal} ${project.useChapters ? "chapters" : "sections"} drafted`
       : "Outline confirmed";
 
   const pagesLabel = project.targetPages ?? project.idealPages;

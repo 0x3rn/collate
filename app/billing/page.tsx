@@ -6,9 +6,12 @@ import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { PaymentStatusToast } from "@/components/account/payment-status-toast";
 import { BILLING_POLICY } from "@/config/pricing";
 import { createDb } from "@/db/client";
-import { creditLedger } from "@/db/schema";
+import { creditLedger, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth/server";
+import { verifyAndSettlePaystackCallback } from "@/lib/billing/http-handlers";
 import { countUserNonFailedSweeps } from "@/lib/billing/ledger";
+import { type CloudflareEmailBinding, createEmailSender } from "@/lib/email/mailer";
+import { createTelegramNotifier } from "@/lib/notify/admin-alerts";
 import { formatCredits } from "@/lib/ui/formatters";
 
 export const dynamic = "force-dynamic";
@@ -22,13 +25,47 @@ export const metadata: Metadata = {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ payment?: string }>;
+  searchParams: Promise<{ payment?: string; reference?: string; trxref?: string }>;
 }) {
   const user = await requireUser("/billing");
-  const { payment } = await searchParams;
+  const { payment, reference, trxref } = await searchParams;
   const db = createDb(env.DB);
+  const runtimeEnv = env as unknown as Record<string, string | undefined>;
 
-  const [ledgerRows, sweepsUsed] = await Promise.all([
+  let effectivePaymentParam = payment;
+  const paystackRef = (reference ?? trxref)?.trim();
+  if ((payment === "pending" || payment === "paystack_pending") && paystackRef) {
+    const verification = await verifyAndSettlePaystackCallback(
+      { reference: paystackRef, userId: user.id },
+      {
+        db,
+        mailer: createEmailSender({
+          EMAIL_PROVIDER: runtimeEnv.EMAIL_PROVIDER,
+          EMAIL_FROM: runtimeEnv.EMAIL_FROM,
+          EMAIL_REPLY_TO: runtimeEnv.EMAIL_REPLY_TO,
+          APP_URL: runtimeEnv.APP_URL,
+          binding: (env as unknown as { EMAIL?: CloudflareEmailBinding }).EMAIL ?? null,
+        }),
+        appUrl: runtimeEnv.APP_URL?.trim() || "https://collateresearch.app",
+        adminNotifier: createTelegramNotifier(runtimeEnv),
+        paystackSecretKey: runtimeEnv.PAYSTACK_SECRET_KEY,
+      }
+    );
+    if (verification.status === "succeeded") {
+      effectivePaymentParam = "success";
+    } else if (verification.status === "failed") {
+      effectivePaymentParam = "failed";
+    } else if (verification.status === "cancelled") {
+      effectivePaymentParam = "cancelled";
+    }
+  }
+
+  const [freshUserRows, ledgerRows, sweepsUsed] = await Promise.all([
+    db
+      .select({ creditsBalance: users.creditsBalance })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1),
     db
       .select()
       .from(creditLedger)
@@ -38,6 +75,11 @@ export default async function BillingPage({
     countUserNonFailedSweeps(db, user.id),
   ]);
 
+  const currentUser = {
+    ...user,
+    creditsBalance: freshUserRows[0]?.creditsBalance ?? user.creditsBalance,
+  };
+
   const freeSweepsTotal = BILLING_POLICY.freeFeasibilitySweepsPerUser;
   const freeSweepsRemaining = Math.max(0, freeSweepsTotal - sweepsUsed);
   const sweepPct = Math.min(
@@ -46,7 +88,7 @@ export default async function BillingPage({
   );
 
   return (
-    <WorkspaceShell user={user} maxWidthClassName="max-w-[980px]">
+    <WorkspaceShell user={currentUser} maxWidthClassName="max-w-[980px]">
       <div className="space-y-6">
         <header className="space-y-1 pb-5 border-b border-[var(--neutral-200)]">
           <h1 className="text-[1.75rem] sm:text-[2rem] font-medium leading-tight">
@@ -57,7 +99,7 @@ export default async function BillingPage({
           </p>
         </header>
 
-        <PaymentStatusToast payment={payment} />
+        <PaymentStatusToast payment={effectivePaymentParam} />
 
         {/* Unified horizontal allowance bar (no separate KPI boxes) */}
         <section
@@ -68,7 +110,7 @@ export default async function BillingPage({
             <div className="space-y-1">
               <p className="text-xs font-medium text-[var(--neutral-500)]">Writing credits</p>
               <p className="text-2xl font-semibold text-[var(--neutral-900)] tabular-nums">
-                {formatCredits(user.creditsBalance)}
+                {formatCredits(currentUser.creditsBalance)}
               </p>
               <p className="text-xs text-[var(--neutral-500)]">Credits never expire</p>
             </div>

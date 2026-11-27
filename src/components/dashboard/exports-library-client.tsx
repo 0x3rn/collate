@@ -10,6 +10,7 @@ import {
   formatExportFormat,
   formatExportScope,
   formatFileSize,
+  formatOpenWorkLabel,
   formatProjectType,
   formatShortDate,
 } from "@/lib/ui/formatters";
@@ -177,7 +178,7 @@ export function ExportsLibraryClient({ exportsList }: { exportsList: UserExportI
                   </Link>
                   <p className="text-xs text-[var(--neutral-600)]">
                     {formatProjectType(item.projectType)} ·{" "}
-                    {formatExportScope(item.scope, item.chapterNumber)}
+                    {formatExportScope(item.scope, item.chapterNumber, item.useChapters ?? true)}
                     {item.chapterTitle ? ` (${item.chapterTitle})` : ""}
                     {item.chapterVersion ? ` · Version ${item.chapterVersion}` : ""}
                   </p>
@@ -217,7 +218,7 @@ export function ExportsLibraryClient({ exportsList }: { exportsList: UserExportI
                       href={`/projects/${item.projectId}`}
                       className="text-xs font-medium text-[var(--accent-600)] hover:underline underline-offset-4"
                     >
-                      Open project
+                      {formatOpenWorkLabel(item.projectType)}
                     </Link>
                   )}
                 </div>

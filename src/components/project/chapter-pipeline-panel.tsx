@@ -22,6 +22,13 @@ import {
   MAX_MARKDOWN_ATTACHMENT_BYTES,
 } from "@/lib/writing/chapter-instructions";
 import type { ChapterAttentionInfo } from "@/lib/writing/attention";
+import {
+  formatUnitHeading,
+  formatUnitShortLabel,
+  subUnitNounPlural,
+  unitNounPlural,
+  unitNounSingular,
+} from "@/lib/outline/structures";
 import { canStartChapter } from "@/lib/writing/state-machine";
 
 export interface ChapterPanelItem {
@@ -85,15 +92,23 @@ export function ChapterPipelinePanel({
   projectId,
   chapters,
   datasets,
+  useChapters = true,
   isExperimental = false,
   experimentalDataMode = "user_provided",
 }: {
   projectId: string;
   chapters: ChapterPanelItem[];
   datasets: DatasetPanelItem[];
+  useChapters?: boolean;
   isExperimental?: boolean;
   experimentalDataMode?: ExperimentalDataMode;
 }) {
+  const unitCap = unitNounSingular(useChapters, true);
+  const unitLower = unitNounSingular(useChapters, false);
+  const unitsCap = unitNounPlural(useChapters, true);
+  const unitsLower = unitNounPlural(useChapters, false);
+  const subUnitsCap = subUnitNounPlural(useChapters, true);
+  const subUnitsLower = subUnitNounPlural(useChapters, false);
   const router = useRouter();
   const toast = useToast();
   const [busyChapterId, setBusyChapterId] = useState<string | null>(null);
@@ -176,26 +191,29 @@ export function ChapterPipelinePanel({
           setDetailsChapter(null);
           setCreditsModal({
             actionLabel: targetChapter
-              ? `Chapter ${targetChapter.number}: ${targetChapter.title}`
-              : "This chapter",
+              ? formatUnitHeading(targetChapter.number, targetChapter.title, useChapters)
+              : `This ${unitLower}`,
             creditsRequired: data.creditsRequired,
             creditsAvailable: data.creditsAvailable,
             message: data.error,
           });
           return;
         }
-        toast.error(data.error ?? "Could not start this chapter.", "Could not start chapter");
+        toast.error(
+          data.error ?? `Could not start this ${unitLower}.`,
+          `Could not start ${unitLower}`
+        );
         return;
       }
       setDetailsChapter(null);
       setDetailsText("");
       toast.success(
-        "Chapter queued for drafting. You will receive an email as soon as it is ready to review.",
-        "Chapter queued"
+        `${unitCap} queued for drafting. You will receive an email as soon as it is ready to review.`,
+        `${unitCap} queued`
       );
       router.refresh();
     } catch {
-      toast.error("Network error while starting chapter.", "Connection error");
+      toast.error(`Network error while starting ${unitLower}.`, "Connection error");
     } finally {
       setBusyChapterId(null);
     }
@@ -247,16 +265,19 @@ export function ChapterPipelinePanel({
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        toast.error(data.error ?? "Could not approve chapter.", "Could not approve chapter");
+        toast.error(
+          data.error ?? `Could not approve ${unitLower}.`,
+          `Could not approve ${unitLower}`
+        );
         return;
       }
       toast.success(
-        "You can now start the next chapter whenever you are ready.",
-        "Chapter approved"
+        `You can now start the next ${unitLower} whenever you are ready.`,
+        `${unitCap} approved`
       );
       router.refresh();
     } catch {
-      toast.error("Network error while approving chapter.", "Connection error");
+      toast.error(`Network error while approving ${unitLower}.`, "Connection error");
     } finally {
       setBusyChapterId(null);
     }
@@ -546,17 +567,17 @@ export function ChapterPipelinePanel({
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]">
         <div className="px-5 sm:px-6 py-4 bg-[var(--neutral-50)] border-b border-[var(--neutral-200)] rounded-t-[var(--radius-md)] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-lg font-medium text-[var(--neutral-900)]">
-            Chapters ({chapters.length})
+            {unitsCap} ({chapters.length})
           </h2>
           <p className="text-xs text-[var(--neutral-600)]">
-            Chapters unlock one at a time as each draft is ready
+            {unitsCap} unlock one at a time as each draft is ready
           </p>
         </div>
 
         <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
           {chapters.map((ch) => {
             const badge = CHAPTER_STATUS_BADGE[ch.status];
-            const gate = canStartChapter(chapters, ch.number);
+            const gate = canStartChapter(chapters, ch.number, useChapters);
             const isBusy = busyChapterId === ch.id;
             const isMultiActionChapter = ch.status === "ready" || ch.status === "approved";
             const loadingDownloadFormat =
@@ -596,7 +617,9 @@ export function ChapterPipelinePanel({
                           className="text-base font-semibold text-[var(--neutral-900)] leading-snug"
                           style={{ fontFamily: "var(--font-sans)" }}
                         >
-                          {ch.isAutoReferences ? ch.title : `Chapter ${ch.number}: ${ch.title}`}
+                          {ch.isAutoReferences
+                            ? ch.title
+                            : formatUnitHeading(ch.number, ch.title, useChapters)}
                         </h3>
 
                         {ch.isAutoReferences ? (
@@ -614,13 +637,13 @@ export function ChapterPipelinePanel({
 
                       <p className="text-xs text-[var(--neutral-600)] tabular-nums leading-relaxed">
                         {ch.isAutoReferences
-                          ? "Built automatically from the verified sources cited across your chapters."
+                          ? `Built automatically from the verified sources cited across your ${unitsLower}.`
                           : `Target: ~${(ch.pageBudget ?? 0).toLocaleString("en-US")} pages (~${(ch.wordBudget ?? 0).toLocaleString("en-US")} words)`}
                       </p>
 
                       {ch.sectionHeadings.length > 0 ? (
                         <p className="text-xs text-[var(--neutral-500)] leading-relaxed">
-                          Sections: {ch.sectionHeadings.join(" · ")}
+                          {subUnitsCap}: {ch.sectionHeadings.join(" · ")}
                         </p>
                       ) : null}
 
@@ -734,7 +757,7 @@ export function ChapterPipelinePanel({
                             onClick={() => triggerStart(ch.id)}
                             className="w-full sm:w-auto whitespace-nowrap"
                           >
-                            Start Chapter {ch.number}
+                            Start {formatUnitShortLabel(ch.number, useChapters)}
                           </Button>
                         </>
                       ) : null}
@@ -773,7 +796,7 @@ export function ChapterPipelinePanel({
                               title={gate.allowed ? undefined : gate.reason}
                               onClick={() => triggerStart(ch.id)}
                             >
-                              Resume Chapter {ch.number}
+                              Resume {formatUnitShortLabel(ch.number, useChapters)}
                             </Button>
                           )}
                         </>
@@ -810,7 +833,7 @@ export function ChapterPipelinePanel({
                               loadingLabel="Approving..."
                               onClick={() => triggerApprove(ch.id)}
                             >
-                              Approve Chapter
+                              Approve {unitCap}
                             </Button>
                           ) : null}
 
@@ -855,13 +878,14 @@ export function ChapterPipelinePanel({
                               htmlFor={`rev-note-${ch.id}`}
                               className="block text-xs font-medium text-[var(--neutral-800)]"
                             >
-                              What should be revised in Chapter {ch.number}?
+                              What should be revised in{" "}
+                              {formatUnitShortLabel(ch.number, useChapters)}?
                             </label>
                             <p className="text-xs text-[var(--neutral-500)]">
                               Requesting changes deducts credits when the revision finishes
                               (refunded automatically if it fails).{" "}
                               {hasMultipleSections
-                                ? "Select a specific section to send only that section to Collate and use fewer credits."
+                                ? `Select a specific ${useChapters ? "section" : "subsection"} to send only that part to Collate and use fewer credits.`
                                 : "Untouched sentences and verified citations are preserved."}
                             </p>
                           </div>
@@ -871,11 +895,13 @@ export function ChapterPipelinePanel({
                                 htmlFor={`rev-section-${ch.id}`}
                                 className="block text-xs font-medium text-[var(--neutral-700)]"
                               >
-                                Section to update
+                                {useChapters ? "Section to update" : "Subsection to update"}
                               </label>
                               <CustomSelect
                                 id={`rev-section-${ch.id}`}
-                                ariaLabel="Section to update"
+                                ariaLabel={
+                                  useChapters ? "Section to update" : "Subsection to update"
+                                }
                                 size="sm"
                                 value={revisionTargetSection}
                                 onChange={setRevisionTargetSection}
@@ -883,14 +909,12 @@ export function ChapterPipelinePanel({
                                   {
                                     value: "",
                                     label: `Auto-detect from my note · ${fullRevCredits} ${creditWord(fullRevCredits)}`,
-                                    description:
-                                      "May review the whole chapter · deducts the full chapter credit cost",
+                                    description: `May review the whole ${unitLower} · deducts the full ${unitLower} credit cost`,
                                   },
                                   ...ch.sectionHeadings.map((heading, idx) => ({
                                     value: heading,
                                     label: `${ch.number}.${idx + 1} ${heading} · ${singleSectionCredits} ${creditWord(singleSectionCredits)}`,
-                                    description:
-                                      "Sends only this section to Collate · untouched sections stay unchanged",
+                                    description: `Sends only this ${useChapters ? "section" : "subsection"} to Collate · untouched ${subUnitsLower} stay unchanged`,
                                   })),
                                 ]}
                               />
@@ -951,10 +975,10 @@ export function ChapterPipelinePanel({
         onClose={closeInstructionsModal}
         eyebrow={
           instructionsChapter
-            ? `Chapter ${instructionsChapter.number}: ${instructionsChapter.title}`
+            ? formatUnitHeading(instructionsChapter.number, instructionsChapter.title, useChapters)
             : undefined
         }
-        title="Optional instructions & data"
+        title={isExperimental ? "Optional instructions & data" : "Optional instructions & notes"}
         maxWidthClassName="max-w-[580px]"
         footer={
           instructionsChapter ? (
@@ -1002,11 +1026,11 @@ export function ChapterPipelinePanel({
           <>
             <div className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] px-3.5 py-2.5 text-sm text-[var(--neutral-700)] leading-relaxed">
               <strong className="font-semibold text-[var(--neutral-900)]">
-                Optional: you can start this chapter right away.
+                Optional: you can start this {unitLower} right away.
               </strong>{" "}
-              Collate already has your topic, chapter outline, and verified sources. Only add notes
-              here if you want to include extra details such as supervisor instructions, specific
-              points to emphasize, or your own experimental or survey results.
+              Collate already has your topic, outline, and verified sources. Only add notes here if
+              you want to include extra details such as supervisor instructions, specific themes to
+              emphasize{isExperimental ? ", or your own experimental or survey results" : ""}.
             </div>
 
             <div className="rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)] p-3.5 space-y-2.5">
@@ -1097,7 +1121,9 @@ export function ChapterPipelinePanel({
         open={Boolean(detailsChapter)}
         onClose={() => setDetailsChapter(null)}
         eyebrow={
-          detailsChapter ? `Chapter ${detailsChapter.number}: ${detailsChapter.title}` : undefined
+          detailsChapter
+            ? formatUnitHeading(detailsChapter.number, detailsChapter.title, useChapters)
+            : undefined
         }
         title={detailsChapter?.attention?.title ?? "Provide details to continue"}
         maxWidthClassName="max-w-[540px]"
@@ -1119,7 +1145,7 @@ export function ChapterPipelinePanel({
                 loadingLabel="Resuming..."
                 onClick={() => triggerStart(detailsChapter.id, detailsText)}
               >
-                Resume Chapter {detailsChapter.number}
+                Resume {formatUnitShortLabel(detailsChapter.number, useChapters)}
               </Button>
             </>
           ) : null

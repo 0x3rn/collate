@@ -10,6 +10,7 @@ import {
   SPELLING_VARIANTS,
   type ProjectType,
 } from "@/db/schema";
+import { defaultUseChaptersForType, getDefaultStructureForWork } from "@/lib/outline/structures";
 
 export const ALLOWED_FONTS = [
   "Times New Roman",
@@ -55,6 +56,7 @@ export type CoverDetails = z.infer<typeof CoverDetailsSchema>;
 export const WizardStep1Schema = z.object({
   step: z.literal(1),
   type: z.enum(PROJECT_TYPES),
+  useChapters: z.boolean().optional(),
 });
 
 export const WizardStep2TopicSchema = z.object({
@@ -68,6 +70,7 @@ export const WizardStep2TopicSchema = z.object({
   level: z.string().trim().max(100).optional().default(""),
   institution: z.string().trim().max(200).optional().default(""),
   supervisorNotes: z.string().trim().max(2000).optional().default(""),
+  useChapters: z.boolean().optional(),
   isExperimental: z.boolean().optional().default(false),
   experimentalDataMode: z.enum(EXPERIMENTAL_DATA_MODES).optional().default("user_provided"),
   questions: z
@@ -187,42 +190,82 @@ export const DEFAULT_COVER_DETAILS: CoverDetails = {
   submissionDate: "",
 };
 
-export function inferChapterTypeFromTitle(title: string): string {
+export function inferChapterTypeFromTitle(
+  title: string,
+  options: { isExperimental?: boolean } = {}
+): string {
   const lower = title.toLowerCase();
+  const isExperimental = options.isExperimental ?? true;
+  if (lower.includes("reference") || lower.includes("bibliograph")) return "references";
   if (lower.includes("intro")) return "introduction";
+  if (
+    lower.includes("theoretical framework") ||
+    lower.includes("conceptual and theoretical") ||
+    lower.includes("theoretical and analytical") ||
+    lower.includes("conceptual framework")
+  ) {
+    return "theoretical_framework";
+  }
   if (lower.includes("literature") || lower.includes("review")) return "literature_review";
-  if (lower.includes("method") || lower.includes("design") || lower.includes("analysis")) {
+  if (
+    lower.includes("thematic") ||
+    lower.includes("contextual") ||
+    lower.includes("historical") ||
+    lower.includes("statutory") ||
+    lower.includes("doctrinal")
+  ) {
+    return "thematic_analysis";
+  }
+  if (
+    lower.includes("critical evaluation") ||
+    lower.includes("critical analysis") ||
+    lower.includes("critical discussion") ||
+    lower.includes("comparative") ||
+    lower.includes("synthesis")
+  ) {
+    return "critical_analysis";
+  }
+  if (lower.includes("method") || lower.includes("research design")) {
     return "methodology";
   }
-  if (lower.includes("result") || lower.includes("finding") || lower.includes("data")) {
-    return "results";
+  if (
+    lower.includes("result") ||
+    lower.includes("finding") ||
+    lower.includes("data presentation")
+  ) {
+    return isExperimental ? "results" : "critical_analysis";
   }
-  if (lower.includes("discussion")) return "discussion";
+  if (lower.includes("discussion")) {
+    return isExperimental ? "discussion" : "critical_analysis";
+  }
   if (lower.includes("conclusion") || lower.includes("recommend")) return "conclusion";
-  if (lower.includes("reference") || lower.includes("bibliograph")) return "references";
   return "custom";
 }
 
 export function getDefaultChaptersForType(
-  type: ProjectType
-): Array<{ number: number; title: string }> {
-  if (type === "assignment") return [];
-  if (type === "research") {
-    return [
-      { number: 1, title: "Introduction" },
-      { number: 2, title: "Literature Review" },
-      { number: 3, title: "Methodology" },
-      { number: 4, title: "Results and Discussion" },
-      { number: 5, title: "Conclusion" },
-    ];
-  }
-  return [
-    { number: 1, title: "Introduction" },
-    { number: 2, title: "Literature Review" },
-    { number: 3, title: "Methodology" },
-    { number: 4, title: "Results and Findings" },
-    { number: 5, title: "Conclusion and Recommendations" },
-  ];
+  type: ProjectType,
+  options: { isExperimental?: boolean; useChapters?: boolean; level?: string | null } = {}
+): Array<{
+  number: number;
+  title: string;
+  chapterType: string;
+  brief: string;
+  sections: string[];
+}> {
+  const isExperimental = options.isExperimental ?? false;
+  const useChapters = options.useChapters ?? defaultUseChaptersForType(type);
+  return getDefaultStructureForWork({
+    type,
+    isExperimental,
+    useChapters,
+    level: options.level,
+  }).map((item) => ({
+    number: item.number,
+    title: item.title,
+    chapterType: item.chapterType,
+    brief: item.purpose,
+    sections: item.sections,
+  }));
 }
 
 export function recommendMockIdealPages(params: {
@@ -281,9 +324,10 @@ export function estimateWordsPerPage(lineSpacing: (typeof LINE_SPACINGS)[number]
 }
 
 export function allocateChapterBudgets(
-  chapterList: Array<{ number: number; title: string }>,
+  chapterList: Array<{ number: number; title: string; chapterType?: string }>,
   targetPages: number,
-  lineSpacing: (typeof LINE_SPACINGS)[number]
+  lineSpacing: (typeof LINE_SPACINGS)[number],
+  options: { isExperimental?: boolean } = {}
 ): Array<{
   number: number;
   title: string;
@@ -295,7 +339,10 @@ export function allocateChapterBudgets(
   const wordsPerPage = estimateWordsPerPage(lineSpacing);
   const weightMap: Record<string, number> = {
     introduction: 12,
-    literature_review: 28,
+    literature_review: 26,
+    theoretical_framework: 16,
+    thematic_analysis: 22,
+    critical_analysis: 20,
     methodology: 15,
     results: 22,
     discussion: 13,
@@ -304,7 +351,10 @@ export function allocateChapterBudgets(
   };
 
   const typed = chapterList.map((ch) => {
-    const chapterType = inferChapterTypeFromTitle(ch.title);
+    const chapterType =
+      ch.chapterType && ch.chapterType !== "custom"
+        ? ch.chapterType
+        : inferChapterTypeFromTitle(ch.title, options);
     return { ...ch, chapterType, weight: weightMap[chapterType] ?? 15 };
   });
 

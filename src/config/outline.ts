@@ -4,6 +4,8 @@ export const CHAPTER_TYPES = [
   "introduction",
   "literature_review",
   "theoretical_framework",
+  "thematic_analysis",
+  "critical_analysis",
   "methodology",
   "results",
   "discussion",
@@ -59,12 +61,36 @@ export const CHAPTER_TYPE_TEMPLATES: Record<
     label: "Theoretical framework",
     defaultPurpose:
       "Examine core theories, models, and conceptual relationships guiding the investigation.",
-    defaultWeight: 14,
+    defaultWeight: 16,
     requiredSections: [
       "Core theoretical foundations",
-      "Conceptual model and variables",
+      "Conceptual model and key constructs",
       "Application of theory to the study",
       "Summary of framework",
+    ],
+  },
+  thematic_analysis: {
+    label: "Thematic and contextual analysis",
+    defaultPurpose:
+      "Examine core historical, conceptual, policy, legal, or textual themes grounded in published literature and primary documents.",
+    defaultWeight: 22,
+    requiredSections: [
+      "Historical and contextual background",
+      "Analysis of primary themes and scholarly debates",
+      "Institutional, policy, or textual perspectives",
+      "Synthesis of thematic insights",
+    ],
+  },
+  critical_analysis: {
+    label: "Critical evaluation and synthesis",
+    defaultPurpose:
+      "Critically evaluate competing scholarly arguments, compare perspectives across contexts, and synthesize answers to the research questions.",
+    defaultWeight: 20,
+    requiredSections: [
+      "Critical evaluation of key arguments",
+      "Comparative perspectives and tensions",
+      "Synthesis addressing the research questions",
+      "Theoretical and practical implications",
     ],
   },
   methodology: {

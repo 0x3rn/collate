@@ -19,6 +19,7 @@ import {
   sections,
   sourcePassages,
   type ChapterVersionCreator,
+  type ProjectType,
   type SpellingVariant,
 } from "@/db/schema";
 import type { CallLLMContext } from "@/lib/ai/call-llm";
@@ -27,6 +28,7 @@ import { formatFigureAttributionForDisplay } from "@/lib/export/figure-layout";
 import { createBrowserRunPageMeasurer } from "@/lib/export/pdf-assembler";
 import type { ExportFormattingSettings } from "@/lib/export/templates";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
+import { formatUnitHeading, formatUnitShortLabel } from "@/lib/outline/structures";
 import type { BrowserRunPdfBinding, R2WritableBucket } from "@/lib/pdf/render-pdf";
 import type { EmbeddingProvider, VectorStore } from "@/lib/research/embeddings";
 import {
@@ -110,6 +112,9 @@ export type WriteChapterPayload = z.input<typeof WriteChapterPayloadSchema>;
 export interface LoadedChapterContext {
   userId: string;
   projectId: string;
+  projectType: ProjectType;
+  useChapters: boolean;
+  isExperimental: boolean;
   chapterId: string;
   chapterNumber: number;
   chapterTitle: string;
@@ -348,13 +353,24 @@ export async function runWriteChapterOrchestration(
         }
       }
 
+      const useChapters = settingsRow?.useChapters ?? true;
+      const isExperimental = settingsRow?.isExperimental ?? false;
+
       const projectOutlineText = outlineChapters
         .map((ch) => {
-          const currentTag = ch.number === chapter.number ? " (current chapter)" : "";
+          const currentTag =
+            ch.number === chapter.number
+              ? useChapters
+                ? " (current chapter)"
+                : " (current section)"
+              : "";
           const brief = ch.brief?.trim() ? ` | Focus: ${ch.brief.trim()}` : "";
           const secHeadings = outlineSectionsByChapter.get(ch.id) ?? [];
-          const secList = secHeadings.length > 0 ? ` | Sections: ${secHeadings.join("; ")}` : "";
-          return `- Chapter ${ch.number}: ${ch.title}${currentTag}${brief}${secList}`;
+          const secList =
+            secHeadings.length > 0
+              ? ` | ${useChapters ? "Sections" : "Subsections"}: ${secHeadings.join("; ")}`
+              : "";
+          return `- ${formatUnitHeading(ch.number, ch.title, useChapters)}${currentTag}${brief}${secList}`;
         })
         .join("\n");
 
@@ -375,7 +391,10 @@ export async function runWriteChapterOrchestration(
           }>;
           priorSummaryText = summaries
             .filter((s) => s.chapterNumber < chapter.number)
-            .map((s) => `Chapter ${s.chapterNumber} (${s.title}): ${s.summary}`)
+            .map(
+              (s) =>
+                `${formatUnitShortLabel(s.chapterNumber, useChapters)} (${s.title}): ${s.summary}`
+            )
             .join("\n");
         } catch {
           priorSummaryText = "";
@@ -606,6 +625,9 @@ export async function runWriteChapterOrchestration(
       return {
         userId: project.userId,
         projectId: project.id,
+        projectType: project.type,
+        useChapters,
+        isExperimental,
         chapterId: chapter.id,
         chapterNumber: chapter.number,
         chapterTitle: chapter.title,
@@ -634,7 +656,11 @@ export async function runWriteChapterOrchestration(
       return await steps.assembleAndFinalize(async () => {
         const now = nowFn();
         const frameworkMd = buildLabelledResultsFramework({
-          chapterTitle: `Chapter ${context.chapterNumber}: ${context.chapterTitle}`,
+          chapterTitle: formatUnitHeading(
+            context.chapterNumber,
+            context.chapterTitle,
+            context.useChapters
+          ),
           topic: context.topic,
           sectionHeadings: context.sectionPlan.map((s) => s.heading),
         });
@@ -849,6 +875,9 @@ export async function runWriteChapterOrchestration(
           {
             workflowId: payload.runId,
             projectId: context.projectId,
+            projectType: context.projectType,
+            useChapters: context.useChapters,
+            isExperimental: context.isExperimental,
             topic: context.topic,
             chapterTitle: context.chapterTitle,
             sectionHeading: sec.heading,
@@ -940,11 +969,18 @@ export async function runWriteChapterOrchestration(
 
       const assembledSections = context.sectionPlan.map((sec) => {
         const body = draftBySectionId.get(sec.sectionId) ?? "";
+        const singleSameHeading =
+          !context.useChapters &&
+          context.sectionPlan.length === 1 &&
+          sec.heading.trim().toLowerCase() === context.chapterTitle.trim().toLowerCase();
+        if (singleSameHeading) {
+          return body;
+        }
         return `## ${context.chapterNumber}.${sec.orderIndex} ${sec.heading}\n\n${body}`;
       });
 
       const rawChapterMarkdown = [
-        `# Chapter ${context.chapterNumber}: ${context.chapterTitle}`,
+        `# ${formatUnitHeading(context.chapterNumber, context.chapterTitle, context.useChapters)}`,
         ...(context.resultsMode === "user_dataset" && context.datasetMarkdown
           ? [context.datasetMarkdown]
           : []),
@@ -993,6 +1029,7 @@ export async function runWriteChapterOrchestration(
               workflowId: payload.runId,
               projectId: context.projectId,
               chapterTitle: context.chapterTitle,
+              useChapters: context.useChapters,
               assembledMarkdown: rawChapterMarkdown,
               targetPages: context.targetPages,
               wordsPerPage: context.wordsPerPage,
@@ -1115,6 +1152,7 @@ export async function runWriteChapterOrchestration(
             projectId: context.projectId,
             chapterNumber: context.chapterNumber,
             chapterTitle: context.chapterTitle,
+            useChapters: context.useChapters,
             chapterMarkdown: finalMarkdown,
             spendCapUsd: payload.spendCapUsd,
           },

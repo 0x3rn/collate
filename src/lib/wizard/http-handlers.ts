@@ -42,6 +42,7 @@ export interface SerializedWizardState {
     spelling: HydratedWizardState["settings"]["spelling"];
     isExperimental: boolean;
     experimentalDataMode: HydratedWizardState["settings"]["experimentalDataMode"];
+    useChapters: boolean;
     frontMatter: HydratedWizardState["settings"]["frontMatter"];
     cover: HydratedWizardState["settings"]["cover"];
     updatedAt: string;
@@ -116,6 +117,7 @@ export function serializeWizardState(state: HydratedWizardState): SerializedWiza
       spelling: state.settings.spelling,
       isExperimental: state.settings.isExperimental,
       experimentalDataMode: state.settings.experimentalDataMode,
+      useChapters: state.settings.useChapters,
       frontMatter: state.settings.frontMatter,
       cover: state.settings.cover,
       updatedAt: state.settings.updatedAt.toISOString(),
@@ -154,6 +156,7 @@ const CreateDraftBodySchema = z.object({
     message: "Choose Project, Research paper, Thesis, or Assignment.",
   }),
   title: z.string().trim().max(300).optional(),
+  useChapters: z.boolean().optional(),
 });
 
 const ProjectIdSchema = z.string().trim().min(1).max(120);
@@ -227,7 +230,8 @@ export async function handleCreateProjectDraft(
       session.user.id,
       validated.data.type,
       now,
-      validated.data.title
+      validated.data.title,
+      { useChapters: validated.data.useChapters }
     );
     return jsonNoStore({ ok: true, wizard: serializeWizardState(state) }, 201);
   } catch (err) {

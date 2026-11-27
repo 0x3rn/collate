@@ -63,6 +63,13 @@ export function formatProjectType(type: ProjectType): string {
   return PROJECT_TYPE_LABELS[type];
 }
 
+export function formatOpenWorkLabel(type: ProjectType): string {
+  if (type === "research") return "Open research paper";
+  if (type === "thesis") return "Open thesis";
+  if (type === "assignment") return "Open assignment";
+  return "Open project";
+}
+
 export function formatProjectStatus(status: ProjectStatus): StatusDisplay {
   return PROJECT_STATUS_DISPLAY[status];
 }
@@ -74,6 +81,8 @@ export function formatProjectStatus(status: ProjectStatus): StatusDisplay {
  */
 export function resolveProjectDisplayStatus(input: {
   status: ProjectStatus;
+  projectType?: ProjectType;
+  useChapters?: boolean;
   chaptersTotal?: number;
   chaptersReady?: number;
   chaptersApproved?: number;
@@ -89,7 +98,13 @@ export function resolveProjectDisplayStatus(input: {
   }
 
   if ((input.chaptersWriting ?? 0) > 0) {
-    return { label: "Writing Chapters", tone: "info" };
+    const writingLabel =
+      input.projectType === "assignment"
+        ? "Drafting Answers"
+        : input.useChapters === false
+          ? "Writing Sections"
+          : "Writing Chapters";
+    return { label: writingLabel, tone: "info" };
   }
 
   if ((input.chaptersReady ?? 0) > 0) {
@@ -123,12 +138,19 @@ export function formatCreditLedgerType(entryType: string): string {
   return CREDIT_LEDGER_LABELS[entryType as CreditLedgerType] ?? "Credit activity";
 }
 
-export function formatExportScope(scope: ExportScope, chapterNumber?: number | null): string {
+export function formatExportScope(
+  scope: ExportScope,
+  chapterNumber?: number | null,
+  useChapters = true
+): string {
   if (scope === "chapter") {
-    return chapterNumber ? `Chapter ${chapterNumber}` : "Single chapter";
+    if (chapterNumber) {
+      return useChapters ? `Chapter ${chapterNumber}` : `Section ${chapterNumber}`;
+    }
+    return useChapters ? "Single chapter" : "Single section";
   }
   if (scope === "combined") {
-    return "Completed chapters";
+    return useChapters ? "Completed chapters" : "Completed sections";
   }
   return "Full manuscript";
 }

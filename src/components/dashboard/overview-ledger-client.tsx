@@ -146,7 +146,11 @@ export function OverviewLedgerClient({
         ) : (
           <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
             {recentProjects.map((project, index) => {
-              const status = resolveProjectDisplayStatus(project);
+              const status = resolveProjectDisplayStatus({
+                ...project,
+                projectType: project.type,
+                useChapters: project.useChapters,
+              });
               const inSetup = SETUP_PROJECT_STATUSES.has(project.status);
               const doneChapters = project.chaptersApproved + project.chaptersReady;
               const progressPct = inSetup
@@ -159,7 +163,11 @@ export function OverviewLedgerClient({
               const progressText = inSetup
                 ? `Step ${project.wizardStep} of 8`
                 : project.chaptersTotal > 0
-                  ? `${doneChapters}/${project.chaptersTotal} chapters`
+                  ? project.type === "assignment"
+                    ? doneChapters > 0
+                      ? "Draft ready"
+                      : "Ready to draft"
+                    : `${doneChapters}/${project.chaptersTotal} ${project.useChapters ? "chapters" : "sections"}`
                   : "Outline ready";
 
               const projectOverviewHref = inSetup

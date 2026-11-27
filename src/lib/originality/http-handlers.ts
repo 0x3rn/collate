@@ -62,6 +62,7 @@ export async function handleGetProjectIntegrity(
     projectTitle: project.title,
     citationStyle: processLog.project.citationStyle,
     verifiedSourceCount: processLog.verifiedSourcesUsed.length,
+    useChapters: settings?.useChapters ?? true,
   });
 
   const requestedFormat = new URL(request.url).searchParams.get("format")?.trim().toLowerCase();

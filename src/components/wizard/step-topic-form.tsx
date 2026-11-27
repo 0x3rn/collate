@@ -32,6 +32,7 @@ export function StepTopicForm({
   const [level, setLevel] = useState(wizard.project.level ?? "");
   const [institution, setInstitution] = useState(wizard.project.institution ?? "");
   const [supervisorNotes, setSupervisorNotes] = useState(wizard.project.supervisorNotes ?? "");
+  const [useChapters, setUseChapters] = useState<boolean>(wizard.settings.useChapters);
   const [isExperimental, setIsExperimental] = useState<boolean>(wizard.settings.isExperimental);
   const [experimentalDataMode, setExperimentalDataMode] = useState<ExperimentalDataMode>(
     wizard.settings.experimentalDataMode
@@ -95,6 +96,7 @@ export function StepTopicForm({
       level: level.trim(),
       institution: institution.trim(),
       supervisorNotes: supervisorNotes.trim(),
+      useChapters,
       isExperimental,
       experimentalDataMode: isExperimental ? experimentalDataMode : "user_provided",
     });
@@ -218,6 +220,72 @@ export function StepTopicForm({
       />
 
       {!isAssignment ? (
+        <fieldset className="rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]/70 p-4 sm:p-5 space-y-3.5">
+          <legend className="sr-only">Document structure</legend>
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-[var(--neutral-900)]">
+              Should this{" "}
+              {wizard.project.type === "research"
+                ? "research paper"
+                : wizard.project.type === "thesis"
+                  ? "thesis"
+                  : "project"}{" "}
+              have chapters?
+            </p>
+            <p className="text-xs text-[var(--neutral-600)] leading-relaxed">
+              {wizard.project.type === "research"
+                ? "Most journal-style research papers use continuous numbered sections without chapters. Choose chapters if your course or department requires a chaptered paper."
+                : "Choose whether your outline and exports should be divided into formal chapters or continuous numbered sections."}
+            </p>
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label="Document structure"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-2.5"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={useChapters}
+              onClick={() => setUseChapters(true)}
+              className={`text-left px-3.5 py-3 rounded-[var(--radius-sm)] border transition-colors cursor-pointer ${
+                useChapters
+                  ? "border-[var(--accent-600)] bg-white ring-1 ring-[var(--accent-600)]/20"
+                  : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
+              }`}
+            >
+              <p className="text-sm font-medium text-[var(--neutral-900)]">
+                Yes, use formal chapters
+              </p>
+              <p className="text-xs text-[var(--neutral-500)] mt-0.5">
+                Chapter 1, Chapter 2, and chapter-level subheadings
+              </p>
+            </button>
+
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!useChapters}
+              onClick={() => setUseChapters(false)}
+              className={`text-left px-3.5 py-3 rounded-[var(--radius-sm)] border transition-colors cursor-pointer ${
+                !useChapters
+                  ? "border-[var(--accent-600)] bg-white ring-1 ring-[var(--accent-600)]/20"
+                  : "border-[var(--neutral-200)] bg-white hover:border-[var(--neutral-300)]"
+              }`}
+            >
+              <p className="text-sm font-medium text-[var(--neutral-900)]">
+                No chapters, use numbered sections
+              </p>
+              <p className="text-xs text-[var(--neutral-500)] mt-0.5">
+                1. Introduction, 2. ..., Conclusion, drafted section by section
+              </p>
+            </button>
+          </div>
+        </fieldset>
+      ) : null}
+
+      {!isAssignment ? (
         <fieldset className="rounded-[var(--radius-md)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]/70 p-4 sm:p-5 space-y-4">
           <legend className="sr-only">Experimental or empirical study settings</legend>
           <div className="space-y-1">
@@ -225,8 +293,8 @@ export function StepTopicForm({
               Does this study involve an experiment or empirical data?
             </p>
             <p className="text-xs text-[var(--neutral-600)] leading-relaxed">
-              Tell Collate if your topic includes lab assays, animal or clinical trials, field
-              measurements, or survey datasets that require numerical results.
+              This controls your entire outline. Pure literature studies use conceptual, thematic,
+              and critical analysis without experimental Methodology or Results chapters.
             </p>
           </div>
 
@@ -247,10 +315,10 @@ export function StepTopicForm({
               }`}
             >
               <p className="text-sm font-medium text-[var(--neutral-900)]">
-                No, standard / literature study
+                No, pure literature / library study
               </p>
               <p className="text-xs text-[var(--neutral-500)] mt-0.5">
-                No primary lab or experimental values needed
+                No experiments, surveys, or primary datasets (thematic &amp; critical synthesis)
               </p>
             </button>
 
@@ -269,7 +337,7 @@ export function StepTopicForm({
                 Yes, experimental / empirical study
               </p>
               <p className="text-xs text-[var(--neutral-500)] mt-0.5">
-                Includes lab assays, trials, or numerical findings
+                Includes lab assays, trials, or survey datasets with Methodology and Results
               </p>
             </button>
           </div>

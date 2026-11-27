@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 import { createDb } from "@/db/client";
-import { projects, users } from "@/db/schema";
+import { projects, projectSettings, users } from "@/db/schema";
+import { formatProjectType } from "@/lib/ui/formatters";
 import type { AIGatewayEnv } from "@/lib/ai/call-llm";
 import { LLMError } from "@/lib/ai/errors";
 import { type CloudflareEmailBinding, createEmailSender } from "@/lib/email/mailer";
@@ -68,6 +69,12 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
         if (!proj) return;
         const [usr] = await db.select().from(users).where(eq(users.id, proj.userId)).limit(1);
         if (!usr) return;
+        const [settingsRow] = await db
+          .select({ useChapters: projectSettings.useChapters })
+          .from(projectSettings)
+          .where(eq(projectSettings.projectId, proj.id))
+          .limit(1);
+        const useChapters = settingsRow?.useChapters ?? true;
 
         await dispatchUserNotification(db, mailer, {
           userId: usr.id,
@@ -80,6 +87,7 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
             chapterUrl: `${appUrl}/projects/${proj.id}/chapters/${info.chapterId}`,
             wordCount: info.wordCount,
             pageCount: info.pageCount,
+            useChapters,
           }),
         });
 
@@ -91,6 +99,8 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
               name: usr.name,
               projectTitle: proj.title,
               projectUrl: `${appUrl}/projects/${proj.id}`,
+              workTypeLabel: formatProjectType(proj.type),
+              useChapters,
             }),
           });
         }
@@ -104,6 +114,11 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
         if (!proj) return;
         const [usr] = await db.select().from(users).where(eq(users.id, proj.userId)).limit(1);
         if (!usr) return;
+        const [settingsRow] = await db
+          .select({ useChapters: projectSettings.useChapters })
+          .from(projectSettings)
+          .where(eq(projectSettings.projectId, proj.id))
+          .limit(1);
 
         await dispatchUserNotification(db, mailer, {
           userId: usr.id,
@@ -116,6 +131,7 @@ export class WriteChapterWorkflow extends WorkflowEntrypoint<Env, WriteChapterPa
             projectUrl: `${appUrl}/projects/${proj.id}`,
             reason: info.reason,
             kind: info.kind,
+            useChapters: settingsRow?.useChapters ?? true,
           }),
         });
       },

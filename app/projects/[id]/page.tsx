@@ -125,6 +125,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const writableChapters = state.chapters.filter((ch) => !ch.isAutoReferences);
   const statusDisplay = resolveProjectDisplayStatus({
     status: project.status,
+    projectType: project.type,
+    useChapters: settings.useChapters,
     chaptersTotal: writableChapters.length,
     chaptersReady: writableChapters.filter((c) => c.status === "ready").length,
     chaptersApproved: writableChapters.filter((c) => c.status === "approved").length,
@@ -159,8 +161,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 >
                   {statusDisplay.label}
                 </span>
+                {project.type !== "assignment" ? (
+                  <>
+                    <span className="text-[var(--neutral-500)]">
+                      {settings.isExperimental ? "Experimental / empirical" : "Pure literature"}
+                    </span>
+                    <span className="text-[var(--neutral-300)]" aria-hidden="true">
+                      ·
+                    </span>
+                    <span className="text-[var(--neutral-500)]">
+                      {settings.useChapters ? "Chapters" : "Numbered sections"}
+                    </span>
+                  </>
+                ) : null}
                 {outlineData?.outlineLocked ? (
-                  <span className="text-[var(--neutral-500)]">Outline locked</span>
+                  <span className="text-[var(--neutral-500)]">· Outline locked</span>
                 ) : null}
               </div>
 
@@ -258,6 +273,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           <ChapterPipelinePanel
             projectId={project.id}
             chapters={chapterPanelItems}
+            useChapters={settings.useChapters}
             isExperimental={settings.isExperimental}
             experimentalDataMode={settings.experimentalDataMode}
             datasets={datasetRows.map((d) => ({
@@ -269,6 +285,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         )}
         <ExportControls
           projectId={project.id}
+          projectType={project.type}
+          useChapters={settings.useChapters}
           hasCompletedChapters={chapterPanelItems.some(
             (c) => !c.isAutoReferences && (c.status === "ready" || c.status === "approved")
           )}
@@ -288,6 +306,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             projectTitle: project.title,
             citationStyle: settings.citationStyle,
             verifiedSourceCount: citationRows.length,
+            useChapters: settings.useChapters,
           })}
         />
       </div>

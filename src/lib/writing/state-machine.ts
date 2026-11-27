@@ -43,24 +43,29 @@ const READABLE_CHAPTER_STATUS: Record<ChapterStatus, string> = {
 
 export function canStartChapter(
   allChapters: ChapterGateSummary[],
-  targetNumber: number
+  targetNumber: number,
+  useChapters = true
 ): StartChapterCheck {
+  const unitLabel = (num: number) => (useChapters ? `Chapter ${num}` : `Section ${num}`);
   const sorted = [...allChapters].sort((a, b) => a.number - b.number);
   const target = sorted.find((c) => c.number === targetNumber);
 
   if (!target) {
-    return { allowed: false, reason: `Chapter ${targetNumber} does not exist in this project.` };
+    return {
+      allowed: false,
+      reason: `${unitLabel(targetNumber)} does not exist in this document.`,
+    };
   }
 
   if (target.isAutoReferences) {
     return {
       allowed: false,
-      reason: "The References chapter is built automatically from your verified citations.",
+      reason: "The References section is built automatically from your verified citations.",
     };
   }
 
   if (target.status === "queued" || target.status === "writing") {
-    return { allowed: false, reason: `Chapter ${targetNumber} is already in progress.` };
+    return { allowed: false, reason: `${unitLabel(targetNumber)} is already in progress.` };
   }
 
   const contentChapters = sorted.filter((c) => !c.isAutoReferences);
@@ -71,7 +76,7 @@ export function canStartChapter(
     if (prev.status !== "ready" && prev.status !== "approved") {
       return {
         allowed: false,
-        reason: `Finish Chapter ${prev.number} ("${prev.title}") before starting Chapter ${targetNumber}. Current status: ${READABLE_CHAPTER_STATUS[prev.status]}.`,
+        reason: `Finish ${unitLabel(prev.number)} ("${prev.title}") before starting ${unitLabel(targetNumber)}. Current status: ${READABLE_CHAPTER_STATUS[prev.status]}.`,
       };
     }
   }

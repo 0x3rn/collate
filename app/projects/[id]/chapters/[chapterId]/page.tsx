@@ -17,6 +17,7 @@ import { buildReaderCitationLabels } from "@/lib/citations/reader-format";
 import { formatFigureAttributionForDisplay } from "@/lib/export/figure-layout";
 import type { R2ReadWriteBucket } from "@/lib/export/http-handlers";
 import { calculateWordsPerPage } from "@/lib/outline/planner";
+import { formatUnitHeading } from "@/lib/outline/structures";
 import { loadChapterAttentionMap } from "@/lib/writing/attention";
 import { extractMarkdownHeadings } from "@/lib/writing/chapter-reader-handlers";
 
@@ -108,6 +109,8 @@ export default async function ChapterReaderPage({
 
   const initial: ChapterReaderInitialData = {
     projectId: id,
+    projectType: state.project.type,
+    useChapters: state.settings.useChapters,
     projectTitle: state.project.title,
     wordsPerPage,
     pageSize: state.settings.pageSize,
@@ -182,7 +185,9 @@ export default async function ChapterReaderPage({
             <span className="truncate">Back to {state.project.title}</span>
           </Link>
           <h1 className="text-[1.75rem] sm:text-[1.875rem] font-medium leading-tight">
-            Chapter {chapter.number}: {chapter.title}
+            {state.project.type === "assignment"
+              ? chapter.title
+              : formatUnitHeading(chapter.number, chapter.title, state.settings.useChapters)}
           </h1>
         </div>
 

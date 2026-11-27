@@ -198,7 +198,7 @@ export const TERMS_POLICY: LegalDocumentData = {
           rows: [
             ["Starter", "25 credits", "$10 USD", "NGN 10,000"],
             ["Project (Popular)", "100 credits", "$30 USD", "NGN 35,000"],
-            ["Thesis", "200 credits", "$50 USD", "NGN 60,000"],
+            ["Thesis", "200 credits", "$50 USD", "NGN 65,000"],
           ],
         },
         {

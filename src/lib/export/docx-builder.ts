@@ -77,12 +77,17 @@ interface HeadingLayout {
   lineSpacing: ThesisExportDocument["formatting"]["lineSpacing"];
 }
 
-/** Chapter titles are centred; every heading stays on the same page as the text after it. */
-function headingParagraph(level: ExportHeadingLevel, text: string, layout: HeadingLayout) {
+/** Chapter titles are centred; numbered paper sections are left-aligned. Every heading stays with the text after it. */
+function headingParagraph(
+  level: ExportHeadingLevel,
+  text: string,
+  layout: HeadingLayout,
+  centerLevel1 = true
+) {
   const spacing = wordHeadingSpacingTwips(level, layout.bodySizePt, layout.lineSpacing);
   return new Paragraph({
     heading: WORD_HEADING_LEVELS[level],
-    ...(level === 1 ? { alignment: AlignmentType.CENTER } : {}),
+    ...(level === 1 && centerLevel1 ? { alignment: AlignmentType.CENTER } : {}),
     keepNext: true,
     keepLines: true,
     spacing,
@@ -101,7 +106,8 @@ function markdownToDocxBlocks(
   sizeHalfPt: number,
   lineTwips: number,
   heading: HeadingLayout,
-  resolvedFigures?: Record<string, ResolvedExportFigureAsset>
+  resolvedFigures?: Record<string, ResolvedExportFigureAsset>,
+  useChapters = true
 ): Array<Paragraph | Table> {
   const parsedBlocks = parseMarkdownToBlocks(markdown);
   const blocks: Array<Paragraph | Table> = [];
@@ -114,7 +120,7 @@ function markdownToDocxBlocks(
       }
       case "heading": {
         const level = Math.min(4, Math.max(1, block.level)) as ExportHeadingLevel;
-        blocks.push(headingParagraph(level, block.text, heading));
+        blocks.push(headingParagraph(level, block.text, heading, useChapters));
         break;
       }
       case "paragraph": {
@@ -359,8 +365,9 @@ export async function buildThesisDocx(
     );
   }
 
+  const useChapters = doc.useChapters ?? true;
   doc.chapters.forEach((ch, idx) => {
-    if (idx > 0) {
+    if (idx > 0 && useChapters) {
       children.push(new Paragraph({ children: [new PageBreak()] }));
     }
     children.push(
@@ -370,7 +377,8 @@ export async function buildThesisDocx(
         sizeHalfPt,
         lineTwips,
         headingLayout,
-        doc.resolvedFigures
+        doc.resolvedFigures,
+        useChapters
       )
     );
   });

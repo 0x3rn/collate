@@ -14,6 +14,7 @@ import {
 } from "./heading-style";
 import { keepWordsTogether } from "./keep-together";
 import { getPageSizeSpec } from "./page-sizes";
+import { formatUnitHeading } from "@/lib/outline/structures";
 
 export interface ExportFormattingSettings {
   font: string;
@@ -44,6 +45,8 @@ export interface ThesisExportDocument {
   projectTitle: string;
   workTypeLabel: string;
   level?: string | null;
+  /** When false, renders continuous numbered paper sections (left-aligned H1, no forced page breaks between sections). Defaults to true. */
+  useChapters?: boolean;
   abstractText?: string;
   formatting: ExportFormattingSettings;
   chapters: ExportChapterContent[];
@@ -190,12 +193,11 @@ export function markdownToPrintHtml(
  * sizes follow the body size (unchanged at 12pt) and colour is the user's choice. A heading is
  * never left as the last line of a page: it moves to the next page with its text.
  */
-function buildHeadingCss(fmt: ExportFormattingSettings): string {
+function buildHeadingCss(fmt: ExportFormattingSettings, useChapters = true): string {
   const rule = (level: HeadingLevel) => {
     const { before, after } = PRINT_HEADING_MARGIN_PT[level];
-    return `h${level} { font-size: ${headingSizePt(level, fmt.fontSizePt)}pt; font-weight: 700; margin: ${before}pt 0 ${after}pt 0;${
-      level === 1 ? " text-align: center;" : ""
-    } }`;
+    const align = level === 1 ? (useChapters ? " text-align: center;" : " text-align: left;") : "";
+    return `h${level} { font-size: ${headingSizePt(level, fmt.fontSizePt)}pt; font-weight: 700; margin: ${before}pt 0 ${after}pt 0;${align} }`;
   };
   const color = fmt.headingColor === "blue" ? ` color: #${headingColorHex("blue")};` : "";
   return [
@@ -204,10 +206,12 @@ function buildHeadingCss(fmt: ExportFormattingSettings): string {
     rule(2),
     rule(3),
     rule(4),
+    "section.page-break h1, section.front-matter-section h1 { text-align: center; }",
+    "article.paper-section { margin-top: 20pt; }",
   ].join("\n    ");
 }
 
-function buildPrintCss(fmt: ExportFormattingSettings): string {
+function buildPrintCss(fmt: ExportFormattingSettings, useChapters = true): string {
   const safeFont = escapeHtml(fmt.font);
   const pageSpec = getPageSizeSpec(fmt.pageSize);
   return `
@@ -264,7 +268,7 @@ function buildPrintCss(fmt: ExportFormattingSettings): string {
     }
     .cover-title { font-size: 20pt; font-weight: 700; line-height: 1.3; text-transform: uppercase; }
     .cover-meta { font-size: 12pt; line-height: 1.8; }
-    ${buildHeadingCss(fmt)}
+    ${buildHeadingCss(fmt, useChapters)}
     p { margin: 0 0 10pt 0; text-align: left; }
     p.blank-line { margin: 0 0 10pt 0; min-height: 1em; }
     blockquote {
@@ -306,8 +310,10 @@ export function buildFrontMatterHtml(doc: ThesisExportDocument, tocEntries: TocE
     </section>`);
   }
 
+  const useChapters = doc.useChapters ?? true;
+
   if (fm.certification) {
-    blocks.push(`<section class="page-break">
+    blocks.push(`<section class="page-break front-matter-section">
       <h1>Certification / Declaration</h1>
       <p>I declare that this ${escapeHtml(doc.workTypeLabel.toLowerCase())} titled "${escapeHtml(doc.projectTitle)}" was prepared and verified by ${escapeHtml(cover.authorName || "[Author Name]")} in accordance with departmental guidelines.</p>
       <p style="margin-top: 28pt;">Signature: ____________________________ &nbsp;&nbsp; Date: ________________</p>
@@ -315,30 +321,30 @@ export function buildFrontMatterHtml(doc: ThesisExportDocument, tocEntries: TocE
   }
 
   if (fm.dedication) {
-    blocks.push(`<section class="page-break">
+    blocks.push(`<section class="page-break front-matter-section">
       <h1>Dedication</h1>
       <p>[Add your personal dedication here.]</p>
     </section>`);
   }
 
   if (fm.acknowledgements) {
-    blocks.push(`<section class="page-break">
+    blocks.push(`<section class="page-break front-matter-section">
       <h1>Acknowledgements</h1>
       <p>Grateful acknowledgement is extended to ${escapeHtml(cover.supervisor || "my supervisor")}, faculty mentors, and all researchers whose verified works informed this study.</p>
     </section>`);
   }
 
   if (fm.preface) {
-    blocks.push(`<section class="page-break">
+    blocks.push(`<section class="page-break front-matter-section">
       <h1>Preface</h1>
       <p>This work examines ${escapeHtml(doc.projectTitle)} through evidence-bound synthesis of verified academic and institutional records.</p>
     </section>`);
   }
 
   if (fm.abstract) {
-    blocks.push(`<section class="page-break">
+    blocks.push(`<section class="page-break front-matter-section">
       <h1>Abstract</h1>
-      <p>${escapeHtml(doc.abstractText?.trim() || `This ${doc.workTypeLabel.toLowerCase()} investigates ${doc.projectTitle} using verified academic literature and structured chapter analysis.`)}</p>
+      <p>${escapeHtml(doc.abstractText?.trim() || `This ${doc.workTypeLabel.toLowerCase()} investigates ${doc.projectTitle} using verified academic literature and structured ${useChapters ? "chapter" : "section"} analysis.`)}</p>
     </section>`);
   }
 
@@ -349,16 +355,16 @@ export function buildFrontMatterHtml(doc: ThesisExportDocument, tocEntries: TocE
           `<div class="toc-row"><span><strong>${escapeHtml(entry.label)}</strong> ${escapeHtml(entry.title)}</span><span>${entry.pageNumber}</span></div>`
       )
       .join("\n");
-    blocks.push(`<section class="page-break">
+    blocks.push(`<section class="page-break front-matter-section">
       <h1>Table of Contents</h1>
       ${rows}
     </section>`);
   }
 
   if (fm.listOfFiguresAndTables) {
-    blocks.push(`<section class="page-break">
+    blocks.push(`<section class="page-break front-matter-section">
       <h1>List of Figures and Tables</h1>
-      <p>Tables and figures appear in their respective results and analysis chapters.</p>
+      <p>Tables and figures appear in their respective ${useChapters ? "analysis chapters" : "sections"}.</p>
     </section>`);
   }
 
@@ -369,7 +375,7 @@ export function buildFrontMatterHtml(doc: ThesisExportDocument, tocEntries: TocE
   <head>
     <meta charset="utf-8" />
     <title>${escapeHtml(doc.projectTitle)} | Front Matter</title>
-    <style>${buildPrintCss(doc.formatting)}</style>
+    <style>${buildPrintCss(doc.formatting, useChapters)}</style>
   </head>
   <body>${blocks.join("\n")}</body>
 </html>`;
@@ -378,14 +384,15 @@ export function buildFrontMatterHtml(doc: ThesisExportDocument, tocEntries: TocE
 export function buildChapterHtmlDocument(
   chapter: ExportChapterContent,
   formatting: ExportFormattingSettings,
-  resolvedFigures?: Record<string, ResolvedExportFigureAsset>
+  resolvedFigures?: Record<string, ResolvedExportFigureAsset>,
+  useChapters = true
 ): string {
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Chapter ${chapter.number}: ${escapeHtml(chapter.title)}</title>
-    <style>${buildPrintCss(formatting)}</style>
+    <title>${escapeHtml(formatUnitHeading(chapter.number, chapter.title, useChapters))}</title>
+    <style>${buildPrintCss(formatting, useChapters)}</style>
   </head>
   <body>
     <article>${markdownToPrintHtml(chapter.markdown, resolvedFigures)}</article>
@@ -404,7 +411,7 @@ export function buildReferencesHtmlDocument(
 
   const appendixBlock =
     formatting.frontMatter.appendices && appendicesMarkdown?.trim()
-      ? `<section class="page-break"><h1>Appendices</h1>${markdownToPrintHtml(appendicesMarkdown)}</section>`
+      ? `<section class="page-break front-matter-section"><h1>Appendices</h1>${markdownToPrintHtml(appendicesMarkdown)}</section>`
       : "";
 
   return `<!doctype html>
@@ -412,10 +419,10 @@ export function buildReferencesHtmlDocument(
   <head>
     <meta charset="utf-8" />
     <title>References</title>
-    <style>${buildPrintCss(formatting)}</style>
+    <style>${buildPrintCss(formatting, true)}</style>
   </head>
   <body>
-    <section>
+    <section class="front-matter-section">
       <h1>References</h1>
       ${refItems || "<p>No cited references recorded yet.</p>"}
     </section>
@@ -425,22 +432,23 @@ export function buildReferencesHtmlDocument(
 }
 
 /**
- * Builds a single self-contained HTML print document containing all target chapters
- * and optional References/Appendices separated by explicit print page breaks.
- * Used whenever a Table of Contents page-number pass is not needed (single-chapter
- * and combined exports), cutting Cloudflare Browser Rendering API calls down to 1.
+ * Builds a single self-contained HTML print document containing all target chapters or paper sections
+ * and optional References/Appendices. Chaptered manuscripts break onto a new page per chapter,
+ * while continuous non-chapter papers flow seamlessly across numbered sections.
  */
 export function buildCombinedBodyHtmlDocument(
   doc: ThesisExportDocument,
   options: { includeReferences?: boolean } = {}
 ): string {
   const includeReferences = options.includeReferences ?? true;
+  const useChapters = doc.useChapters ?? true;
   const sectionsHtml: string[] = [];
 
   doc.chapters.forEach((ch, idx) => {
-    const breakClass = idx > 0 ? ' class="page-break"' : "";
+    const classAttr =
+      idx > 0 ? (useChapters ? ' class="page-break"' : ' class="paper-section"') : "";
     sectionsHtml.push(
-      `<article${breakClass}>${markdownToPrintHtml(ch.markdown, doc.resolvedFigures)}</article>`
+      `<article${classAttr}>${markdownToPrintHtml(ch.markdown, doc.resolvedFigures)}</article>`
     );
   });
 
@@ -459,7 +467,7 @@ export function buildCombinedBodyHtmlDocument(
 
   const title =
     doc.chapters.length === 1
-      ? `Chapter ${doc.chapters[0]!.number}: ${doc.chapters[0]!.title}`
+      ? formatUnitHeading(doc.chapters[0]!.number, doc.chapters[0]!.title, useChapters)
       : doc.projectTitle;
 
   return `<!doctype html>
@@ -467,7 +475,7 @@ export function buildCombinedBodyHtmlDocument(
   <head>
     <meta charset="utf-8" />
     <title>${escapeHtml(title)}</title>
-    <style>${buildPrintCss(doc.formatting)}</style>
+    <style>${buildPrintCss(doc.formatting, useChapters)}</style>
   </head>
   <body>
     ${sectionsHtml.join("\n")}

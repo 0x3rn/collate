@@ -419,7 +419,9 @@ describe("Production polish: marketing opt-in prompt, cancelled checkouts, resul
 
   it("resolves a single authoritative Results dataset across Results card and Add instructions without duplicates", async () => {
     const user = await signUpAndSignIn("Ngozi", "ngozi@uni.edu", "quiet cedar study bench");
-    const draft = await createWizardDraftProject(db, user.userId, "project", now);
+    const draft = await createWizardDraftProject(db, user.userId, "project", now, undefined, {
+      isExperimental: true,
+    });
     const resultsChapter = draft.chapters.find((c) => c.chapterType === "results");
     expect(resultsChapter).toBeDefined();
 

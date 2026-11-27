@@ -26,6 +26,11 @@ export function PaymentStatusToast({ payment }: { payment?: string }) {
         "Your credits are added automatically as soon as the payment is confirmed.",
         "Payment submitted"
       );
+    } else if (payment === "failed" || payment === "paystack_failed") {
+      toast.error(
+        "Your payment did not go through. No credits were added and you can try again anytime.",
+        "Payment failed"
+      );
     } else if (
       payment === "cancelled" ||
       payment === "polar_cancelled" ||

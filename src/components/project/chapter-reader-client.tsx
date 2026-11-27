@@ -17,7 +17,9 @@ import {
   type InsufficientCreditsDetails,
 } from "@/components/ui/modal-card";
 import { useToast } from "@/components/ui/toast";
-import type { PageSize } from "@/db/schema";
+import type { PageSize, ProjectType } from "@/db/schema";
+import { formatUnitHeading, formatUnitShortLabel } from "@/lib/outline/structures";
+import { formatProjectType } from "@/lib/ui/formatters";
 import type { FormattedCitationCluster } from "@/lib/citations/reader-format";
 import {
   computeControlledFigureDimensions,
@@ -60,6 +62,8 @@ export interface ReaderVersionItem {
 
 export interface ChapterReaderInitialData {
   projectId: string;
+  projectType?: ProjectType;
+  useChapters?: boolean;
   projectTitle?: string;
   wordsPerPage?: number;
   pageSize?: PageSize;
@@ -458,13 +462,25 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
     }
   }
 
+  const useChapters = initial.useChapters ?? true;
+  const isAssignment = initial.projectType === "assignment";
+  const unitCap = isAssignment ? "Draft" : useChapters ? "Chapter" : "Section";
+  const unitLower = isAssignment ? "draft" : useChapters ? "chapter" : "section";
+  const workNounLower = initial.projectType
+    ? formatProjectType(initial.projectType).toLowerCase()
+    : "project";
+
   let headingCounter = 0;
   let lastShownPage = 0;
   const parsedReadBlocks = parseMarkdownToBlocks(activeReadMarkdown);
   const readPageNumbers = computeBlockPageNumbers(parsedReadBlocks, initial.wordsPerPage ?? 275);
-  const pageTitleLower = `chapter ${initial.chapter.number}: ${initial.chapter.title}`
-    .trim()
-    .toLowerCase();
+  const pageTitleCandidates = new Set([
+    `chapter ${initial.chapter.number}: ${initial.chapter.title}`.trim().toLowerCase(),
+    `${initial.chapter.number}. ${initial.chapter.title}`.trim().toLowerCase(),
+    formatUnitHeading(initial.chapter.number, initial.chapter.title, useChapters)
+      .trim()
+      .toLowerCase(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -487,7 +503,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                   : "text-[var(--neutral-700)] hover:text-[var(--neutral-900)]"
               }`}
             >
-              Read<span className="hidden sm:inline"> Chapter</span>
+              Read<span className="hidden sm:inline"> {unitCap}</span>
             </button>
             <button
               type="button"
@@ -538,7 +554,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 loadingLabel="Resuming..."
                 onClick={handleResumeChapter}
               >
-                Resume Chapter {initial.chapter.number}
+                Resume {formatUnitShortLabel(initial.chapter.number, useChapters)}
               </Button>
             )}
           </div>
@@ -559,7 +575,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                 </h2>
                 <p className="text-sm text-[var(--neutral-700)] leading-relaxed max-w-[60ch]">
                   {initial.attention?.userMessage ??
-                    "We ran into a temporary service issue while drafting this chapter. Your saved progress is intact and any reserved credits have been refunded. Please resume to try again."}
+                    `We ran into a temporary service issue while drafting this ${unitLower}. Your saved progress is intact and any reserved credits have been refunded. Please resume to try again.`}
                 </p>
               </div>
 
@@ -576,11 +592,11 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                     loadingLabel="Resuming..."
                     onClick={handleResumeChapter}
                   >
-                    Resume Chapter {initial.chapter.number}
+                    Resume {formatUnitShortLabel(initial.chapter.number, useChapters)}
                   </Button>
                 )}
                 <LinkButton href={`/projects/${initial.projectId}`} variant="secondary">
-                  Back to project
+                  Back to {workNounLower}
                 </LinkButton>
               </div>
             </div>
@@ -683,7 +699,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                   if (
                     block.type === "heading" &&
                     block.level === 1 &&
-                    block.text.trim().toLowerCase() === pageTitleLower
+                    pageTitleCandidates.has(block.text.trim().toLowerCase())
                   ) {
                     return null;
                   }

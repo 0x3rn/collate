@@ -7,5 +7,6 @@ export async function POST(request: Request): Promise<Response> {
   return handlePaystackWebhook(request, {
     ...buildWorkerAuthDeps(request),
     paystackSecretKey: runtimeEnv.PAYSTACK_SECRET_KEY,
+    paystackWebhookSecret: runtimeEnv.PAYSTACK_WEBHOOK_SECRET,
   });
 }

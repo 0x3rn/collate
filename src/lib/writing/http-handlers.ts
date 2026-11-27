@@ -352,6 +352,14 @@ export async function handleStartChapter(
     );
   }
 
+  const [settingsRow] = await deps.db
+    .select({ useChapters: projectSettings.useChapters })
+    .from(projectSettings)
+    .where(eq(projectSettings.projectId, auth.project.id))
+    .limit(1);
+  const useChapters = settingsRow?.useChapters ?? true;
+  const unitLabel = useChapters ? `Chapter ${target.number}` : `Section ${target.number}`;
+
   const gate = canStartChapter(
     allChapters.map((c) => ({
       number: c.number,
@@ -359,11 +367,15 @@ export async function handleStartChapter(
       status: c.status,
       isAutoReferences: c.isAutoReferences,
     })),
-    target.number
+    target.number,
+    useChapters
   );
 
   if (!gate.allowed) {
-    return jsonNoStore({ ok: false, error: gate.reason ?? "Chapter cannot be started yet." }, 409);
+    return jsonNoStore(
+      { ok: false, error: gate.reason ?? `${unitLabel} cannot be started yet.` },
+      409
+    );
   }
 
   const now = (deps.nowFn ?? (() => new Date()))();
@@ -408,7 +420,7 @@ export async function handleStartChapter(
       chapterId: target.id,
       credits: creditsRequired,
       idempotencyKey: `chapter:${runId}`,
-      note: `Reserved ${creditsRequired} credits for Chapter ${target.number}: ${target.title}`,
+      note: `Reserved ${creditsRequired} credits for ${unitLabel}: ${target.title}`,
       now,
     });
     reservationId = reserved.reservationId;
@@ -423,7 +435,7 @@ export async function handleStartChapter(
           code: err.code,
           creditsRequired,
           creditsAvailable: err.availableCredits ?? auth.session.user.creditsBalance,
-          error: `Chapter ${target.number} requires ${creditsRequired} credits. Top up your credit balance on Credits & Billing to continue.`,
+          error: `${unitLabel} requires ${creditsRequired} credits. Top up your credit balance on Credits & Billing to continue.`,
         },
         err.status
       );

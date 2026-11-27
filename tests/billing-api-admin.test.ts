@@ -17,8 +17,10 @@ import {
   handlePaystackWebhook,
   handlePolarWebhook,
   handleStripeWebhook,
+  verifyAndSettlePaystackCallback,
   type BillingHttpDeps,
 } from "@/lib/billing/http-handlers";
+import { buildDisputeEvidence } from "@/lib/billing/evidence-report";
 import { computeHmacBase64, computeHmacHex } from "@/lib/billing/webhooks";
 import type { EmailMessage, EmailSender } from "@/lib/email/mailer";
 import { createInMemoryD1, type InMemoryD1Context } from "./helpers/in-memory-d1";
@@ -729,5 +731,159 @@ describe("Phase 11 — Billing Webhooks, Checkout & Admin Authorization HTTP API
     const winners = allAfterSample.filter((u) => u.creditsBalance === 17);
     expect(winners).toHaveLength(2);
     expect([u1.userId, u2.userId, u3.userId, u4.userId, admin.userId]).toContain(winners[0]!.id);
+  });
+
+  it("verifies Paystack callback idempotently, sends 1 receipt email + alert, populates evidence, blocks IDOR, and parses string metadata webhooks", async () => {
+    const buyer = await signUpUser("Tunde", "tunde.ng@uni.edu.ng", "quiet library oak shelf");
+    const other = await signUpUser("Kemi", "kemi.ng@uni.edu.ng", "bright morning desk lamp");
+    const emailsBefore = sent.length;
+    const alertsBefore = adminAlerts.length;
+
+    const initBodies: Array<Record<string, unknown>> = [];
+    const deps: BillingHttpDeps = {
+      ...authDeps,
+      paystackSecretKey: "sk_test_paystack_live_flow",
+      fetchFn: async (url, init) => {
+        const u = String(url);
+        if (u.includes("/transaction/initialize")) {
+          const parsedBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+          initBodies.push(parsedBody);
+          return Response.json({
+            status: true,
+            data: {
+              authorization_url: "https://checkout.paystack.com/test_ref_01",
+              reference: parsedBody.reference,
+            },
+          });
+        }
+        if (u.includes("/transaction/verify/")) {
+          const ref = decodeURIComponent(u.split("/transaction/verify/")[1] ?? "");
+          return Response.json({
+            status: true,
+            data: {
+              id: 5098765432,
+              domain: "test",
+              status: "success",
+              reference: ref,
+              amount: 1_000_000,
+              currency: "NGN",
+              channel: "card",
+              gateway_response: "Successful",
+              paid_at: "2026-11-27T14:00:00.000Z",
+              authorization: {
+                brand: "visa",
+                last4: "4081",
+                bank: "TEST BANK",
+                channel: "card",
+              },
+              customer: {
+                customer_code: "CUS_test_tunde_01",
+                email: "tunde.ng@uni.edu.ng",
+              },
+              metadata: {
+                userId: buyer.userId,
+                credits: 25,
+                packId: "pack_starter_25",
+              },
+            },
+          });
+        }
+        return Response.json({ status: false }, { status: 404 });
+      },
+    };
+
+    // 1. Initialize NGN Paystack checkout -> sends cancel_action + metadata
+    const initRes = await handleCreateCheckout(
+      new Request("https://collate.app/api/billing/checkout", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://collate.app",
+          cookie: buyer.cookie,
+        },
+        body: JSON.stringify({
+          provider: "paystack",
+          packId: "pack_starter_25",
+          acceptTerms: true,
+        }),
+      }),
+      deps
+    );
+    expect(initRes.status).toBe(201);
+    const initJson = (await initRes.json()) as { ok: boolean; reference: string };
+    expect(initJson.ok).toBe(true);
+    expect((initBodies[0]?.metadata as Record<string, unknown>)?.cancel_action).toBe(
+      "https://collate.app/billing?payment=cancelled"
+    );
+
+    // 2. IDOR guard: another user passing buyer's reference is ignored (no verify call, no credits)
+    const idorResult = await verifyAndSettlePaystackCallback(
+      { reference: initJson.reference, userId: other.userId },
+      deps
+    );
+    expect(idorResult.status).toBe("ignored");
+
+    // 3. Buyer returns to /billing?payment=pending&reference=... -> instant server-side settlement
+    const settled = await verifyAndSettlePaystackCallback(
+      { reference: initJson.reference, userId: buyer.userId },
+      deps
+    );
+    expect(settled).toMatchObject({
+      status: "succeeded",
+      alreadyProcessed: false,
+      newBalance: 25,
+    });
+    expect(sent.length).toBe(emailsBefore + 1);
+    expect(sent[sent.length - 1]?.subject).toContain("Collate receipt: 25 credits added");
+    expect(sent[sent.length - 1]?.text).toContain("NGN 10,000.00");
+    expect(sent[sent.length - 1]?.text).toContain(initJson.reference);
+    expect(adminAlerts.length).toBe(alertsBefore + 1);
+
+    // 4. Subsequent Paystack webhook with stringified metadata deduplicates cleanly (zero double credit/email)
+    const webhookBody = JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 5098765432,
+        reference: initJson.reference,
+        amount: 1_000_000,
+        currency: "NGN",
+        status: "success",
+        metadata: JSON.stringify({ userId: buyer.userId, credits: 25, packId: "pack_starter_25" }),
+      },
+    });
+    const webhookSig = await computeHmacHex("SHA-512", "sk_test_paystack_live_flow", webhookBody);
+    const whRes = await handlePaystackWebhook(
+      new Request("https://collate.app/api/webhooks/paystack", {
+        method: "POST",
+        headers: { "x-paystack-signature": webhookSig },
+        body: webhookBody,
+      }),
+      deps
+    );
+    expect(whRes.status).toBe(200);
+    expect((await whRes.json()) as Record<string, unknown>).toMatchObject({
+      ok: true,
+      alreadyProcessed: true,
+      newBalance: 25,
+    });
+    expect(sent.length).toBe(emailsBefore + 1);
+    expect(adminAlerts.length).toBe(alertsBefore + 1);
+
+    // 5. Transaction evidence captures Paystack Transaction ID, card brand/last4, bank, test domain
+    const [buyerRow] = await db.select().from(users).where(eq(users.id, buyer.userId));
+    expect(buyerRow?.creditsBalance).toBe(25);
+    const ledgerRows = await db
+      .select()
+      .from(creditLedger)
+      .where(eq(creditLedger.userId, buyer.userId));
+    expect(ledgerRows).toHaveLength(1);
+    const evidence = await buildDisputeEvidence(db, ledgerRows[0]!.paymentId!);
+    expect(evidence?.providerDetails.providerTransactionId).toBe("5098765432");
+    expect(evidence?.providerDetails.providerTransactionIdLabel).toBe("Paystack transaction ID");
+    expect(evidence?.providerDetails.paymentMethod).toContain("visa");
+    expect(evidence?.providerDetails.paymentMethod).toContain("4081");
+    expect(evidence?.providerDetails.gatewayResponse).toBe("Successful");
+    expect(evidence?.providerDetails.providerCustomerId).toBe("CUS_test_tunde_01");
+    expect(evidence?.providerDetails.environment).toBe("test");
   });
 });

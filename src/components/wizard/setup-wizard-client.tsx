@@ -103,6 +103,7 @@ export function SetupWizardClient({
       <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5">
         <WizardStepper
           projectType={wizard.project.type}
+          useChapters={wizard.settings.useChapters}
           currentStep={currentStep}
           maxReachedStep={Math.max(wizard.project.wizardStep, currentStep)}
           onSelectStep={(stepNum) => setCurrentStep(stepNum)}
@@ -143,6 +144,7 @@ export function SetupWizardClient({
           <StepChaptersForm
             wizard={wizard}
             saving={saving}
+            onWizardUpdated={setWizard}
             onSave={(payload) => saveStep(payload, 6)}
             onBack={() => setCurrentStep(4)}
           />

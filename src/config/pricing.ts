@@ -33,7 +33,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     id: "pack_thesis_150",
     label: "Thesis (200 credits)",
     credits: 200,
-    amountNgnKobo: 6_000_000, // NGN 60,000
+    amountNgnKobo: 6_500_000, // NGN 65,000
     amountUsdCents: 5000, // $50.00
     description: "Covers a full master's or doctoral thesis with generous revision capacity.",
   },

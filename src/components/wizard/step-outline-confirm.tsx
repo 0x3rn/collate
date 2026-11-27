@@ -10,6 +10,11 @@ import {
   validateConfirmedOutline,
   type ProjectOutlinePlan,
 } from "@/lib/outline/planner";
+import {
+  formatUnitShortLabel,
+  subUnitNounPlural,
+  unitNounSingular,
+} from "@/lib/outline/structures";
 import { formatProjectType } from "@/lib/ui/formatters";
 import type { SerializedWizardState } from "@/lib/wizard/http-handlers";
 
@@ -28,6 +33,7 @@ export function StepOutlineConfirm({
   const [outlineLocked, setOutlineLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +89,41 @@ export function StepOutlineConfirm({
       toast.error("Network error while unlocking outline.", "Connection error");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleRegenerateForTopic() {
+    setRegenerating(true);
+    try {
+      const res = await fetch(`/api/projects/${wizard.project.id}/outline/suggest`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        usedAi?: boolean;
+        outline?: ProjectOutlinePlan;
+        error?: string;
+      };
+      if (!res.ok || !data.ok || !data.outline) {
+        toast.error(
+          data.error ?? "Could not regenerate your outline right now.",
+          "Regeneration failed"
+        );
+        return;
+      }
+      setOutline(data.outline);
+      toast.success(
+        data.usedAi
+          ? "Updated your outline titles and subheadings specifically for your topic."
+          : "Updated your outline to match your topic and study settings.",
+        "Outline updated"
+      );
+    } catch {
+      toast.error("Network error while regenerating your outline.", "Connection error");
+    } finally {
+      setRegenerating(false);
     }
   }
 
@@ -203,23 +244,43 @@ export function StepOutlineConfirm({
 
   const validation = validateConfirmedOutline(outline);
   const { project, settings } = wizard;
+  const useChapters = outline.useChapters ?? settings.useChapters;
+  const unitLower = unitNounSingular(useChapters, false);
+  const subUnitsCap = subUnitNounPlural(useChapters, true);
+  const subUnitsLower = subUnitNounPlural(useChapters, false);
   const enabledFrontMatter = Object.entries(settings.frontMatter)
     .filter(([, enabled]) => enabled)
     .map(([key]) => key.replace(/([A-Z])/g, " $1").toLowerCase());
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h2 className="text-2xl font-medium">Review, adjust, and confirm your outline</h2>
-        <p className="text-sm text-[var(--neutral-600)]">
-          Edit chapter titles, page budgets, and section headings before writing begins. Total
-          allocated pages must stay within 2% of your target ({outline.targetPages} pages).
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="text-2xl font-medium">Review, adjust, and confirm your outline</h2>
+          <p className="text-sm text-[var(--neutral-600)]">
+            Edit {unitLower} titles, page budgets, and {subUnitsLower} before writing begins. Total
+            allocated pages must stay within 2% of your target ({outline.targetPages} pages).
+          </p>
+        </div>
+
+        {!outlineLocked && outline.projectType !== "assignment" ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={submitting || regenerating}
+            loading={regenerating}
+            loadingLabel="Tailoring..."
+            onClick={() => void handleRegenerateForTopic()}
+            className="shrink-0 w-fit"
+          >
+            Tailor outline to topic
+          </Button>
+        ) : null}
       </div>
 
       {outlineLocked ? (
         <FormAlert tone="warning">
-          This outline is locked because chapter drafting has started.{" "}
+          This outline is locked because drafting has started.{" "}
           <button
             type="button"
             onClick={handleUnlock}
@@ -232,10 +293,16 @@ export function StepOutlineConfirm({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
-          <p className="text-xs text-[var(--neutral-600)]">Work type</p>
+          <p className="text-xs text-[var(--neutral-600)]">Format &amp; mode</p>
           <p className="text-base font-semibold text-[var(--neutral-900)]">
             {formatProjectType(project.type)}
           </p>
+          {project.type !== "assignment" ? (
+            <p className="text-xs text-[var(--neutral-600)] mt-0.5">
+              {settings.isExperimental ? "Experimental / empirical" : "Pure literature"} ·{" "}
+              {useChapters ? "Chapters" : "Numbered sections"}
+            </p>
+          ) : null}
         </div>
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
           <p className="text-xs text-[var(--neutral-600)]">Budget allocation</p>
@@ -306,7 +373,7 @@ export function StepOutlineConfirm({
                   >
                     {ch.isAutoReferences
                       ? "Automatic reference list"
-                      : `Chapter ${ch.number} · ${ch.chapterType.replace("_", " ")}`}
+                      : `${formatUnitShortLabel(ch.number, useChapters)} · ${ch.chapterType.replaceAll("_", " ")}`}
                   </label>
                   <input
                     id={`out-title-${idx}`}
@@ -348,7 +415,7 @@ export function StepOutlineConfirm({
               {ch.needsConfirmation ? (
                 <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--warning-border)] bg-[var(--warning-bg)] space-y-3">
                   <p className="text-xs font-semibold text-[var(--warning-text)]">
-                    Custom chapter confirmation required
+                    Custom {unitLower} confirmation required
                   </p>
                   <textarea
                     rows={2}
@@ -367,7 +434,7 @@ export function StepOutlineConfirm({
                       }
                       className="w-4 h-4 accent-[var(--accent-600)]"
                     />
-                    Confirm this chapter purpose
+                    Confirm this {unitLower} purpose
                   </label>
                 </div>
               ) : (
@@ -380,7 +447,7 @@ export function StepOutlineConfirm({
                     htmlFor={`out-sec-${idx}`}
                     className="block text-xs font-medium text-[var(--neutral-600)]"
                   >
-                    Sections (one per line · ~{ch.wordBudget.toLocaleString()} total words)
+                    {subUnitsCap} (one per line · ~{ch.wordBudget.toLocaleString()} total words)
                   </label>
                   <textarea
                     id={`out-sec-${idx}`}

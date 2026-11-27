@@ -103,6 +103,70 @@ describe("Phase 11 — Paystack & Stripe Webhook Verification, Idempotency & Ref
     expect(usr?.creditsBalance).toBe(60);
   });
 
+  it("verifies modern Paystack-Signature header (whsec_..., key rotation, replay window & tamper checks)", async () => {
+    const webhookSecret = "whsec_test_paystack_signing_secret_2026";
+    const ts = Math.floor(now.getTime() / 1000);
+    const rawBody = JSON.stringify({
+      event: "charge.success",
+      data: {
+        id: 987654321,
+        reference: "PSK_MODERN_001",
+        amount: 3_500_000,
+        currency: "NGN",
+        status: "success",
+        metadata: { userId: "usr_pay", credits: 100 },
+      },
+    });
+    const validHash = await computeHmacHex("SHA-512", webhookSecret, `${ts}.${rawBody}`);
+
+    // 1. Valid single v1=<whk_id>:<hex> signature passes
+    const ok = await verifyPaystackWebhook({
+      rawBody,
+      paystackSignatureHeader: `t=${ts},v1=whk_3f9a1c2e:${validHash}`,
+      signatureHeader: null,
+      webhookSecret,
+      nowMs: now.getTime(),
+    });
+    expect(ok.valid).toBe(true);
+    if (!ok.valid || !ok.payment) throw new Error("Expected verified modern Paystack payment");
+    expect(ok.payment.providerOrderId).toBe("987654321");
+    expect(ok.payment.creditsGranted).toBe(100);
+
+    // 2. Secret rotation: multiple v1= signatures where second one matches -> passes
+    const rotated = await verifyPaystackWebhook({
+      rawBody,
+      paystackSignatureHeader: `t=${ts},v1=whk_old:0000000000,v1=whk_new:${validHash}`,
+      signatureHeader: null,
+      webhookSecret,
+      nowMs: now.getTime(),
+    });
+    expect(rotated.valid).toBe(true);
+
+    // 3. Replay attack (> 5 min stale timestamp) rejected even with valid HMAC
+    const staleTs = ts - 600;
+    const staleHash = await computeHmacHex("SHA-512", webhookSecret, `${staleTs}.${rawBody}`);
+    const replayed = await verifyPaystackWebhook({
+      rawBody,
+      paystackSignatureHeader: `t=${staleTs},v1=whk_3f9a1c2e:${staleHash}`,
+      signatureHeader: null,
+      webhookSecret,
+      nowMs: now.getTime(),
+    });
+    expect(replayed.valid).toBe(false);
+
+    // 4. Tampered body rejected (and does NOT silently fall back to legacy x-paystack-signature)
+    const legacyFallbackSig = await computeHmacHex("SHA-512", "sk_test_key", rawBody);
+    const tampered = await verifyPaystackWebhook({
+      rawBody: rawBody.replace("3500000", "3500001"),
+      paystackSignatureHeader: `t=${ts},v1=whk_3f9a1c2e:${validHash}`,
+      signatureHeader: legacyFallbackSig,
+      webhookSecret,
+      secretKey: "sk_test_key",
+      nowMs: now.getTime(),
+    });
+    expect(tampered.valid).toBe(false);
+  });
+
   it("verifies Stripe HMAC-SHA256 webhook with replay guard and grants credits EXACTLY ONCE", async () => {
     const secret = "whsec_test_stripe_secret";
     const rawBody = JSON.stringify({

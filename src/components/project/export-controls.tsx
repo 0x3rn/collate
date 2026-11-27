@@ -3,16 +3,23 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import type { ProjectType } from "@/db/schema";
+import { formatProjectType } from "@/lib/ui/formatters";
 
 export function ExportControls({
   projectId,
+  projectType = "project",
+  useChapters = true,
   hasCompletedChapters,
   allChaptersReady,
 }: {
   projectId: string;
+  projectType?: ProjectType;
+  useChapters?: boolean;
   hasCompletedChapters: boolean;
   allChaptersReady: boolean;
 }) {
+  const workNounLower = formatProjectType(projectType).toLowerCase();
   const toast = useToast();
   const [workingKey, setWorkingKey] = useState<string | null>(null);
 
@@ -47,8 +54,9 @@ export function ExportControls({
       <div className="space-y-1.5">
         <h2 className="text-lg font-medium text-[var(--neutral-900)]">Downloads</h2>
         <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
-          Print-ready PDFs include Roman front matter, Arabic body numbering, and an accurate Table
-          of Contents. Word (.docx) matches the same structure for school template edits.
+          {useChapters
+            ? "Print-ready PDFs include Roman front matter, Arabic body numbering, and an accurate Table of Contents. Word (.docx) matches the same structure for school template edits."
+            : "Print-ready PDFs format your numbered sections continuously with clean academic typography and references. Word (.docx) matches the same layout for easy editing."}
         </p>
       </div>
 
@@ -69,10 +77,10 @@ export function ExportControls({
           variant="primary"
           disabled={!allChaptersReady || workingKey !== null}
           loading={workingKey === "full-pdf"}
-          loadingLabel="Building full thesis PDF..."
+          loadingLabel={`Building full ${workNounLower} PDF...`}
           onClick={() => triggerExport("full", "pdf")}
         >
-          Download whole project (PDF)
+          Download whole {workNounLower} (PDF)
         </Button>
 
         <Button

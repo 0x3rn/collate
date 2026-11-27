@@ -168,9 +168,11 @@ export function generateAiDisclosureStatement(params: {
   projectTitle: string;
   citationStyle: string;
   verifiedSourceCount: number;
+  useChapters?: boolean;
 }): string {
   const author = params.authorName?.trim() || "[Author Name]";
   const institution = params.institution?.trim() || "[Institution / Department]";
+  const draftingUnit = (params.useChapters ?? true) ? "chapter" : "section";
 
   return [
     "AI-Assisted Research and Drafting Disclosure Statement",
@@ -180,7 +182,7 @@ export function generateAiDisclosureStatement(params: {
     `Institution: ${institution}`,
     "",
     "Disclosure:",
-    `During the preparation of this work, the author used Collate (an evidence-bound research and drafting assistant) to support literature discovery across ${params.verifiedSourceCount} verified source records, outline organization, citation formatting (${params.citationStyle.toUpperCase()}), and iterative chapter drafting and similarity checks.`,
+    `During the preparation of this work, the author used Collate (an evidence-bound research and drafting assistant) to support literature discovery across ${params.verifiedSourceCount} verified source records, outline organization, citation formatting (${params.citationStyle.toUpperCase()}), and iterative ${draftingUnit} drafting and similarity checks.`,
     "",
     "Author responsibility:",
     "All empirical data (where included), analytical interpretations, citations, and final edits were reviewed and approved by the author in accordance with institutional academic-integrity guidelines. No experimental, survey, or interview data were fabricated by automated tools.",
