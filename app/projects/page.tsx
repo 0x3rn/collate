@@ -27,7 +27,7 @@ export default async function ProjectsPage() {
           <div className="space-y-1">
             <h1 className="text-[1.875rem] sm:text-[2.125rem] font-medium">Projects</h1>
             <p className="text-sm sm:text-base text-[var(--neutral-600)]">
-              View your ongoing drafts, finished manuscripts, and past work in one place.
+              View your drafts, finished projects, and past work in one place.
             </p>
           </div>
           <LinkButton href="/projects/new" variant="primary" className="shrink-0 w-fit">

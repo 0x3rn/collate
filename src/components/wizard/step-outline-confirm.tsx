@@ -80,13 +80,19 @@ export function StepOutlineConfirm({
       });
       const data = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !data.ok) {
-        toast.error(data.error ?? "Could not unlock outline.", "Could not unlock outline");
+        toast.error(
+          data.error ?? "We could not open the outline for editing.",
+          "Could not edit outline"
+        );
         return;
       }
       setOutlineLocked(false);
-      toast.success("You can now edit your outline before drafting resumes.", "Outline unlocked");
+      toast.success(
+        "You can now edit your outline before drafting resumes.",
+        "Outline is editable again"
+      );
     } catch {
-      toast.error("Network error while unlocking outline.", "Connection error");
+      toast.error("Check your connection and try again.", "Connection error");
     } finally {
       setSubmitting(false);
     }
@@ -107,10 +113,7 @@ export function StepOutlineConfirm({
         error?: string;
       };
       if (!res.ok || !data.ok || !data.outline) {
-        toast.error(
-          data.error ?? "Could not regenerate your outline right now.",
-          "Regeneration failed"
-        );
+        toast.error(data.error ?? "We could not update your outline.", "Could not update outline");
         return;
       }
       setOutline(data.outline);
@@ -121,7 +124,7 @@ export function StepOutlineConfirm({
         "Outline updated"
       );
     } catch {
-      toast.error("Network error while regenerating your outline.", "Connection error");
+      toast.error("Check your connection and try again.", "Connection error");
     } finally {
       setRegenerating(false);
     }
@@ -258,8 +261,8 @@ export function StepOutlineConfirm({
         <div className="space-y-1">
           <h2 className="text-2xl font-medium">Review, adjust, and confirm your outline</h2>
           <p className="text-sm text-[var(--neutral-600)]">
-            Edit {unitLower} titles, page budgets, and {subUnitsLower} before writing begins. Total
-            allocated pages must stay within 2% of your target ({outline.targetPages} pages).
+            Edit {unitLower} titles, page counts, and {subUnitsLower} before writing begins. Your
+            pages must add up to within 2% of your {outline.targetPages}-page target.
           </p>
         </div>
 
@@ -269,24 +272,24 @@ export function StepOutlineConfirm({
             variant="secondary"
             disabled={submitting || regenerating}
             loading={regenerating}
-            loadingLabel="Tailoring..."
+            loadingLabel="Updating..."
             onClick={() => void handleRegenerateForTopic()}
             className="shrink-0 w-fit"
           >
-            Tailor outline to topic
+            Update outline for this topic
           </Button>
         ) : null}
       </div>
 
       {outlineLocked ? (
         <FormAlert tone="warning">
-          This outline is locked because drafting has started.{" "}
+          You can&apos;t change the outline after writing starts.{" "}
           <button
             type="button"
             onClick={handleUnlock}
             className="underline font-semibold cursor-pointer ml-1"
           >
-            Revise outline (unlock)
+            Edit outline anyway
           </button>
         </FormAlert>
       ) : null}
@@ -305,13 +308,13 @@ export function StepOutlineConfirm({
           ) : null}
         </div>
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
-          <p className="text-xs text-[var(--neutral-600)]">Budget allocation</p>
+          <p className="text-xs text-[var(--neutral-600)]">Pages per chapter</p>
           <p className="text-base font-semibold tabular-nums text-[var(--neutral-900)]">
             {validation.allocatedPages} / {outline.targetPages} pages
           </p>
         </div>
         <div className="p-4 rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
-          <p className="text-xs text-[var(--neutral-600)]">Layout density</p>
+          <p className="text-xs text-[var(--neutral-600)]">Words per page</p>
           <p className="text-base font-semibold tabular-nums text-[var(--neutral-900)]">
             ~{outline.wordsPerPage} words/page
           </p>
@@ -391,7 +394,7 @@ export function StepOutlineConfirm({
                       htmlFor={`out-pages-${idx}`}
                       className="block text-xs font-medium text-[var(--neutral-500)]"
                     >
-                      Page budget
+                      Pages
                     </label>
                     <input
                       id={`out-pages-${idx}`}

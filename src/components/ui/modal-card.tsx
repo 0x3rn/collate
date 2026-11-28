@@ -186,8 +186,8 @@ export function InsufficientCreditsModal({
           </div>
 
           <p className="text-xs text-[var(--neutral-500)] leading-relaxed">
-            Credits are only finalized when drafting finishes cleanly; interrupted runs are refunded
-            in full.
+            You are only charged when the work finishes. If it stops partway, the credits go back to
+            you automatically.
           </p>
         </>
       ) : null}

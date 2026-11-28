@@ -102,13 +102,14 @@ export function PricingShowcase({
 
         <div className="lg:col-span-5 p-4 sm:p-5 rounded-[var(--radius-sm)] bg-[var(--neutral-50)] border border-[var(--neutral-200)] space-y-2">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-xs text-[var(--neutral-600)]">Estimated requirement</span>
+            <span className="text-xs text-[var(--neutral-600)]">Credits you will need</span>
             <span className="text-2xl font-semibold tabular-nums text-[var(--neutral-900)]">
               {estimate.baseCredits} credits
             </span>
           </div>
           <p className="text-xs text-[var(--neutral-600)] tabular-nums">
-            Recommended with revision buffer: {estimate.recommendedTotalCredits} credits · Best fit:{" "}
+            Suggested pack, with room for edits: {estimate.recommendedTotalCredits} credits · Best
+            fit:{" "}
             <strong className="text-[var(--accent-600)]">{estimate.recommendedPack.label}</strong>
           </p>
         </div>

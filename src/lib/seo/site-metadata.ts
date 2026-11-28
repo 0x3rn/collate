@@ -70,11 +70,11 @@ export function buildLandingJsonLd(): Record<string, unknown> {
         image: `${SITE_URL}${OG_IMAGE_PATH}`,
         publisher: { "@id": `${SITE_URL}/#organization` },
         featureList: [
-          "Pre-writing topic feasibility check against verified academic databases",
+          "Checks whether real academic sources exist for your topic before you write",
           "Supports undergraduate projects, research papers, theses, and multi-question assignments",
           "Verified citations in APA 7, Harvard, MLA 9, Chicago, IEEE, and Vancouver styles",
           "Automatic statistical tables computed from uploaded CSV research datasets",
-          "Chapter-by-chapter review with originality checks and writing logs",
+          "Chapter-by-chapter review with similarity checks and writing logs",
           "Print-ready PDF and editable Word (.docx) export",
         ],
         offers: CREDIT_PACKS.map((pack) => ({

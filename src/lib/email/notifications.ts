@@ -186,10 +186,10 @@ export function buildChapterNeedsAttentionEmail(params: {
         "",
         params.reason,
         "",
-        `Open your workspace to resume ${unitLabel}:`,
+        `Open your project to resume ${unitLabel}:`,
         params.projectUrl,
       ].join("\n"),
-      html: `<p>Hi ${escapeHtml(safeName)},</p><p>Drafting for ${escapeHtml(unitLabel)} (<strong>${escapeHtml(params.chapterTitle)}</strong>) in "${escapeHtml(params.projectTitle)}" paused due to a temporary service issue.</p><p>${escapeHtml(params.reason)}</p><p><a href="${escapeHtml(params.projectUrl)}">Open workspace to resume ${escapeHtml(unitLabel)}</a></p>`,
+      html: `<p>Hi ${escapeHtml(safeName)},</p><p>Drafting for ${escapeHtml(unitLabel)} (<strong>${escapeHtml(params.chapterTitle)}</strong>) in "${escapeHtml(params.projectTitle)}" paused due to a temporary service issue.</p><p>${escapeHtml(params.reason)}</p><p><a href="${escapeHtml(params.projectUrl)}">Open your project to resume ${escapeHtml(unitLabel)}</a></p>`,
     };
   }
 
@@ -201,10 +201,10 @@ export function buildChapterNeedsAttentionEmail(params: {
       `${unitLabel} ("${params.chapterTitle}") for "${params.projectTitle}" paused and needs a few details from you before continuing.`,
       `What is needed: ${params.reason}`,
       "",
-      "All completed section progress has been saved safely. Open your workspace to provide details and resume:",
+      "All completed section progress has been saved safely. Open your project to provide details and resume:",
       params.projectUrl,
     ].join("\n"),
-    html: `<p>Hi ${escapeHtml(safeName)},</p><p>${escapeHtml(unitLabel)} (<strong>${escapeHtml(params.chapterTitle)}</strong>) for "${escapeHtml(params.projectTitle)}" paused and needs a few details from you before continuing.</p><p><strong>What is needed:</strong> ${escapeHtml(params.reason)}</p><p>All completed progress has been preserved. <a href="${escapeHtml(params.projectUrl)}">Open workspace to provide details</a></p>`,
+    html: `<p>Hi ${escapeHtml(safeName)},</p><p>${escapeHtml(unitLabel)} (<strong>${escapeHtml(params.chapterTitle)}</strong>) for "${escapeHtml(params.projectTitle)}" paused and needs a few details from you before continuing.</p><p><strong>What is needed:</strong> ${escapeHtml(params.reason)}</p><p>All completed progress has been preserved. <a href="${escapeHtml(params.projectUrl)}">Open your project to continue</a></p>`,
   };
 }
 

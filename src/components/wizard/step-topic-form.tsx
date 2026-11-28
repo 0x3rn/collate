@@ -111,7 +111,7 @@ export function StepTopicForm({
         <p className="text-sm text-[var(--neutral-600)]">
           {isAssignment
             ? "Add each question you need to answer. Each question will get its own source check."
-            : "Give your working title and optional academic context so the source check targets the right literature."}
+            : "Give your working title and optional academic context so we search the right literature."}
         </p>
       </div>
 
@@ -293,8 +293,8 @@ export function StepTopicForm({
               Does this study involve an experiment or empirical data?
             </p>
             <p className="text-xs text-[var(--neutral-600)] leading-relaxed">
-              This controls your entire outline. Pure literature studies use conceptual, thematic,
-              and critical analysis without experimental Methodology or Results chapters.
+              This controls your entire outline. A pure literature study uses discussion and
+              critical analysis, with no Methodology or Results chapter.
             </p>
           </div>
 
@@ -318,7 +318,7 @@ export function StepTopicForm({
                 No, pure literature / library study
               </p>
               <p className="text-xs text-[var(--neutral-500)] mt-0.5">
-                No experiments, surveys, or primary datasets (thematic &amp; critical synthesis)
+                No experiments, surveys, or primary datasets (themes and critical discussion)
               </p>
             </button>
 
@@ -387,9 +387,8 @@ export function StepTopicForm({
                     Gather published benchmark data from similar studies
                   </p>
                   <p className="text-xs text-[var(--neutral-600)] mt-1 leading-relaxed">
-                    Collate gathers verified published experimental studies, extracts accepted
-                    physiological or empirical value ranges, and builds range-grounded comparative
-                    tables strictly within those cited bounds.
+                    Collate gathers verified published experimental studies, pulls the measured
+                    ranges those studies report, and builds comparison tables that stay inside them.
                   </p>
                 </button>
               </div>

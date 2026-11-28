@@ -67,7 +67,7 @@ describe("source check step", () => {
   it("shows a plain result with no evidence score or 'Confirmed' prefix", () => {
     const out = renderSweep([report()]);
     expect(out).toContain(
-      "Good news: your topic is feasible. 56 credible sources found, 8 subtopics covered."
+      "Good news: this topic has enough sources. 56 credible sources found, covering 8 parts of your topic."
     );
     expect(out).not.toMatch(/Evidence score|87\/100|Confirmed:/);
   });
@@ -85,15 +85,15 @@ describe("source check step", () => {
       }),
     ]);
     expect(out).toContain(
-      "Your topic needs some refinement. 1 credible source found, 1 subtopic covered."
+      "Your topic needs narrowing. 1 credible source found, covering 1 part of your topic."
     );
-    expect(out).toContain("Edit your topic and run the sweep again.");
+    expect(out).toContain("Edit your topic and run the check again.");
     expect(out).not.toContain("feasibility gate");
   });
 
-  it("tells a new user to start the sweep, and never lists retrieved sources", () => {
+  it("tells a new user to start the check, and never lists retrieved sources", () => {
     const out = renderSweep([]);
-    expect(out).toContain("Start the source sweep to check your topic.");
+    expect(out).toContain("Start the check to see whether your topic has enough sources.");
     expect(out).not.toMatch(/retrieved sources|feasibility gate/i);
   });
 });

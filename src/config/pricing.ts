@@ -19,7 +19,8 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     credits: 25,
     amountNgnKobo: 1_000_000, // NGN 10,000
     amountUsdCents: 1000, // $10.00
-    description: "Covers assignments or a short research paper up to 20 pages with revision room.",
+    description:
+      "Covers assignments or a short research paper up to 20 pages, with room for edits.",
   },
   {
     id: "pack_project_60",
@@ -27,7 +28,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     credits: 100,
     amountNgnKobo: 3_500_000, // NGN 35,000
     amountUsdCents: 3000, // $30.00
-    description: "Covers a 40–80 page project or bachelor's thesis plus revision headroom.",
+    description: "Covers a 40–80 page project or bachelor's thesis, plus room for edits.",
   },
   {
     id: "pack_thesis_150",
@@ -35,7 +36,7 @@ export const CREDIT_PACKS: readonly CreditPack[] = [
     credits: 200,
     amountNgnKobo: 6_500_000, // NGN 65,000
     amountUsdCents: 5000, // $50.00
-    description: "Covers a full master's or doctoral thesis with generous revision capacity.",
+    description: "Covers a full master's or doctoral thesis, with plenty of credits for edits.",
   },
 ] as const;
 

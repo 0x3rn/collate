@@ -31,7 +31,7 @@ export default async function ExportsPage() {
         <header className="space-y-1">
           <h1 className="text-[1.875rem] sm:text-[2.125rem] font-medium">Exports</h1>
           <p className="text-sm sm:text-base text-[var(--neutral-600)]">
-            Re-download finished PDF and Word (.docx) files generated across your projects.
+            Re-download finished PDF and Word (.docx) files saved from your projects.
           </p>
         </header>
 

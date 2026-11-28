@@ -1040,7 +1040,7 @@ describe("End-to-end DB, HTTP API, AI drafting prompt, export, and /projects lab
         useChapters: false,
         chaptersWriting: 1,
       }).label
-    ).toBe("Writing Sections");
+    ).toBe("Writing sections");
 
     expect(formatExportScope("chapter", 2, false)).toBe("Section 2");
     expect(formatExportScope("combined", null, false)).toBe("Completed sections");

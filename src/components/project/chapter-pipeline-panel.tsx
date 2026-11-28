@@ -208,7 +208,7 @@ export function ChapterPipelinePanel({
       setDetailsChapter(null);
       setDetailsText("");
       toast.success(
-        `${unitCap} queued for drafting. You will receive an email as soon as it is ready to review.`,
+        `${unitCap} is waiting to start. You will receive an email as soon as it is ready to review.`,
         `${unitCap} queued`
       );
       router.refresh();
@@ -285,10 +285,7 @@ export function ChapterPipelinePanel({
 
   async function submitRevision(chapterId: string) {
     if (revisionNote.trim().length < 10) {
-      toast.error(
-        "Describe the requested changes in at least 10 characters.",
-        "More detail needed"
-      );
+      toast.error("Tell us what to change (at least 10 characters).", "More detail needed");
       return;
     }
     setBusyChapterId(chapterId);
@@ -462,7 +459,7 @@ export function ChapterPipelinePanel({
       const cleared = !data.userInstructions && !data.userAttachmentName && !data.hasDataTables;
       if (cleared) {
         toast.success(
-          `Cleared pre-start instructions for Chapter ${instructionsChapter.number}.`,
+          `Cleared the saved instructions for Chapter ${instructionsChapter.number}.`,
           "Instructions cleared"
         );
       } else if (data.csvStats) {
@@ -570,7 +567,7 @@ export function ChapterPipelinePanel({
             {unitsCap} ({chapters.length})
           </h2>
           <p className="text-xs text-[var(--neutral-600)]">
-            {unitsCap} unlock one at a time as each draft is ready
+            {unitsCap} open one at a time as each draft is ready
           </p>
         </div>
 
@@ -657,7 +654,7 @@ export function ChapterPipelinePanel({
                             className="w-1.5 h-1.5 rounded-full bg-[var(--accent-600)] shrink-0"
                           />
                           <span>
-                            Pre-start instructions saved
+                            Instructions saved
                             {ch.userAttachmentName ? ` · ${ch.userAttachmentName}` : ""}
                             {!ch.userAttachmentName && ch.hasUserDataTables
                               ? " · Data tables ready"
@@ -678,8 +675,8 @@ export function ChapterPipelinePanel({
                           >
                             {ch.originalityReport.passed ? "Passed" : "Flagged"}
                           </span>{" "}
-                          · Source overlap {ch.originalityReport.overlapScore}% · Quotes{" "}
-                          {ch.originalityReport.quoteSharePct}% · Cross-user{" "}
+                          · Matched source text {ch.originalityReport.overlapScore}% · Quotes{" "}
+                          {ch.originalityReport.quoteSharePct}% · Shared with other projects{" "}
                           {ch.originalityReport.crossUserScore}%
                         </p>
                       ) : null}
@@ -692,8 +689,8 @@ export function ChapterPipelinePanel({
                           />
                           <span>
                             {ch.status === "queued"
-                              ? "Queued for drafting. Status updates automatically."
-                              : "Drafting in progress. Status updates automatically."}
+                              ? "Waiting to start. This page updates by itself."
+                              : "Drafting now. This page updates by itself."}
                           </span>
                         </p>
                       ) : null}
@@ -784,7 +781,7 @@ export function ChapterPipelinePanel({
                                 setDetailsChapter(ch);
                               }}
                             >
-                              Provide Details
+                              Add details
                             </Button>
                           ) : (
                             <Button
@@ -1105,7 +1102,7 @@ export function ChapterPipelinePanel({
               />
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--neutral-500)]">
                 <span>
-                  Paste raw CSV rows or Markdown tables directly; Collate parses them automatically.
+                  Paste raw CSV rows or Markdown tables directly; Collate reads them automatically.
                 </span>
                 <span className="tabular-nums">
                   {instructionsText.length.toLocaleString("en-US")} /{" "}

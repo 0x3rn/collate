@@ -17,7 +17,7 @@ export const COOKIE_POLICY: LegalDocumentData = {
       t(" uses cookies and browser storage technologies when you visit "),
       a(LEGAL_CONFIG.siteUrl, LEGAL_CONFIG.siteUrl),
       t(
-        " and use your research workspace. Because academic work frequently involves unpublished theses, primary datasets, and sensitive pre-publication manuscripts, Collate operates on a strict privacy-first, data-minimization architecture."
+        " and use your research projects. Because academic work often involves unpublished theses, primary datasets, and sensitive pre-publication manuscripts, Collate collects as little personal data as possible."
       ),
     ],
   ],
@@ -47,7 +47,7 @@ export const COOKIE_POLICY: LegalDocumentData = {
             t(" and "),
             c("Referrer-Policy: strict-origin-when-cross-origin"),
             t(
-              " HTTP headers, ensuring that unauthorized third-party trackers cannot execute inside your workspace."
+              " HTTP headers, ensuring that unauthorized third-party trackers cannot run inside your project pages."
             ),
           ],
         },

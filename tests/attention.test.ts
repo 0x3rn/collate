@@ -112,8 +112,8 @@ describe("Chapter attention classification, masking, and D1 persistence", () => 
       semanticScore: 93,
       crossUserScore: 0,
     });
-    expect(semanticOnly.userMessage).toContain("paraphrase similarity 93%");
-    expect(semanticOnly.userMessage).not.toContain("source overlap 0%");
+    expect(semanticOnly.userMessage).toContain("similar wording 93%");
+    expect(semanticOnly.userMessage).not.toContain("matched source text 0%");
   });
 
   it("detects legacy failed originality report as user_input_required even without audit_log row", async () => {

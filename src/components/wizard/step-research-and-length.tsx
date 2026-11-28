@@ -30,29 +30,33 @@ function countLabel(count: number, singular: string, plural: string): string {
 }
 
 const RUN_STAGE_LABELS: Record<ResearchRunStatus, string> = {
-  queued: "Queued for research sweep",
-  planning: "Planning subtopics and search queries",
+  queued: "Waiting to start the source check",
+  planning: "Breaking your topic into parts to search",
   searching: "Searching research databases and web sources",
-  fetching: "Fetching pages, extracting passages, and saving snapshots",
-  scoring: "Evaluating credibility, coverage, and feasibility verdict",
-  completed: "Source sweep and feasibility check completed",
-  failed: "Sweep interrupted. Ready to resume without losing progress.",
+  fetching: "Reading each source and saving the useful passages",
+  scoring: "Checking how many trusted sources back each part",
+  completed: "Source check finished",
+  failed: "The check stopped early. Your progress is saved, so you can resume.",
 };
 
 const VERDICT_META: Record<
   FeasibilityVerdict,
   { title: string; tone: "success" | "warning" | "error"; badge: string }
 > = {
-  feasible: { title: "Good news: your topic is feasible.", tone: "success", badge: "Feasible" },
+  feasible: {
+    title: "Good news: this topic has enough sources.",
+    tone: "success",
+    badge: "Enough sources",
+  },
   needs_refinement: {
-    title: "Your topic needs some refinement.",
+    title: "Your topic needs narrowing.",
     tone: "warning",
-    badge: "Needs refinement",
+    badge: "Narrow your topic",
   },
   not_feasible: {
-    title: "This topic can't be worked on as written.",
+    title: "There aren't enough real sources for this topic as written.",
     tone: "error",
-    badge: "Not feasible",
+    badge: "Not enough sources",
   },
 };
 
@@ -109,7 +113,7 @@ export function StepResearchSweep({
             const failKey = `${data.run.id}:${data.run.error}`;
             if (failKey !== lastFailedRunKeyRef.current) {
               lastFailedRunKeyRef.current = failKey;
-              toast.error(data.run.error, "Source sweep paused");
+              toast.error(data.run.error, "Source check stopped");
             }
           }
         }
@@ -156,7 +160,7 @@ export function StepResearchSweep({
           typeof data.creditsRequired === "number"
         ) {
           setCreditsModal({
-            actionLabel: "Running an extra topic source sweep",
+            actionLabel: "Running another topic check",
             creditsRequired: data.creditsRequired,
             creditsAvailable: data.creditsAvailable,
             message: data.error,
@@ -164,8 +168,8 @@ export function StepResearchSweep({
           return;
         }
         toast.error(
-          data.error ?? "Could not start the source sweep. Try again.",
-          "Could not start sweep"
+          data.error ?? "We could not start the check. Try again.",
+          "Could not start the check"
         );
         return;
       }
@@ -178,7 +182,7 @@ export function StepResearchSweep({
         }
       }
     } catch {
-      toast.error("Network error while starting the source sweep.", "Connection error");
+      toast.error("Check your connection, then try the check again.", "Connection error");
     } finally {
       setStartingLive(false);
     }
@@ -196,7 +200,7 @@ export function StepResearchSweep({
   return (
     <div className="space-y-6">
       <div className="space-y-1.5">
-        <h2 className="text-2xl font-medium">Source check and length</h2>
+        <h2 className="text-2xl font-medium">Check your topic</h2>
         <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
           Collate searches research databases and credible publications first to verify your topic
           has enough real evidence before any writing starts.
@@ -216,16 +220,16 @@ export function StepResearchSweep({
           <Button
             type="button"
             loading={startingLive || isRunning}
-            loadingLabel={isRunning ? "Sweeping sources..." : "Starting sweep..."}
+            loadingLabel={isRunning ? "Checking sources..." : "Starting check..."}
             onClick={() =>
               startLiveSweep(activeRun?.status === "failed" ? activeRun.id : undefined)
             }
           >
             {activeRun?.status === "failed"
-              ? "Resume interrupted sweep"
+              ? "Resume the check"
               : activeRun?.status === "completed"
-                ? "Run fresh sweep"
-                : "Start source sweep"}
+                ? "Run a new check"
+                : "Check my topic"}
           </Button>
         </div>
 
@@ -238,7 +242,7 @@ export function StepResearchSweep({
               </p>
             </div>
             <div className="p-3 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)]">
-              <p className="text-xs text-[var(--neutral-600)]">Sources fetched</p>
+              <p className="text-xs text-[var(--neutral-600)]">Sources read</p>
               <p className="text-xl font-semibold text-[var(--neutral-900)] tabular-nums">
                 {activeRun.sourcesFetched}
               </p>
@@ -263,15 +267,19 @@ export function StepResearchSweep({
               "credible source",
               "credible sources"
             )}{" "}
-            found, {countLabel(primaryReport.coverage.subtopicsCovered, "subtopic", "subtopics")}{" "}
-            covered
+            found, covering{" "}
+            {countLabel(
+              primaryReport.coverage.subtopicsCovered,
+              "part of your topic",
+              "parts of your topic"
+            )}
             {primaryReport.isMocked ? " (preview mode)" : ""}.
           </FormAlert>
 
           {primaryDataNotice ? <FormAlert tone="warning">{primaryDataNotice}</FormAlert> : null}
 
           <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-3">
-            <p className="text-sm font-semibold text-[var(--neutral-900)]">Evidence summary</p>
+            <p className="text-sm font-semibold text-[var(--neutral-900)]">What we found</p>
             <ul className="list-disc pl-5 space-y-1.5 text-sm text-[var(--neutral-700)]">
               {primaryReport.reasons.map((reason, idx) => (
                 <li key={idx}>{reason}</li>
@@ -281,7 +289,9 @@ export function StepResearchSweep({
 
           {subtopicBreakdown.length > 0 ? (
             <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-3">
-              <p className="text-sm font-semibold text-[var(--neutral-900)]">Subtopic coverage</p>
+              <p className="text-sm font-semibold text-[var(--neutral-900)]">
+                Sources for each part of your topic
+              </p>
               <ul className="divide-y divide-[var(--neutral-200)] list-none p-0">
                 {subtopicBreakdown.map((item) => (
                   <li
@@ -296,7 +306,7 @@ export function StepResearchSweep({
                           : "bg-[var(--warning-bg)] text-[var(--warning-text)]"
                       }`}
                     >
-                      {item.covered ? `Covered (${item.credibleSources})` : "Gap (0)"}
+                      {item.covered ? `Covered (${item.credibleSources})` : "No sources yet (0)"}
                     </span>
                   </li>
                 ))}
@@ -307,7 +317,7 @@ export function StepResearchSweep({
           {suggestedRefinements.length > 0 ? (
             <div className="bg-[var(--neutral-50)] border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 space-y-2">
               <p className="text-sm font-semibold text-[var(--neutral-900)]">
-                Suggested topic refinements
+                Ways to narrow your topic
               </p>
               <ul className="list-disc pl-5 space-y-1.5 text-sm text-[var(--neutral-700)]">
                 {suggestedRefinements.map((s, idx) => (
@@ -397,8 +407,8 @@ export function StepResearchSweep({
         ) : (
           <p className="text-sm text-[var(--neutral-600)]">
             {primaryReport
-              ? "Edit your topic and run the sweep again. You can continue once enough sources are found."
-              : "Start the source sweep to check your topic. You can continue once enough sources are found."}
+              ? "Edit your topic and run the check again. You can continue once enough sources are found."
+              : "Start the check to see whether your topic has enough sources. You can continue once it does."}
           </p>
         )}
       </div>
@@ -422,7 +432,7 @@ export function StepLengthForm({
   const recommended = wizard.project.idealPages ?? 40;
   const reason =
     wizard.feasibilityReports[0]?.coverage.idealPagesReason ||
-    "Recommended based on your selected work type and scope.";
+    "Based on what you are writing and how long it usually runs.";
 
   const toast = useToast();
   const [pagesInput, setPagesInput] = useState(String(wizard.project.targetPages ?? recommended));
@@ -442,8 +452,8 @@ export function StepLengthForm({
       <div className="space-y-1">
         <h2 className="text-2xl font-medium">Recommended page length</h2>
         <p className="text-sm text-[var(--neutral-600)]">
-          Keep our recommended length or enter your department&apos;s required page count. Final
-          pages are measured from real rendered PDFs.
+          Keep our recommended length or enter your department&apos;s required page count. We count
+          the pages in the finished PDF.
         </p>
       </div>
 
@@ -468,7 +478,7 @@ export function StepLengthForm({
           required
           value={pagesInput}
           onChange={(e) => setPagesInput(e.target.value)}
-          helpText="Accepted range: 1 to 300 pages."
+          helpText="Enter a number from 1 to 300."
         />
       </div>
 

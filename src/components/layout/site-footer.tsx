@@ -17,8 +17,8 @@ export function SiteFooter() {
             </p>
           </div>
           <p className="text-[var(--neutral-600)] max-w-[46ch] leading-relaxed">
-            Research and drafting assistant for evidence-backed projects, research papers, theses,
-            and assignments.
+            Collate checks real sources, then writes your project, research paper, thesis, or
+            assignment one chapter at a time.
           </p>
         </div>
 

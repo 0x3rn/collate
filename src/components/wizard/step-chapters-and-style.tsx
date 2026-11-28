@@ -135,7 +135,7 @@ export function StepChaptersForm({
             : data.usedAi
               ? `Tailored your ${unitsLower} and subheadings to your topic.`
               : `Updated your ${unitsLower} to match your topic and study mode.`,
-          options.resetToDefault ? "Defaults restored" : "Structure tailored"
+          options.resetToDefault ? "Defaults restored" : "Chapters updated"
         );
       }
     } catch {
@@ -231,15 +231,13 @@ export function StepChaptersForm({
         <h2 className="text-2xl font-medium">{unitsCap} and front matter</h2>
         <p className="text-sm text-[var(--neutral-600)]">
           {useChapters
-            ? "Choose how many chapters to include, refine each title, and toggle front or back matter. The References list is always added automatically."
-            : `Choose the numbered sections for your ${formatProjectType(wizard.project.type).toLowerCase()} and toggle front or back matter. Collate drafts each section in order without chapter prefixes, and builds References automatically.`}
+            ? "Choose how many chapters to include, refine each title, and turn opening or end pages on or off. The References list is always added automatically."
+            : `Choose the numbered sections for your ${formatProjectType(wizard.project.type).toLowerCase()} and turn opening or end pages on or off. Collate drafts each section in order without chapter prefixes, and builds References automatically.`}
         </p>
       </div>
 
       {suggesting ? (
-        <FormAlert tone="info">
-          Formulating {unitsLower} and subheadings tailored to your topic...
-        </FormAlert>
+        <FormAlert tone="info">Writing {unitsLower} and subheadings for your topic...</FormAlert>
       ) : null}
 
       <div className="flex flex-wrap items-end justify-between gap-3">

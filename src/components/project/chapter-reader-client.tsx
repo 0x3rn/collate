@@ -989,12 +989,12 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
 
           <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-5 sm:p-6 flex flex-col gap-4">
             <h2 className="text-base font-semibold text-[var(--neutral-900)]">
-              Originality &amp; checks
+              Similarity &amp; checks
             </h2>
             {initial.originalityReport ? (
               <dl className="flex flex-col gap-2.5 text-xs tabular-nums">
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-[var(--neutral-600)]">Originality check</dt>
+                  <dt className="text-[var(--neutral-600)]">Similarity check</dt>
                   <dd>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-[4px] border ${
@@ -1020,7 +1020,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <dt className="text-[var(--neutral-600)]">Shared across projects</dt>
+                  <dt className="text-[var(--neutral-600)]">Shared with other projects</dt>
                   <dd className="font-semibold text-[var(--neutral-900)]">
                     {initial.originalityReport.crossUserScore}%
                   </dd>
@@ -1041,7 +1041,7 @@ export function ChapterReaderClient({ initial }: { initial: ChapterReaderInitial
                   </strong>
                 </p>
                 <p className="leading-relaxed">
-                  Originality checks appear here once drafting completes.
+                  Similarity checks appear here once drafting completes.
                 </p>
               </div>
             )}

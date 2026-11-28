@@ -44,7 +44,7 @@ export default async function HomePage() {
                 </div>
                 <p className="text-base sm:text-lg text-[var(--neutral-600)] max-w-[54ch] leading-relaxed">
                   Collate researches real academic databases first, then writes your project, paper,
-                  thesis, or assignment with every claim grounded in verified sources, formatted
+                  thesis, or assignment with every claim checked against a real source, formatted
                   citations, and zero fabricated references.
                 </p>
 
@@ -100,8 +100,9 @@ export default async function HomePage() {
                   Built for four types of academic work
                 </h2>
                 <p className="text-[var(--neutral-600)] leading-relaxed">
-                  Collate adapts source thresholds, chapter templates, and recommended lengths to
-                  what you are writing, and lets you adjust the final page count.
+                  Collate changes how many sources it needs, which chapter titles it suggests, and
+                  the recommended length, all to match what you are writing. You can still adjust
+                  the final page count.
                 </p>
               </div>
             </Reveal>
@@ -204,8 +205,8 @@ export default async function HomePage() {
                     What you get in every finished project
                   </h2>
                   <p className="text-[var(--neutral-600)] leading-relaxed">
-                    Select any capability below to inspect how Collate verifies citations, checks
-                    claims, handles research data, and formats final files.
+                    Choose any item below to see how Collate checks citations and claims, handles
+                    your data, and formats your files.
                   </p>
                 </div>
               </Reveal>
@@ -305,7 +306,7 @@ export default async function HomePage() {
                     Frequently asked questions
                   </h2>
                   <p className="text-sm sm:text-base text-[var(--neutral-600)] leading-relaxed">
-                    Plain answers on source checking, citations, empirical data, timing, and
+                    Plain answers on source checking, citations, research data, timing, and
                     university rules.
                   </p>
                   <p className="text-sm pt-1">

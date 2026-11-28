@@ -40,20 +40,20 @@ export function buildOriginalityAttention(params: {
 }): ChapterAttentionInfo {
   const details: string[] = [];
   if (typeof params.overlapScore === "number" && params.overlapScore > 0) {
-    details.push(`source overlap ${params.overlapScore}%`);
+    details.push(`matched source text ${params.overlapScore}%`);
   }
   if (typeof params.quoteSharePct === "number" && params.quoteSharePct > 0) {
     details.push(`direct quotes ${params.quoteSharePct}%`);
   }
   if (typeof params.crossUserScore === "number" && params.crossUserScore > 0) {
-    details.push(`cross-project similarity ${params.crossUserScore}%`);
+    details.push(`wording shared with other projects ${params.crossUserScore}%`);
   }
   if (
     details.length === 0 &&
     typeof params.semanticScore === "number" &&
     params.semanticScore > 0
   ) {
-    details.push(`paraphrase similarity ${Math.round(params.semanticScore)}%`);
+    details.push(`similar wording ${Math.round(params.semanticScore)}%`);
   }
 
   const scoreDetail = details.length > 0 ? ` (${details.join(", ")})` : "";
@@ -61,7 +61,7 @@ export function buildOriginalityAttention(params: {
     kind: "user_input_required",
     inputType: "originality_guidance",
     title: "Needs your input to refine wording",
-    userMessage: `Our similarity check flagged phrasing that stayed too close to source passages${scoreDetail}. Provide brief direction on what to emphasize or reframe, then resume.`,
+    userMessage: `Our similarity check found phrases that sit too close to the original sources${scoreDetail}. Tell us what to keep or reframe, then resume.`,
     promptLabel: "Guidance for rewriting (angle, emphasis, or specific points to focus on)",
     allowCsvUpload: false,
   };

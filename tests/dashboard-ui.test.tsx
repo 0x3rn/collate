@@ -414,12 +414,12 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(chaptersHtml).toContain("Chapter 1: Introduction");
     expect(chaptersHtml).toContain("Add instructions (optional)");
     expect(chaptersHtml).toContain("Edit instructions");
-    expect(chaptersHtml).toContain("Pre-start instructions saved");
+    expect(chaptersHtml).toContain("Instructions saved");
     expect(chaptersHtml).toContain("lab_biomarkers.csv");
     // Started/ready chapter shows Request changes instead of Add instructions
     expect(chaptersHtml).toContain("Request changes");
     expect(chaptersHtml).toContain("Results data (optional)");
-    expect(chaptersHtml).toContain("Chapters unlock one at a time");
+    expect(chaptersHtml).toContain("Chapters open one at a time");
     expect(chaptersHtml).toContain("Automatic");
     expect(chaptersHtml).not.toContain("Rule NN-");
     expect(chaptersHtml).not.toContain("Chapter N+1");
@@ -440,7 +440,7 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     );
     expect(integrityHtml).not.toContain("JSON");
 
-    // Capitalized Chapter buttons, Resume Chapter vs Provide Details distinction, and clean reader recovery
+    // Capitalized Chapter buttons, Resume Chapter vs Add details distinction, and clean reader recovery
     const attentionPipelineHtml = renderToStaticMarkup(
       <ChapterPipelinePanel
         projectId="prj_001"
@@ -485,7 +485,7 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
       />
     );
     expect(attentionPipelineHtml).toContain("Resume Chapter 1");
-    expect(attentionPipelineHtml).toContain("Provide Details");
+    expect(attentionPipelineHtml).toContain("Add details");
     expect(attentionPipelineHtml).toContain("Start Chapter 3");
     expect(attentionPipelineHtml).not.toContain("Start chapter");
     expect(attentionPipelineHtml).not.toContain("Resume chapter");
@@ -677,10 +677,10 @@ describe("Workspace AppShell, dashboard routes, and plain-language account UI", 
     expect(readyReaderHtml).toContain("<em>Beta vulgaris</em>");
     expect(readyReaderHtml).not.toContain("*Beta vulgaris*");
     expect(readyReaderHtml).not.toContain("Chapter 1: Introduction");
-    expect(readyReaderHtml).toContain("Originality &amp; checks");
-    expect(readyReaderHtml).toContain("Originality check");
+    expect(readyReaderHtml).toContain("Similarity &amp; checks");
+    expect(readyReaderHtml).toContain("Similarity check");
     expect(readyReaderHtml).toContain("Matched source text");
-    expect(readyReaderHtml).toContain("Shared across projects");
+    expect(readyReaderHtml).toContain("Shared with other projects");
     expect(readyReaderHtml).not.toContain("Gate:");
     expect(readyReaderHtml).toContain("Draft history (1)");
     expect(readyReaderHtml).toContain("Version 1 · Original draft");

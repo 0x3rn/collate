@@ -169,10 +169,7 @@ export function AssignmentPipelinePanel({
   async function submitRevision() {
     if (!assignmentChapter) return;
     if (revisionNote.trim().length < 10) {
-      toast.error(
-        "Describe the requested changes in at least 10 characters.",
-        "More detail needed"
-      );
+      toast.error("Tell us what to change (at least 10 characters).", "More detail needed");
       return;
     }
     setBusy(true);

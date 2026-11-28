@@ -55,8 +55,8 @@ export function ExportControls({
         <h2 className="text-lg font-medium text-[var(--neutral-900)]">Downloads</h2>
         <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
           {useChapters
-            ? "Print-ready PDFs include Roman front matter, Arabic body numbering, and an accurate Table of Contents. Word (.docx) matches the same structure for school template edits."
-            : "Print-ready PDFs format your numbered sections continuously with clean academic typography and references. Word (.docx) matches the same layout for easy editing."}
+            ? "The PDF numbers opening pages i, ii, iii and chapters 1, 2, 3, and builds a table of contents with the real page numbers. Word (.docx) matches the same structure for school template edits."
+            : "The PDF runs your numbered sections continuously with standard academic formatting and references. Word (.docx) matches the same layout for easy editing."}
         </p>
       </div>
 

@@ -34,7 +34,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Collate is an academic research, source verification, citation formatting, and manuscript drafting workspace designed to support legitimate scholarship, literature synthesis, feasibility screening, structure planning, and responsible manuscript preparation. By creating an account, purchasing credits, uploading data, or generating or exporting content through Collate, you agree to use the Platform lawfully, ethically, and transparently. A violation of this AUP constitutes a material breach of Collate's Terms of Service."
+              "Collate is an academic research, source checking, citation formatting, and manuscript drafting tool designed to support legitimate scholarship: reviewing literature, checking that enough sources exist, planning structure, and preparing a manuscript responsibly. By creating an account, purchasing credits, uploading data, or generating or exporting content through Collate, you agree to use the Platform lawfully, ethically, and transparently. A violation of this AUP constitutes a material breach of Collate's Terms of Service."
             ),
           ],
         },
@@ -49,7 +49,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Collate is an assistive research and drafting workspace, not a substitute for genuine human scholarship, empirical inquiry, or institutional oversight."
+              "Collate is an assistive research and drafting tool, not a substitute for genuine human scholarship, empirical inquiry, or institutional oversight."
             ),
           ],
         },

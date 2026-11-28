@@ -18,7 +18,7 @@ const WORK_TYPES: Array<{
     title: "Project",
     typicalPages: "40–70 pages",
     description:
-      "Final-year undergraduate or practical project with structured chapters, citations, and optional system sections.",
+      "Final-year undergraduate or practical project with structured chapters, citations, and optional chapters on design, implementation, and testing.",
   },
   {
     type: "research",
@@ -32,14 +32,14 @@ const WORK_TYPES: Array<{
     title: "Thesis",
     typicalPages: "50–300 pages",
     description:
-      "Bachelor's, master's, or doctoral dissertation with full front matter, structured chapters or sections, and memory.",
+      "Bachelor's, master's, or doctoral dissertation with the full opening pages, chapters or sections, and the same terms kept consistent all the way through.",
   },
   {
     type: "assignment",
     title: "Assignment",
     typicalPages: "2–6 pages per question",
     description:
-      "One or several separate assignment questions, each checked for source coverage individually.",
+      "One or several separate assignment questions, each checked for sources separately.",
   },
 ];
 
@@ -105,7 +105,7 @@ export function NewProjectSelector() {
     <div className="space-y-6">
       <div
         role="radiogroup"
-        aria-label="Work type"
+        aria-label="What are you writing"
         className="grid grid-cols-1 sm:grid-cols-2 gap-4"
       >
         {WORK_TYPES.map((item) => {

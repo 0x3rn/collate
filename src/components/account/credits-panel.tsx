@@ -236,7 +236,7 @@ export function CreditsPanel({ recentLedger }: { recentLedger: LedgerEntryDispla
 
         {recentLedger.length === 0 ? (
           <div className="px-6 py-8 text-sm text-[var(--neutral-600)]">
-            No credit activity yet. Purchases, chapter runs, and automatic refunds will appear here.
+            No credit activity yet. Purchases, completed chapters, and refunds will appear here.
           </div>
         ) : (
           <>

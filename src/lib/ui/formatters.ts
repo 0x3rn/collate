@@ -24,21 +24,21 @@ export const PROJECT_STATUS_DISPLAY: Record<ProjectStatus, StatusDisplay> = {
   draft: { label: "Draft", tone: "neutral" },
   researching: { label: "Checking sources", tone: "info" },
   feasible: { label: "Ready to plan", tone: "success" },
-  not_feasible: { label: "Insufficient evidence", tone: "error" },
-  needs_refinement: { label: "Needs refinement", tone: "warning" },
+  not_feasible: { label: "Not enough sources", tone: "error" },
+  needs_refinement: { label: "Narrow your topic", tone: "warning" },
   outline_pending: { label: "Outline review", tone: "info" },
-  in_progress: { label: "Writing Chapters", tone: "info" },
+  in_progress: { label: "Writing chapters", tone: "info" },
   completed: { label: "Completed", tone: "success" },
   archived: { label: "Archived", tone: "neutral" },
 };
 
 export const CHAPTER_STATUS_DISPLAY: Record<ChapterStatus, StatusDisplay> = {
   not_started: { label: "Not started", tone: "neutral" },
-  queued: { label: "Queued", tone: "info" },
+  queued: { label: "Waiting", tone: "info" },
   writing: { label: "Writing", tone: "info" },
-  ready: { label: "Ready for Review", tone: "warning" },
+  ready: { label: "Ready for review", tone: "warning" },
   approved: { label: "Approved", tone: "success" },
-  needs_attention: { label: "Needs Attention", tone: "warning" },
+  needs_attention: { label: "Needs attention", tone: "warning" },
 };
 
 export const CITATION_STYLE_LABELS: Record<CitationStyle, string> = {
@@ -52,7 +52,7 @@ export const CITATION_STYLE_LABELS: Record<CitationStyle, string> = {
 
 export const CREDIT_LEDGER_LABELS: Record<CreditLedgerType, string> = {
   purchase: "Credit purchase",
-  reserve: "Chapter credit hold",
+  reserve: "Held for a chapter",
   capture: "Chapter completed",
   refund: "Automatic refund",
   manual_adjustment: "Credit adjustment",
@@ -94,21 +94,21 @@ export function resolveProjectDisplayStatus(input: {
   }
 
   if ((input.chaptersNeedsAttention ?? 0) > 0) {
-    return { label: "Needs Attention", tone: "warning" };
+    return { label: "Needs attention", tone: "warning" };
   }
 
   if ((input.chaptersWriting ?? 0) > 0) {
     const writingLabel =
       input.projectType === "assignment"
-        ? "Drafting Answers"
+        ? "Drafting answers"
         : input.useChapters === false
-          ? "Writing Sections"
-          : "Writing Chapters";
+          ? "Writing sections"
+          : "Writing chapters";
     return { label: writingLabel, tone: "info" };
   }
 
   if ((input.chaptersReady ?? 0) > 0) {
-    return { label: "Ready for Review", tone: "warning" };
+    return { label: "Ready for review", tone: "warning" };
   }
 
   const total = input.chaptersTotal ?? 0;
@@ -119,8 +119,8 @@ export function resolveProjectDisplayStatus(input: {
 
   if (input.status === "in_progress") {
     return approved > 0
-      ? { label: "In Progress", tone: "info" }
-      : { label: "Ready to Draft", tone: "neutral" };
+      ? { label: "In progress", tone: "info" }
+      : { label: "Ready to draft", tone: "neutral" };
   }
 
   return PROJECT_STATUS_DISPLAY[input.status];

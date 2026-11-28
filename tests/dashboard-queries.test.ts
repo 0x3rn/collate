@@ -400,9 +400,9 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
         chapters: [{ id: "c2", number: 2, status: "needs_attention", isAutoReferences: false }],
         attentionByChapterId: new Map([["c2", buildOriginalityAttention({ overlapScore: 19 })]]),
       })
-    ).toEqual({ href: "/projects/p2", label: "Provide Details" });
+    ).toEqual({ href: "/projects/p2", label: "Add details" });
 
-    // Live project badge derivation: Needs Attention > Writing Chapters > Ready for Review > Completed
+    // Live project badge derivation: Needs attention > Writing chapters > Ready for review > Completed
     expect(
       resolveProjectDisplayStatus({
         status: "in_progress",
@@ -410,14 +410,14 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
         chaptersNeedsAttention: 1,
         chaptersWriting: 0,
       })
-    ).toEqual({ label: "Needs Attention", tone: "warning" });
+    ).toEqual({ label: "Needs attention", tone: "warning" });
     expect(
       resolveProjectDisplayStatus({
         status: "in_progress",
         chaptersTotal: 5,
         chaptersWriting: 1,
       })
-    ).toEqual({ label: "Writing Chapters", tone: "info" });
+    ).toEqual({ label: "Writing chapters", tone: "info" });
     expect(
       resolveProjectDisplayStatus({
         status: "completed",
@@ -425,7 +425,7 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
         chaptersReady: 1,
         chaptersApproved: 4,
       })
-    ).toEqual({ label: "Ready for Review", tone: "warning" });
+    ).toEqual({ label: "Ready for review", tone: "warning" });
     expect(
       resolveProjectDisplayStatus({
         status: "completed",
@@ -443,7 +443,7 @@ describe("Dashboard data queries, isolation, and UI formatters", () => {
         chaptersWriting: 0,
         chaptersNeedsAttention: 0,
       })
-    ).toEqual({ label: "Ready to Draft", tone: "neutral" });
+    ).toEqual({ label: "Ready to draft", tone: "neutral" });
 
     expect(formatCreditLedgerType("sweep_fee")).toBe("Topic source check");
     expect(formatCreditLedgerType("refund")).toBe("Automatic refund");

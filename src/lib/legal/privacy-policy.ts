@@ -283,7 +283,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Strict Per-User Isolation: "),
               t(
-                "All project workspaces, retrieved passages, uploaded datasets, chapter versions, and exported files are isolated by user ID in our database and file storage. No other user can browse, search, or access your private work."
+                "Your projects, retrieved passages, uploaded datasets, chapter versions, and exported files are isolated by user ID in our database and file storage. No other user can browse, search, or access your private work."
               ),
             ],
           ],
@@ -568,7 +568,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Right to Data Portability: "),
               t(
-                "Export your manuscripts in standard PDF and Word (.docx) formats directly from your workspace, or request a machine-readable export of your account record."
+                "Export your manuscripts in standard PDF and Word (.docx) formats directly from your project, or ask for a copy of your account record in a standard file format."
               ),
             ],
             [

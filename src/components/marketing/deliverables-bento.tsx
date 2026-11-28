@@ -18,13 +18,13 @@ const FEATURES: Array<{
     summary:
       "References are formatted from checked publisher records, never guessed or typed from memory.",
     guarantee:
-      "Every reference in the bibliography matches an in-text citation and stored DOI/URL.",
+      "Every reference in the bibliography matches an in-text citation and a saved DOI or link.",
   },
   {
     id: "claims",
     title: "Claim-by-claim source checking",
     summary:
-      "A second pass checks every factual claim against its saved source passage before delivery.",
+      "A second pass checks every factual claim against the saved quote from its source before delivery.",
     guarantee: "Unsupported claims are automatically rewritten to match evidence or removed.",
   },
   {
@@ -32,7 +32,7 @@ const FEATURES: Array<{
     title: "Honest results for empirical work",
     summary:
       "Tables are calculated from your uploaded data or taken from published studies, never invented.",
-    guarantee: "Uploaded CSV measurements are computed deterministically, never fabricated.",
+    guarantee: "Tables from your CSV are calculated exactly from your numbers, never invented.",
   },
   {
     id: "exports",
@@ -43,10 +43,10 @@ const FEATURES: Array<{
   },
   {
     id: "integrity",
-    title: "Similarity report, logs & chapter memory",
+    title: "Similarity report, writing log, and consistent wording",
     summary:
-      "Every chapter keeps prior terms consistent and includes overlap scores, a writing log, and a disclosure template.",
-    guarantee: "Shared project memory keeps terminology and findings aligned across all chapters.",
+      "Every chapter keeps the same terms and includes matched-text scores, a writing log, and a disclosure template.",
+    guarantee: "The same terms and findings stay consistent across all chapters.",
   },
 ];
 
@@ -285,7 +285,7 @@ function ExportsPanel() {
 function IntegrityPanel() {
   return (
     <div className="space-y-4">
-      <PanelHeading>Integrity report &amp; cross-chapter memory</PanelHeading>
+      <PanelHeading>Similarity and wording report</PanelHeading>
 
       <div className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-sm)] p-5 space-y-4">
         <div className="grid grid-cols-3 gap-3 text-xs tabular-nums">

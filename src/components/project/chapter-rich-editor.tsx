@@ -898,7 +898,7 @@ export function ChapterRichEditor({
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[var(--neutral-600)] leading-relaxed">
         Edit directly below. Highlight any text for formatting and heading sizes, or press Enter to
-        push items across the fixed page boundary lines. Blue citations stay locked automatically.
+        move text onto the next page. Blue citations stay locked in place.
       </p>
 
       {/* Organized 2-row toolbar separated by function: Row 1 (Format + Document size + Source) | Row 2 (Insert) */}

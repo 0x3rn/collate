@@ -230,7 +230,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <h2 className="text-base font-semibold text-[var(--neutral-900)]">Formatting</h2>
             <dl className="space-y-2 text-sm">
               <div className="flex items-baseline justify-between gap-4">
-                <dt className="text-[var(--neutral-500)]">Typography</dt>
+                <dt className="text-[var(--neutral-500)]">Font and text</dt>
                 <dd className="text-[var(--neutral-900)] text-right tabular-nums">
                   {settings.font}, {settings.fontSizePt}pt, {settings.lineSpacing.replace("_", " ")}{" "}
                   spacing

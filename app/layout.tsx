@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     "APA 7",
     "Harvard citations",
     "IEEE citations",
-    "topic feasibility check",
+    "topic source check",
     "Collate",
   ],
   alternates: {

@@ -153,7 +153,7 @@ export function deriveProjectNextAction(params: {
     if (attention?.kind === "user_input_required") {
       return {
         href: `/projects/${id}`,
-        label: "Provide Details",
+        label: "Add details",
       };
     }
     return {
@@ -343,7 +343,7 @@ export async function listEnrichedProjectsForUser(
                     : `${unitLabel(ch.number)} paused temporarily`,
               detail: att?.title ? `${ch.title}: ${att.title}` : ch.title,
               actionLabel: needsUserDetails
-                ? "Provide Details"
+                ? "Add details"
                 : project.type === "assignment"
                   ? "Resume assignment"
                   : `Resume ${unitLabel(ch.number)}`,

@@ -21,14 +21,14 @@ export const WORK_TYPE_OVERVIEWS: readonly WorkTypeOverview[] = [
     pageRange: `${FEASIBILITY_CONFIG.idealPageRanges.research[0]}–${FEASIBILITY_CONFIG.idealPageRanges.research[1]} pages`,
     bestFor: "Focused studies, technical reports, and policy papers.",
     structureNote:
-      "Prioritizes peer-reviewed journals, tight evidence synthesis, and calibrated section lengths.",
+      "Searches peer-reviewed journals first, keeps your sections balanced, and matches your page count.",
   },
   {
     title: "Thesis",
     pageRange: `${FEASIBILITY_CONFIG.idealPageRanges.thesisBachelors[0]}–${FEASIBILITY_CONFIG.idealPageRanges.thesisPhd[1]} pages`,
     bestFor: "Bachelor's (50–80p), Master's (80–150p), and PhD (150–300p) dissertations.",
     structureNote:
-      "Includes declaration, abstract, acknowledgements, preface, table of contents, and running memory across chapters.",
+      "Includes declaration, abstract, acknowledgements, preface, table of contents, and the same terms kept consistent from the first chapter to the last.",
   },
   {
     title: "Assignment",
