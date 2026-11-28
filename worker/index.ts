@@ -1,5 +1,6 @@
 import handler from "vinext/server/app-router-entry";
 import { createDb } from "@/db/client";
+import { purgeExpiredRecords } from "@/lib/account/retention";
 import { resolvePolarApiBaseUrl } from "@/lib/billing/http-handlers";
 import { syncPolarDisputes } from "@/lib/billing/polar-disputes";
 import { readMailboxConfig } from "@/lib/inbox/config";
@@ -35,6 +36,12 @@ export default {
       notifier: createTelegramNotifier(runtimeEnv),
     });
     logEvent(result.ok ? "info" : "warn", "billing.polar_dispute_sync", { data: { ...result } });
+
+    // Drop records of deleted accounts that have reached the end of their retention period.
+    const purged = await purgeExpiredRecords(createDb(env.DB), new Date());
+    if (purged.evidenceCleared || purged.recordsDeleted) {
+      logEvent("info", "account.retention_purge", { data: { ...purged } });
+    }
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {

@@ -22,6 +22,8 @@ import type { HttpAuthDeps } from "@/lib/auth/http-handlers";
 import { verifyPassword } from "@/lib/auth/password";
 import { consumeAuthRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionFromToken } from "@/lib/auth/service";
+import { retainBillingRecords, scrubActivityDetails } from "./retention";
+import { logEvent } from "@/lib/observability/logger";
 
 export interface R2DeletableBucket {
   delete(keys: string | string[]): Promise<void>;
@@ -113,6 +115,20 @@ export async function handleDeleteAccount(
     }
   }
 
+  // Keep a record of completed payments first: if it cannot be saved, nothing is deleted.
+  let retainedPayments: number;
+  try {
+    retainedPayments = await retainBillingRecords(deps.db, session.user.id, now);
+  } catch (err) {
+    logEvent("error", "account.retention_failed", {
+      data: { reason: err instanceof Error ? err.message : String(err) },
+    });
+    return jsonNoStore(
+      { ok: false, error: "Your account could not be deleted just now. Please try again." },
+      500
+    );
+  }
+
   // Gather R2 object keys belonging to this user's projects before cascading DB delete
   const userProjects = await deps.db
     .select({ id: projects.id })
@@ -167,10 +183,13 @@ export async function handleDeleteAccount(
     }
   }
 
+  // Strip IP addresses and device details from the activity log (needs the account link).
+  await scrubActivityDetails(deps.db, session.user.id);
+
   // Cascade delete user + projects + sessions + chapters + claims + exports + fingerprints in D1
   await deps.db.delete(users).where(eq(users.id, session.user.id));
 
-  // Record anonymized deletion audit trail (zero PII retained)
+  // Record the deletion itself, with no personal details.
   await deps.db.insert(auditLog).values({
     id: `aud_${crypto.randomUUID()}`,
     actorUserId: null,
@@ -180,6 +199,7 @@ export async function handleDeleteAccount(
     metadataJson: JSON.stringify({
       projectsDeleted: projectIds.length,
       r2ObjectsDeleted: r2Keys.length,
+      retainedPayments,
     }),
     createdAt: now,
   });

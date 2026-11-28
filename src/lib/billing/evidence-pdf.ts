@@ -105,6 +105,9 @@ export function renderEvidenceHtml(ev: DisputeEvidence, generatedAt: Date): stri
       ? ([[`${provider} customer`, providerDetails.providerCustomerId]] as Array<[string, string]>)
       : []),
     ["Date", when(providerDetails.paidAt ?? payment.createdAt)],
+    ...(ev.accountDeletedAt
+      ? ([["Account deleted", when(ev.accountDeletedAt)]] as Array<[string, string]>)
+      : []),
   ];
 
   const bodyHtml = `<h1>${esc(customer.name)} · ${esc(money(payment.currency, payment.amountMinor))}</h1>

@@ -203,6 +203,13 @@ export default async function PaymentEvidencePage({ params }: { params: Promise<
           </div>
         </header>
 
+        {ev.accountDeletedAt && (
+          <FormAlert tone="info">
+            This customer deleted their account on {when(ev.accountDeletedAt)}. This is the record
+            kept afterwards.
+          </FormAlert>
+        )}
+
         {openDispute && (
           <FormAlert tone="error">
             Dispute open ({openDispute.status.replace(/_/g, " ")})

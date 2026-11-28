@@ -38,6 +38,7 @@ export interface AdminOverviewProps {
     userName: string | null;
     createdAt: string;
     openDispute: boolean;
+    accountDeleted: boolean;
     provider: string;
     providerReference: string;
     currency: string;
@@ -944,6 +945,13 @@ function RecentPayments({ payments: latest }: { payments: AdminOverviewProps["re
               >
                 {p.status}
               </span>
+              {p.accountDeleted && (
+                <span
+                  className={`text-[11px] leading-5 px-2 rounded-full border ${STATUS_STYLES.started}`}
+                >
+                  account deleted
+                </span>
+              )}
               {p.openDispute && (
                 <span
                   className={`text-[11px] leading-5 px-2 rounded-full border ${STATUS_STYLES.failed}`}

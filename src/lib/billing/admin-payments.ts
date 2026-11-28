@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull, or, type SQL, sql } from "drizzle-orm";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { AppDb } from "@/db/client";
-import { paymentReversals, payments, users } from "@/db/schema";
+import { paymentReversals, payments, retainedBillingRecords, users } from "@/db/schema";
 import { listReversalsForPayments } from "./reversals";
 
 /** One payment row for the admin list. */
@@ -18,6 +18,8 @@ export interface AdminPaymentRow {
   status: string;
   createdAt: string;
   openDispute: boolean;
+  /** The customer deleted their account; this is the record kept afterwards. */
+  accountDeleted: boolean;
 }
 
 export const ADMIN_PAYMENTS_LIMIT = 200;
@@ -64,7 +66,8 @@ export async function loadAdminPayments(
   const open = new Set(
     reversals.filter((r) => r.kind === "dispute" && !r.resolvedAt).map((r) => r.paymentId)
   );
-  return rows.map(({ payment: p, userEmail, userName }) => ({
+  const live = rows.map(({ payment: p, userEmail, userName }) => ({
+    accountDeleted: false,
     id: p.id,
     userId: p.userId,
     userEmail,
@@ -78,6 +81,43 @@ export async function loadAdminPayments(
     createdAt: p.createdAt.toISOString(),
     openDispute: open.has(p.id),
   }));
+
+  // Payments of deleted accounts, from the records kept for them.
+  const keptBase = db.select().from(retainedBillingRecords);
+  const keptRows = q
+    ? await keptBase
+        .where(
+          or(
+            contains(retainedBillingRecords.customerEmail, q),
+            contains(retainedBillingRecords.customerName, q),
+            contains(retainedBillingRecords.providerReference, q),
+            contains(retainedBillingRecords.providerOrderId, q),
+            eq(retainedBillingRecords.paymentId, q)
+          )
+        )
+        .orderBy(desc(retainedBillingRecords.paidAt))
+        .limit(limit)
+    : await keptBase.orderBy(desc(retainedBillingRecords.paidAt)).limit(limit);
+  const liveIds = new Set(live.map((p) => p.id));
+  const kept = keptRows
+    .filter((k) => !liveIds.has(k.paymentId))
+    .map((k) => ({
+      accountDeleted: true,
+      id: k.paymentId,
+      userId: k.userId,
+      userEmail: k.customerEmail,
+      userName: k.customerName,
+      provider: k.provider,
+      providerReference: k.providerReference,
+      currency: k.currency,
+      amountMinor: k.amountMinor,
+      creditsGranted: k.credits,
+      status: k.status,
+      createdAt: k.paidAt.toISOString(),
+      openDispute: k.openDispute,
+    }));
+
+  return [...live, ...kept].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
 }
 
 /** Count of payments with a dispute still open (shown as a warning on the admin page). */

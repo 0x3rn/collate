@@ -934,6 +934,44 @@ export const paymentReversals = sqliteTable(
   ]
 );
 
+/**
+ * What is kept about a payment after its owner deletes their account: the basic transaction
+ * record, and for a shorter time the evidence needed to answer a chargeback. Deliberately has
+ * no foreign key to users or payments, so deleting the account cannot remove it. Purged on
+ * schedule (see src/lib/account/retention.ts).
+ */
+export const retainedBillingRecords = sqliteTable(
+  "retained_billing_records",
+  {
+    id: text("id").primaryKey(),
+    paymentId: text("payment_id").notNull(),
+    userId: text("user_id").notNull(),
+    provider: text("provider", { enum: PAYMENT_PROVIDERS }).notNull(),
+    providerReference: text("provider_reference").notNull(),
+    providerOrderId: text("provider_order_id"),
+    customerEmail: text("customer_email").notNull(),
+    customerName: text("customer_name").notNull(),
+    currency: text("currency").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    credits: integer("credits").notNull(),
+    status: text("status").notNull(),
+    paidAt: integer("paid_at", { mode: "timestamp_ms" }).notNull(),
+    accountErasedAt: integer("account_erased_at", { mode: "timestamp_ms" }).notNull(),
+    /** The transaction record as it stood when the account was deleted; null once purged. */
+    evidenceJson: text("evidence_json"),
+    evidencePurgeAfter: integer("evidence_purge_after", { mode: "timestamp_ms" }).notNull(),
+    recordPurgeAfter: integer("record_purge_after", { mode: "timestamp_ms" }).notNull(),
+    /** A record under an open dispute is never purged. */
+    openDispute: integer("open_dispute", { mode: "boolean" }).notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex("retained_billing_payment_unique").on(table.paymentId),
+    index("retained_billing_reference_idx").on(table.provider, table.providerReference),
+    index("retained_billing_order_idx").on(table.provider, table.providerOrderId),
+    index("retained_billing_paid_idx").on(table.paidAt),
+  ]
+);
+
 export const creditLedger = sqliteTable(
   "credit_ledger",
   {

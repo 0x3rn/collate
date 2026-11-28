@@ -450,7 +450,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Ephemeral Auth Tokens: "),
               t(
-                "Email verification tokens expire after 24 hours; password reset tokens expire after 1 hour (and are immediately invalidated upon use); active session records expire after 7 days and are purged immediately upon sign-out or password change."
+                "Emailed codes expire after 10 minutes and email verification links after 24 hours (each is invalidated upon use); active session records expire after 7 days and are purged immediately upon sign-out or password change."
               ),
             ],
             [
@@ -458,14 +458,24 @@ export const PRIVACY_POLICY: LegalDocumentData = {
               t("You may permanently delete your account at any time directly from your "),
               a("Account settings page", "/account"),
               t(
-                ' by re-entering your current password and confirming with "DELETE MY ACCOUNT". Upon confirmation, Collate immediately deletes your stored files (source snapshots, chapter drafts, uploaded datasets, and PDF/Word exports), executes a cascading deletion across our database removing your profile, credentials, sessions, projects, outlines, citations, originality reports, and shingle hashes, clears your session cookie, and retains only an anonymized account-erasure audit counter containing zero personal identifiers.'
+                ' by re-entering your current password and confirming with "DELETE MY ACCOUNT". Upon confirmation, Collate immediately deletes your stored files (source snapshots, chapter drafts, uploaded datasets, and PDF/Word exports), executes a cascading deletion across our database removing your profile, credentials, sessions, projects, outlines, citations, originality reports, and shingle hashes, and clears your session cookie. IP addresses and device details are removed from your activity log, leaving entries that no longer identify you. The exceptions are listed below.'
               ),
             ],
             [
-              b("Statutory Billing and Anti-Fraud Records: "),
+              b("Payment Records Kept After Deletion: "),
               t(
-                "Completed financial transaction references, tax/VAT invoices, and anti-fraud records are retained only for periods required by applicable tax, financial, and accounting laws (and by our payment providers under their independent compliance obligations)."
+                "If you have made a purchase, we keep a record of each completed payment (your name, email address, amount, date, credits, and payment reference) for 6 years from the date of payment, for tax, accounting, and anti-fraud purposes. Our payment providers keep their own records under their independent compliance obligations."
               ),
+            ],
+            [
+              b("Refund and Chargeback Evidence: "),
+              t(
+                "For 18 months from the date of payment, that record also includes what is needed to answer a refund claim or chargeback: when you agreed to our Terms, your sign-ins and downloads (with the IP address, device type, and approximate location of each), the project and chapter titles and word counts delivered, and the subject lines of emails you sent us. A record under an open payment dispute is kept until the dispute closes."
+              ),
+            ],
+            [
+              b("Correspondence: "),
+              t("Emails you have sent to our support, billing, or general addresses are kept."),
             ],
           ],
         },
@@ -551,7 +561,9 @@ export const PRIVACY_POLICY: LegalDocumentData = {
               b("Right to Erasure: "),
               t("Permanently erase your account and research files immediately on "),
               a("/account", "/account"),
-              t(" or via email request."),
+              t(
+                " or via email request. Payment records are kept as described under Data Retention, where the law permits or requires it."
+              ),
             ],
             [
               b("Right to Data Portability: "),

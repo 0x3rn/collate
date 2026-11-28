@@ -14,6 +14,7 @@ import {
   users,
 } from "@/db/schema";
 import { describeDevice, describeLocation } from "@/lib/account/device";
+import { findRetainedByPaymentId, reviveRecord } from "@/lib/account/retention";
 import { LEGAL_CONFIG } from "@/lib/legal/config";
 
 /**
@@ -47,6 +48,8 @@ export interface ProviderPaymentDetails {
 }
 
 export interface DisputeEvidence {
+  /** Set when the record was kept after the customer deleted their account. */
+  accountDeletedAt?: Date | null;
   payment: typeof payments.$inferSelect;
   providerDetails: ProviderPaymentDetails;
   customer: {
@@ -268,7 +271,12 @@ export async function buildDisputeEvidence(
   paymentId: string
 ): Promise<DisputeEvidence | null> {
   const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId)).limit(1);
-  if (!payment || !isSettledPaymentStatus(payment.status)) return null;
+  if (!payment) {
+    // The account may have been deleted: use the record kept for that case.
+    const kept = await findRetainedByPaymentId(db, paymentId);
+    return kept ? reviveRecord(kept) : null;
+  }
+  if (!isSettledPaymentStatus(payment.status)) return null;
   const [user] = await db.select().from(users).where(eq(users.id, payment.userId)).limit(1);
   if (!user) return null;
 

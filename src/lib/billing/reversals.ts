@@ -9,6 +9,7 @@ import {
   type ReversalKind,
   users,
 } from "@/db/schema";
+import { closeRetainedDispute, noteReversalOnRetained } from "@/lib/account/retention";
 import { type AdminNotifier, escapeTelegramHtml } from "@/lib/notify/admin-alerts";
 import { logEvent } from "@/lib/observability/logger";
 
@@ -43,6 +44,7 @@ export interface ReversalEvent {
 
 export type ReversalOutcome =
   | { outcome: "payment_not_found" }
+  | { outcome: "retained_record"; paymentId: string }
   | { outcome: "updated"; reversalId: string }
   | {
       outcome: "applied";
@@ -147,6 +149,25 @@ export async function applyPaymentReversal(
   const now = deps.now ?? new Date();
   const payment = await findPayment(db, ev);
   if (!payment) {
+    const kept = await noteReversalOnRetained(db, ev, { now });
+    if (kept) {
+      if (kept.isNew) {
+        await deps.notifier?.send(
+          [
+            ev.kind === "dispute"
+              ? "⚠️ <b>Payment dispute on a deleted account</b>"
+              : "↩️ <b>Payment refunded on a deleted account</b>",
+            `Customer: ${escapeTelegramHtml(kept.customerEmail)}`,
+            `Amount: ${escapeTelegramHtml(money(ev.currency, ev.amountMinor))} via ${ev.provider}`,
+            ev.dueAt ? `Respond by: ${escapeTelegramHtml(ev.dueAt.toUTCString())}` : "",
+            ev.kind === "dispute" ? "Open Admin → Recent payments → Record." : "",
+          ]
+            .filter(Boolean)
+            .join("\n")
+        );
+      }
+      return { outcome: "retained_record", paymentId: kept.paymentId };
+    }
     logEvent("warn", "billing.reversal_payment_not_found", {
       data: { provider: ev.provider, kind: ev.kind, id: ev.providerReversalId },
     });
@@ -327,7 +348,16 @@ export async function resolveDispute(
       )
     )
     .limit(1);
-  if (!rev) return { outcome: "not_found", creditsReturned: 0 };
+  if (!rev) {
+    // A dispute on a deleted account: close it on the kept record so it can later be purged.
+    const closed = await closeRetainedDispute(db, {
+      provider: params.provider,
+      providerDisputeId: params.providerDisputeId,
+      status: params.status,
+      now,
+    });
+    return { outcome: closed ? "resolved" : "not_found", creditsReturned: 0 };
+  }
   if (rev.resolvedAt) return { outcome: "already_resolved", creditsReturned: 0 };
 
   const marked = await db
