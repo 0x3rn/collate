@@ -359,7 +359,7 @@ export function StepResearchSweep({
       {allowDevPreview ? (
         <details className="border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-4 bg-white">
           <summary className="text-sm font-medium text-[var(--neutral-700)] cursor-pointer">
-            Local dev verdict preview (offline test helper)
+            Local preview (offline test helper)
           </summary>
           <div className="pt-4 space-y-4">
             <div className="space-y-1.5">
@@ -367,18 +367,18 @@ export function StepResearchSweep({
                 htmlFor="mock-verdict"
                 className="block text-sm font-medium text-[var(--neutral-800)]"
               >
-                Simulate verdict outcome
+                Preview the source-check result
               </label>
               <CustomSelect<FeasibilityVerdict>
                 id="mock-verdict"
-                ariaLabel="Simulate verdict outcome"
+                ariaLabel="Preview the source-check result"
                 value={simulateVerdict}
                 onChange={setSimulateVerdict}
                 className="sm:max-w-[340px]"
                 options={[
-                  { value: "feasible", label: "Feasible (sufficient evidence)" },
-                  { value: "needs_refinement", label: "Needs refinement (too broad/narrow)" },
-                  { value: "not_feasible", label: "Not feasible (cannot guess)" },
+                  { value: "feasible", label: "Enough sources (sufficient evidence)" },
+                  { value: "needs_refinement", label: "Narrow your topic (too broad/narrow)" },
+                  { value: "not_feasible", label: "Not enough sources (cannot guess)" },
                 ]}
               />
             </div>
@@ -386,10 +386,10 @@ export function StepResearchSweep({
               type="button"
               variant="secondary"
               loading={saving}
-              loadingLabel="Saving verdict preview..."
+              loadingLabel="Saving preview..."
               onClick={() => onSave({ step: 3, simulateVerdict })}
             >
-              Save offline preview verdict
+              Save preview result
             </Button>
           </div>
         </details>

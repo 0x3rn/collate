@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Admin operations | Collate",
-  description: "Monitor users, drafting job costs, failures, circuit breakers, and credit grants.",
+  description: "Users, what each draft cost, failures, drafting pauses, and credit grants.",
   robots: { index: false, follow: false },
 };
 

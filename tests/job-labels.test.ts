@@ -19,7 +19,7 @@ describe("admin job labels", () => {
     expect(describeJobStep("copy_edit_section:Conceptual review")).toBe(
       "Copy-editing “Conceptual review”"
     );
-    expect(describeJobStep("originality_rewrite_1")).toBe("Originality rewrite 1");
+    expect(describeJobStep("originality_rewrite_1")).toBe("Similarity rewrite 1");
     expect(describeJobStep("research_query_plan")).toBe("Planning the source search");
     expect(describeJobStep("something_new")).toBe("something new");
     // A heading containing a colon still parses.

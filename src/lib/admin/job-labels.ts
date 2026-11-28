@@ -12,7 +12,7 @@ export function describeJobStep(step: string): string {
   if ((m = step.match(/^verify_claims:(.+):a(\d+)$/)))
     return `Checking sources in “${m[1]}” (check ${Number(m[2]) + 1})`;
   if ((m = step.match(/^rewrite_section:(.+):r(\d+)$/))) return `Fixing “${m[1]}” (fix ${m[2]})`;
-  if ((m = step.match(/^originality_rewrite_(\d+)$/))) return `Originality rewrite ${m[1]}`;
+  if ((m = step.match(/^originality_rewrite_(\d+)$/))) return `Similarity rewrite ${m[1]}`;
   if (step === "research_query_plan") return "Planning the source search";
   return step.replace(/_/g, " ");
 }

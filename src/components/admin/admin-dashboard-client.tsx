@@ -89,20 +89,25 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
       const res = await fetch("/api/admin/circuit-breaker", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ paused, reason: breakerReason.trim() || "Admin toggle" }),
+        body: JSON.stringify({
+          paused,
+          reason: breakerReason.trim() || "Paused from the admin page",
+        }),
       });
       const json = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !json.ok) {
-        toast.error(json.error ?? "Could not update circuit breaker.", "Circuit breaker error");
+        toast.error(json.error ?? "Could not change the drafting pause.", "Could not change pause");
         return;
       }
       toast.success(
-        paused ? "Global circuit breaker paused." : "Global circuit breaker resumed.",
+        paused
+          ? "New chapters are paused. Chapters already writing will finish normally."
+          : "Drafting resumed.",
         paused ? "Drafting paused" : "Drafting resumed"
       );
       router.refresh();
     } catch {
-      toast.error("Network error updating circuit breaker.", "Connection error");
+      toast.error("Network error. The pause was not changed.", "Connection error");
     } finally {
       setBusy(false);
     }
@@ -381,7 +386,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
           </p>
         </div>
         <div className="p-5 bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)]">
-          <p className="text-xs text-[var(--neutral-600)]">Circuit breaker status</p>
+          <p className="text-xs text-[var(--neutral-600)]">Drafting</p>
           <p
             className={`text-2xl font-semibold mt-1 ${
               initial.circuitBreaker.allowed
@@ -389,26 +394,27 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
                 : "text-[var(--error-text)]"
             }`}
           >
-            {initial.circuitBreaker.allowed ? "Open (active)" : "Paused"}
+            {initial.circuitBreaker.allowed ? "Running normally" : "Paused"}
           </p>
         </div>
       </div>
 
       <section className="bg-white border border-[var(--neutral-200)] rounded-[var(--radius-md)] p-6 space-y-4">
         <div className="space-y-1">
-          <h2 className="text-xl font-medium">Global circuit breaker</h2>
+          <h2 className="text-xl font-medium">Pause all drafting</h2>
           <p className="text-sm text-[var(--neutral-600)]">
-            Pausing stops new drafting runs without charging credits; active runs finish normally.
+            Pausing stops new chapters from starting and charges no credits. Chapters already
+            writing finish normally.
           </p>
         </div>
         {!initial.circuitBreaker.allowed && initial.circuitBreaker.reason ? (
           <p className="text-xs font-medium text-[var(--error-text)] bg-[var(--error-bg)] border border-[var(--error-border)] rounded-[var(--radius-sm)] px-3.5 py-2.5">
-            Active pause reason: {initial.circuitBreaker.reason}
+            Paused because: {initial.circuitBreaker.reason}
           </p>
         ) : null}
         <FormField
           id="breaker-reason"
-          label="Operational note"
+          label="Note for the log"
           type="text"
           value={breakerReason}
           onChange={(e) => setBreakerReason(e.target.value)}
@@ -420,7 +426,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
             disabled={busy || !initial.circuitBreaker.allowed}
             onClick={() => toggleCircuitBreaker(true)}
           >
-            Pause all drafting jobs
+            Pause all drafting
           </Button>
           <Button
             type="button"
@@ -428,7 +434,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
             disabled={busy || initial.circuitBreaker.allowed}
             onClick={() => toggleCircuitBreaker(false)}
           >
-            Resume drafting jobs
+            Resume drafting
           </Button>
         </div>
       </section>
@@ -437,7 +443,8 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
         <div className="space-y-1">
           <h2 className="text-xl font-medium">Credit users in batches</h2>
           <p className="text-sm text-[var(--neutral-600)]">
-            Grant credits to all accounts or a random subset in idempotent 50-user batches.
+            Grant credits to all accounts or a random subset, in 50-user batches. Re-running will
+            not credit anyone twice.
           </p>
         </div>
 
@@ -460,7 +467,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
                   {
                     value: "all",
                     label: `All users (${initial.totalUsersCount.toLocaleString("en-US")} accounts)`,
-                    description: "Credits every user automatically in sequential 50-user batches",
+                    description: "Credits every user, one 50-user batch at a time",
                   },
                   {
                     value: "random_sample",
@@ -498,7 +505,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
 
           <FormField
             id="batch-reason"
-            label="Audit reason (outage, promo, or goodwill note)"
+            label="Reason (outage, promo, or goodwill)"
             type="text"
             placeholder="e.g. Service outage goodwill credit"
             disabled={Boolean(batchProgress?.running)}
@@ -611,8 +618,8 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
           <span className="font-medium text-[var(--neutral-800)]">{batchReason.trim()}</span>
         </p>
         <p className="text-xs text-[var(--neutral-500)]">
-          Credits are applied in automatic 50-user batches with per-user idempotency keys, so no
-          account can ever be credited twice for the same campaign.
+          Credits are applied in 50-user batches, and each account is credited at most once per
+          campaign.
         </p>
       </ModalCard>
 
@@ -675,7 +682,7 @@ export function AdminDashboardClient({ initial }: { initial: AdminOverviewProps 
           </div>
           <FormField
             id="refund-reason"
-            label="Audit reason"
+            label="Reason for the log"
             type="text"
             placeholder={
               adjustMode === "deduct"
