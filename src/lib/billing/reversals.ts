@@ -217,7 +217,7 @@ export async function applyPaymentReversal(
   const creditsRemoved = await takeCredits(db, {
     userId: payment.userId,
     credits: creditsTarget,
-    note: `${label} (${ev.provider} ${payment.providerReference})`,
+    note: `${label} (reference ${payment.providerReference})`,
     idempotencyKey: `reversal:${reversalId}`,
     now,
   });

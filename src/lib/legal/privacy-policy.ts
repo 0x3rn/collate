@@ -152,18 +152,14 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Payment Provider References: "),
               t(
-                "Payment provider name (Polar.sh or Paystack), transaction reference identifier, currency (USD or NGN), transaction amount in minor units, payment status, and webhook confirmation records."
+                "Payment provider name, transaction reference identifier, currency (USD or NGN), transaction amount in minor units, payment status, and webhook confirmation records."
               ),
             ],
             [
               b("No Card or Bank Credentials: "),
               t("Payment card numbers, CVVs, and bank account credentials "),
               b("never touch Collate servers"),
-              t(". All USD checkouts are handled directly by "),
-              b("Polar Software, Inc. (Polar.sh)"),
-              t(" acting as Merchant of Record, and all NGN checkouts are handled directly by "),
-              b("Paystack"),
-              t("."),
+              t(". All checkouts are handled directly by our payment providers."),
             ],
           ],
         },
@@ -177,7 +173,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Network and Session Metadata: "),
               t(
-                "Your IP address (read from Cloudflare edge headers for rate limiting, bot mitigation, and abuse prevention), truncated user-agent string, session expiry timestamps, and SHA-256 hashes of session, email verification, and password reset tokens (raw tokens are never stored in our database)."
+                "Your IP address (read from our hosting provider's network headers for rate limiting, bot mitigation, and abuse prevention), truncated user-agent string, session expiry timestamps, and SHA-256 hashes of session, email verification, and password reset tokens (raw tokens are never stored in our database)."
               ),
             ],
             [
@@ -219,7 +215,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Legitimate Interests (Article 6(1)(f) GDPR / Section 25(1)(b)(v) NDPA): "),
               t(
-                "Processing IP addresses, rate-limit counters, Cloudflare Turnstile bot signals, security audit logs, and scrubbed error telemetry to protect Collate against credential stuffing, automated abuse, fraud, CSRF attacks, unauthorized access, and service disruptions."
+                "Processing IP addresses, rate-limit counters, bot-protection signals, security audit logs, and scrubbed error telemetry to protect Collate against credential stuffing, automated abuse, fraud, CSRF attacks, unauthorized access, and service disruptions."
               ),
             ],
             [
@@ -227,7 +223,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
                 "Payment Disputes (Legitimate Interests / Establishing or Defending Legal Claims): "
               ),
               t(
-                "Recording when you sign up, sign in, accept our Terms at checkout, and download files (with the IP address, device type, and approximate location of each), and, only if a payment is refunded or disputed, sharing those records with Polar.sh or Paystack, and through them with the card network or bank handling the dispute, to show that the purchase was authorized and the service was delivered."
+                "Recording when you sign up, sign in, accept our Terms at checkout, and download files (with the IP address, device type, and approximate location of each), and, only if a payment is refunded or disputed, sharing those records with the payment provider that processed the payment, and through them with the card network or bank handling the dispute, to show that the purchase was authorized and the service was delivered."
               ),
             ],
             [
@@ -271,7 +267,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Serverless Enterprise Inference Only: "),
               t(
-                "Drafting, extraction, classification, and claim-verification calls are routed strictly through serverless enterprise APIs (Google Cloud Vertex AI / Gemini and DeepSeek, plus Cloudflare Workers AI for ephemeral semantic embeddings) under API terms that prohibit training on customer prompts or outputs."
+                "Drafting, extraction, classification, and claim-verification calls are routed strictly through serverless enterprise AI APIs (including ephemeral semantic embeddings) under API terms that prohibit training on customer prompts or outputs."
               ),
             ],
             [
@@ -287,7 +283,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Strict Per-User Isolation: "),
               t(
-                "All project workspaces, retrieved passages, uploaded datasets, chapter versions, and exported files are isolated by user ID in Cloudflare D1 and R2. No other user can browse, search, or access your private work."
+                "All project workspaces, retrieved passages, uploaded datasets, chapter versions, and exported files are isolated by user ID in our database and file storage. No other user can browse, search, or access your private work."
               ),
             ],
           ],
@@ -395,7 +391,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             t(", and "),
             c("Path=/"),
             t(
-              " flags to keep you signed in, alongside Cloudflare security tokens on protected forms. We do not deploy third-party advertising networks, behavioral tracking cookies, or cross-site analytics scripts. See our full "
+              " flags to keep you signed in, alongside bot-protection security tokens on protected forms. We do not deploy third-party advertising networks, behavioral tracking cookies, or cross-site analytics scripts. See our full "
             ),
             a("Cookie Policy", "/cookies"),
             t(" for a complete cookie inventory and browser controls."),
@@ -412,7 +408,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Collate runs on Cloudflare's global edge network and integrates with cloud, payment, and AI providers operating across jurisdictions including the United States, the European Economic Area (EEA), the United Kingdom, and Nigeria. Whenever personal data is transferred outside Nigeria, the EEA, or the UK to jurisdictions without an adequacy decision:"
+              "Collate runs on a global edge network and integrates with cloud, payment, and AI providers operating across jurisdictions including the United States, the European Economic Area (EEA), the United Kingdom, and Nigeria. Whenever personal data is transferred outside Nigeria, the EEA, or the UK to jurisdictions without an adequacy decision:"
             ),
           ],
         },
@@ -431,9 +427,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               t("All data in transit is encrypted via "),
               b("HTTPS / TLS 1.3"),
-              t(
-                " with Strict Transport Security, and stored data in Cloudflare D1 and R2 is encrypted at rest."
-              ),
+              t(" with Strict Transport Security, and stored data is encrypted at rest."),
             ],
           ],
         },
@@ -464,13 +458,13 @@ export const PRIVACY_POLICY: LegalDocumentData = {
               t("You may permanently delete your account at any time directly from your "),
               a("Account settings page", "/account"),
               t(
-                ' by re-entering your current password and confirming with "DELETE MY ACCOUNT". Upon confirmation, Collate immediately deletes your files stored in Cloudflare R2 (source snapshots, chapter drafts, uploaded datasets, and PDF/Word exports), executes a cascading deletion across Cloudflare D1 removing your profile, credentials, sessions, projects, outlines, citations, originality reports, and shingle hashes, clears your session cookie, and retains only an anonymized account-erasure audit counter containing zero personal identifiers.'
+                ' by re-entering your current password and confirming with "DELETE MY ACCOUNT". Upon confirmation, Collate immediately deletes your stored files (source snapshots, chapter drafts, uploaded datasets, and PDF/Word exports), executes a cascading deletion across our database removing your profile, credentials, sessions, projects, outlines, citations, originality reports, and shingle hashes, clears your session cookie, and retains only an anonymized account-erasure audit counter containing zero personal identifiers.'
               ),
             ],
             [
               b("Statutory Billing and Anti-Fraud Records: "),
               t(
-                "Completed financial transaction references, tax/VAT invoices, and anti-fraud records are retained only for periods required by applicable tax, financial, and accounting laws (and by Polar.sh and Paystack under their independent compliance obligations)."
+                "Completed financial transaction references, tax/VAT invoices, and anti-fraud records are retained only for periods required by applicable tax, financial, and accounting laws (and by our payment providers under their independent compliance obligations)."
               ),
             ],
           ],
@@ -510,7 +504,7 @@ export const PRIVACY_POLICY: LegalDocumentData = {
             [
               b("Cryptographic Webhooks and Signed Downloads: "),
               t(
-                "Payment webhooks are verified with constant-time HMAC-SHA256 (Polar.sh Standard Webhooks with 5-minute replay guard) and HMAC-SHA512 (Paystack). Document exports are delivered via time-limited HMAC-SHA256 signed URLs."
+                "Payment webhooks are verified with constant-time HMAC signatures and replay protection. Document exports are delivered via time-limited HMAC-SHA256 signed URLs."
               ),
             ],
             [

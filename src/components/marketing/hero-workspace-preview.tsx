@@ -330,8 +330,7 @@ export function HeroWorkspacePreview() {
         </div>
 
         <div className="pt-3 border-t border-[var(--neutral-200)] flex items-center justify-between text-xs text-[var(--neutral-500)]">
-          <span>Switch stages above to inspect the flow</span>
-          <span>Example project</span>
+          <span>Example project flow</span>
         </div>
       </div>
     </aside>

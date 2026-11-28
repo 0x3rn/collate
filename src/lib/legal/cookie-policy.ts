@@ -80,7 +80,7 @@ export const COOKIE_POLICY: LegalDocumentData = {
             [
               b("Essential Partner Cookies: "),
               t(
-                "Cookies or tokens set by essential infrastructure partners, specifically Cloudflare for bot and DDoS mitigation, or Polar.sh and Paystack exclusively on their separate hosted checkout domains when you initiate a purchase."
+                "Cookies or tokens set by essential infrastructure partners, specifically our security provider for bot and DDoS mitigation, or our payment providers exclusively on their separate hosted checkout domains when you initiate a purchase."
               ),
             ],
             [
@@ -137,10 +137,10 @@ export const COOKIE_POLICY: LegalDocumentData = {
             ],
             [
               "Hosted Checkout Session Cookies",
-              "Polar.sh (USD) and Paystack (NGN)",
+              "Our payment providers",
               "Strictly Necessary (Payment Processing, third-party checkout domain only)",
-              "Set ONLY after you navigate to Polar.sh or Paystack's external hosted checkout page to process payment securely, prevent fraud, and calculate applicable sales tax/VAT",
-              "Governed by Polar.sh and Paystack's cookie policies during checkout",
+              "Set ONLY after you navigate to our payment provider's external hosted checkout page to process payment securely, prevent fraud, and calculate applicable sales tax/VAT",
+              "Governed by the payment provider's cookie policy during checkout",
             ],
             [
               "collate_analytics_consent (Visitors) & account consent record (Signed-in users)",
@@ -220,7 +220,7 @@ export const COOKIE_POLICY: LegalDocumentData = {
             [
               b("Ephemeral In-Memory UI State: "),
               t(
-                "While a tab is open, your browser holds temporary UI state in JavaScript memory (RAM) only for that page view, including active form inputs, unsaved editor edits prior to saving, toast notifications, navigation progress indicators, and short-lived Cloudflare Turnstile tokens awaiting submission. Closing or refreshing the tab clears this in-memory state."
+                "While a tab is open, your browser holds temporary UI state in JavaScript memory (RAM) only for that page view, including active form inputs, unsaved editor edits prior to saving, toast notifications, navigation progress indicators, and short-lived bot-protection tokens awaiting submission. Closing or refreshing the tab clears this in-memory state."
               ),
             ],
             [
@@ -274,10 +274,10 @@ export const COOKIE_POLICY: LegalDocumentData = {
             ],
             [
               b("Ensure Transmission Security and Prevent Fraud: "),
-              t("Operating Cloudflare Turnstile and "),
+              t("Operating bot protection and "),
               c("__cf_bm"),
               t(
-                " security tokens to protect sign-up, sign-in, password reset, and service uptime against automated abuse, or completing a credit-pack checkout you initiate on Polar.sh or Paystack."
+                " security tokens to protect sign-up, sign-in, password reset, and service uptime against automated abuse, or completing a credit-pack checkout you initiate with our payment providers."
               ),
             ],
           ],
@@ -349,9 +349,9 @@ export const COOKIE_POLICY: LegalDocumentData = {
               ),
             ],
             [
-              b("Blocking Cloudflare Security Tokens: "),
+              b("Blocking Security Tokens: "),
               t(
-                "Blocking Cloudflare Turnstile scripts or security tokens may cause sign-up, sign-in, or protected form requests to fail bot verification until allowed."
+                "Blocking bot-protection scripts or security tokens may cause sign-up, sign-in, or protected form requests to fail bot verification until allowed."
               ),
             ],
           ],
@@ -367,9 +367,9 @@ export const COOKIE_POLICY: LegalDocumentData = {
           type: "list",
           items: [
             [
-              b("Hosted Payment Checkouts (Polar.sh and Paystack): "),
+              b("Hosted Payment Checkouts: "),
               t(
-                "When you buy a credit pack, Collate redirects your browser to Polar.sh (USD) or Paystack (NGN). Those independent checkout domains set their own strictly necessary session, fraud-prevention, and regional tax/VAT cookies governed by Polar.sh and Paystack's respective policies."
+                "When you buy a credit pack, Collate redirects your browser to our payment provider's checkout page. Those independent checkout domains set their own strictly necessary session, fraud-prevention, and regional tax/VAT cookies governed by the payment provider's own policies."
               ),
             ],
             [

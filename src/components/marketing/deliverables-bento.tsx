@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ArrowRightIcon } from "@/components/layout/workspace-icons";
+import { ArrowRightIcon, MinusIcon, PlusIcon } from "@/components/layout/workspace-icons";
 import { CITATION_SPECIMENS } from "@/lib/marketing/landing-content";
 
 type DeliverableKey = "citations" | "claims" | "results" | "exports" | "integrity";
@@ -330,13 +330,15 @@ const PANELS: Record<DeliverableKey, () => ReactNode> = {
 export function DeliverablesBento() {
   const [selected, setSelected] = useState<DeliverableKey>("citations");
   const current = FEATURES.find((f) => f.id === selected)!;
+  // Phones keep their own open card, so it can also be closed (desktop always shows one).
+  const [openId, setOpenId] = useState<DeliverableKey | null>("citations");
 
   return (
     <div>
       {/* Mobile & Tablet (< lg): inline expandable capability stack */}
       <div className="lg:hidden space-y-3" aria-label="Project deliverables">
         {FEATURES.map((feat) => {
-          const active = selected === feat.id;
+          const active = openId === feat.id;
           return (
             <div
               key={feat.id}
@@ -351,7 +353,7 @@ export function DeliverablesBento() {
                 id={`deliverable-mobile-tab-${feat.id}`}
                 aria-expanded={active}
                 aria-controls={`deliverable-mobile-panel-${feat.id}`}
-                onClick={() => setSelected(feat.id)}
+                onClick={() => setOpenId(active ? null : feat.id)}
                 className="w-full min-h-[44px] text-left p-4 sm:p-5 cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -360,13 +362,13 @@ export function DeliverablesBento() {
                   </span>
                   <span
                     aria-hidden="true"
-                    className={`w-7 h-7 rounded-full grid place-items-center text-sm font-medium shrink-0 transition-colors ${
+                    className={`w-7 h-7 rounded-full grid place-items-center shrink-0 transition-colors ${
                       active
                         ? "bg-[var(--accent-100)] text-[var(--accent-600)]"
                         : "bg-white text-[var(--neutral-500)] border border-[var(--neutral-200)]"
                     }`}
                   >
-                    {active ? "−" : "+"}
+                    {active ? <MinusIcon className="w-4 h-4" /> : <PlusIcon className="w-4 h-4" />}
                   </span>
                 </div>
                 <p className="text-sm text-[var(--neutral-600)] leading-relaxed mt-1.5">

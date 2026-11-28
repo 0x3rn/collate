@@ -8,7 +8,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
   slug: "/acceptable-use",
   title: "Acceptable Use Policy",
   subtitle:
-    "Academic integrity boundaries, prohibited content standards, file upload rules, platform security expectations, and Merchant of Record compliance requirements.",
+    "Academic integrity boundaries, prohibited content standards, file upload rules, platform security expectations, and payment provider compliance requirements.",
   effectiveDate: LEGAL_CONFIG.effectiveDate,
   lastUpdated: LEGAL_CONFIG.lastUpdated,
   intro: [
@@ -20,7 +20,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
       t(". This AUP forms part of our "),
       a("Terms of Service", "/terms"),
       t(
-        " and aligns with applicable laws, university academic integrity standards, and the Acceptable Use and Restricted Business policies of our Merchant of Record, Polar.sh, and its underlying payment partners."
+        " and aligns with applicable laws, university academic integrity standards, and the Acceptable Use and Restricted Business policies of our payment providers and their underlying payment partners."
       ),
     ],
   ],
@@ -121,7 +121,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "In accordance with applicable law and the Merchant of Record and payment-processing standards enforced by Polar.sh and its payment partners, you may never use Collate to generate, upload, store, analyze, translate, or distribute any of the following:"
+              "In accordance with applicable law and the payment-processing standards enforced by our payment providers and their partners, you may never use Collate to generate, upload, store, analyze, translate, or distribute any of the following:"
             ),
           ],
         },
@@ -195,7 +195,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
             [
               b("Circumvent Quotas, Rate Limits, or Anti-Bot Controls: "),
               t(
-                "Bypass or manipulate API rate limits, free topic feasibility sweep quotas, credit reservation and deduction accounting, spend circuit breakers, or Cloudflare Turnstile challenges. Creating multiple, disposable, or automated accounts to farm free feasibility checks or promotional credits is strictly prohibited."
+                "Bypass or manipulate API rate limits, free topic feasibility sweep quotas, credit reservation and deduction accounting, spend circuit breakers, or bot-protection challenges. Creating multiple, disposable, or automated accounts to farm free feasibility checks or promotional credits is strictly prohibited."
               ),
             ],
             [
@@ -213,7 +213,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
             [
               b("Engage in Payment Fraud or Abusive Chargebacks: "),
               t(
-                "Use stolen or unauthorized payment methods, misrepresent billing location or tax status, or initiate bad-faith payment disputes or friendly-fraud chargebacks through Polar.sh, Paystack, or your card issuer after consuming credits or receiving generated chapters. Report legitimate billing issues directly to "
+                "Use stolen or unauthorized payment methods, misrepresent billing location or tax status, or initiate bad-faith payment disputes or friendly-fraud chargebacks through our payment providers or your card issuer after consuming credits or receiving generated chapters. Report legitimate billing issues directly to "
               ),
               supportMail,
               t(" before opening a dispute."),
@@ -323,7 +323,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
             [
               b("Traffic, Bot, and Spend Controls: "),
               t(
-                "Automated request rate limiting, Cloudflare Turnstile bot protection on authentication routes, and per-chapter, per-user, and global spend circuit breakers designed to halt runaway or abusive compute consumption."
+                "Automated request rate limiting, bot protection on authentication routes, and per-chapter, per-user, and global spend circuit breakers designed to halt runaway or abusive compute consumption."
               ),
             ],
             [
@@ -382,9 +382,9 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
               ),
             ],
             [
-              b("Chargeback and Merchant of Record Defense: "),
+              b("Chargeback and Payment Dispute Defense: "),
               t(
-                "Submitting relevant account, credit-ledger, verification, and export delivery logs to Polar.sh, Paystack, or financial institutions to contest fraudulent disputes and satisfy compliance obligations."
+                "Submitting relevant account, credit-ledger, verification, and export delivery logs to our payment providers or financial institutions to contest fraudulent disputes and satisfy compliance obligations."
               ),
             ],
             [
@@ -435,7 +435,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
               t(" of the notice to "),
               supportMail,
               t(
-                ' with the subject line "AUP Enforcement Appeal". We review timely appeals in good faith and issue a final determination, except where disclosure is restricted by law or where termination resulted from CSAM, confirmed payment fraud, or mandatory Merchant of Record compliance directives.'
+                ' with the subject line "AUP Enforcement Appeal". We review timely appeals in good faith and issue a final determination, except where disclosure is restricted by law or where termination resulted from CSAM, confirmed payment fraud, or mandatory payment provider compliance directives.'
               ),
             ],
           ],
@@ -451,7 +451,7 @@ export const ACCEPTABLE_USE_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Collate may update this Acceptable Use Policy from time to time to reflect changes in applicable law, Polar.sh and Paystack compliance standards, academic integrity norms, or platform capabilities. Material revisions will be reflected in the Last Updated date and communicated via email or in-app notice where appropriate. Where any provision of this AUP conflicts with another Collate policy regarding prohibited content, security, or payment compliance, the more protective restriction governs."
+              "Collate may update this Acceptable Use Policy from time to time to reflect changes in applicable law, payment provider compliance standards, academic integrity norms, or platform capabilities. Material revisions will be reflected in the Last Updated date and communicated via email or in-app notice where appropriate. Where any provision of this AUP conflicts with another Collate policy regarding prohibited content, security, or payment compliance, the more protective restriction governs."
             ),
           ],
         },

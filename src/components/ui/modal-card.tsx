@@ -127,7 +127,6 @@ export function InsufficientCreditsModal({
 }) {
   const required = details?.creditsRequired ?? 0;
   const available = details?.creditsAvailable ?? 0;
-  const shortfall = Math.max(0, required - available);
 
   return (
     <ModalCard
@@ -167,7 +166,7 @@ export function InsufficientCreditsModal({
             )}
           </p>
 
-          <div className="grid grid-cols-3 divide-x divide-[var(--neutral-200)] rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
+          <div className="grid grid-cols-2 divide-x divide-[var(--neutral-200)] rounded-[var(--radius-sm)] border border-[var(--neutral-200)] bg-[var(--neutral-50)]">
             <div className="p-3.5 flex flex-col gap-1">
               <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)]">
                 Required
@@ -182,16 +181,6 @@ export function InsufficientCreditsModal({
               </p>
               <p className="text-base font-semibold text-[var(--neutral-900)] tabular-nums">
                 {details.creditsAvailable !== undefined ? formatCredits(available) : "—"}
-              </p>
-            </div>
-            <div className="p-3.5 flex flex-col gap-1">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-[var(--neutral-500)]">
-                Needed
-              </p>
-              <p className="text-base font-semibold text-[var(--accent-600)] tabular-nums">
-                {details.creditsAvailable !== undefined
-                  ? formatCredits(shortfall)
-                  : formatCredits(required)}
               </p>
             </div>
           </div>

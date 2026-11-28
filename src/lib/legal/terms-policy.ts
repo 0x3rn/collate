@@ -7,7 +7,7 @@ export const TERMS_POLICY: LegalDocumentData = {
   slug: "/terms",
   title: "Terms of Service & Refund Policy",
   subtitle:
-    "The contract governing your Collate account, prepaid credit packs, Merchant of Record billing via Polar.sh and Paystack, academic integrity responsibilities, and refund eligibility.",
+    "The contract governing your Collate account, prepaid credit packs, payments, academic integrity responsibilities, and refund eligibility.",
   effectiveDate: LEGAL_CONFIG.effectiveDate,
   lastUpdated: LEGAL_CONFIG.lastUpdated,
   intro: [
@@ -189,12 +189,7 @@ export const TERMS_POLICY: LegalDocumentData = {
         {
           type: "table",
           caption: "Current one-time prepaid credit packs available on Collate.",
-          headers: [
-            "Credit Pack",
-            "Included Credits",
-            "USD Price (Polar.sh)",
-            "NGN Price (Paystack)",
-          ],
+          headers: ["Credit Pack", "Included Credits", "USD Price", "NGN Price"],
           rows: [
             ["Starter", "25 credits", "$10 USD", "NGN 10,000"],
             ["Project (Popular)", "100 credits", "$30 USD", "NGN 35,000"],
@@ -250,33 +245,33 @@ export const TERMS_POLICY: LegalDocumentData = {
         },
         {
           type: "subheading",
-          title: "3.3 Payment Processors and Merchant of Record",
+          title: "3.3 Payment Processing",
         },
         {
           type: "list",
           items: [
             [
-              b("USD and International Payments (Polar.sh): "),
-              t("All USD and international credit pack purchases are processed by "),
-              b("Polar Software, Inc. (Polar.sh)"),
-              t(" acting as our "),
+              b("USD and International Payments: "),
+              t("All USD and international credit pack purchases are sold through "),
+              b("Polar Software, Inc."),
+              t(" acting as our authorised reseller and "),
               b("Merchant of Record"),
               t(
-                ". Polar.sh handles hosted checkout processing, invoicing, receipt generation, applicable VAT, GST, or sales tax calculation and collection, and billing compliance on our behalf. By completing a USD or international purchase, you also agree to Polar.sh's applicable buyer terms."
+                ". Our reseller handles hosted checkout processing, invoicing, receipt generation, applicable VAT, GST, or sales tax calculation and collection, and billing compliance. By completing a USD or international purchase, you also agree to Polar's applicable buyer terms."
               ),
             ],
             [
-              b("Nigerian Naira (NGN) Payments (Paystack): "),
-              t("All NGN credit pack purchases are processed by "),
-              b("Paystack"),
+              b("Nigerian Naira (NGN) Payments: "),
+              t("All NGN credit pack purchases are processed by our "),
+              b("payment provider"),
               t(
-                ". Credits are added automatically to your Collate balance upon verified webhook payment confirmation from Paystack."
+                ". Credits are added automatically to your Collate balance once the payment provider confirms your payment."
               ),
             ],
             [
               b("Payment Security: "),
               t(
-                "Collate does not collect, process, or store your full payment card numbers, CVVs, or banking credentials on Collate servers. All payment transactions are handled directly by Polar.sh or Paystack under their respective security and PCI-DSS standards."
+                "Collate does not collect, process, or store your full payment card numbers, CVVs, or banking credentials on Collate servers. All payment transactions are handled directly by our payment providers under their respective security and PCI-DSS standards."
               ),
             ],
           ],
@@ -507,7 +502,7 @@ export const TERMS_POLICY: LegalDocumentData = {
             [t("Your Project ID (if applicable).")],
             [
               t(
-                "Your purchase receipt, invoice, or order reference number from Polar.sh or Paystack."
+                "Your purchase receipt, invoice, or order reference number from the payment provider."
               ),
             ],
             [
@@ -532,12 +527,10 @@ export const TERMS_POLICY: LegalDocumentData = {
               b("Payout Timeline: "),
               t("Approved refunds are issued back to your "),
               b("original payment method"),
-              t(" via "),
-              b("Polar.sh"),
-              t(" (for USD and international orders) or "),
-              b("Paystack"),
+              t(" via the "),
+              b("payment provider"),
               t(
-                " (for NGN orders). Depending on your card issuer or bank, settled funds typically arrive within "
+                " that processed your order. Depending on your card issuer or bank, settled funds typically arrive within "
               ),
               b("5 to 10 business days"),
               t(
@@ -558,7 +551,7 @@ export const TERMS_POLICY: LegalDocumentData = {
             ),
             supportMail,
             t(
-              " first so we can investigate and process any eligible refund quickly. Filing a chargeback or bank reversal without contacting us may result in temporary suspension of your account while we submit transaction, credit-ledger, and chapter delivery logs to Polar.sh or Paystack to resolve the dispute."
+              " first so we can investigate and process any eligible refund quickly. Filing a chargeback or bank reversal without contacting us may result in temporary suspension of your account while we submit transaction, credit-ledger, and chapter delivery logs to the payment provider to resolve the dispute."
             ),
           ],
         },
@@ -691,7 +684,7 @@ export const TERMS_POLICY: LegalDocumentData = {
           type: "paragraph",
           runs: [
             t(
-              "Collate integrates with external research metadata registries, open-access repositories, open-license media repositories, payment providers (Polar.sh and Paystack), and cloud and AI infrastructure providers. Collate does not control and is not responsible for the uptime, accuracy, completeness, or policies of external research registries or third-party websites. You should verify critical bibliographic details against the primary publication prior to final academic submission. Some academic metadata is provided by Semantic Scholar."
+              "Collate integrates with external research metadata registries, open-access repositories, open-license media repositories, payment providers, and cloud and AI infrastructure providers. Collate does not control and is not responsible for the uptime, accuracy, completeness, or policies of external research registries or third-party websites. You should verify critical bibliographic details against the primary publication prior to final academic submission. Some academic metadata is provided by Semantic Scholar."
             ),
           ],
         },
@@ -852,7 +845,7 @@ export const TERMS_POLICY: LegalDocumentData = {
               t(", "),
               a("Cookie Policy", "/cookies"),
               t(
-                ", and any purchase receipt issued through Polar.sh or Paystack, constitute the entire agreement between you and Collate regarding the Service."
+                ", and any purchase receipt issued by our payment providers, constitute the entire agreement between you and Collate regarding the Service."
               ),
             ],
             [
@@ -901,8 +894,6 @@ export const TERMS_POLICY: LegalDocumentData = {
           items: [
             [b("Service: "), t(`${LEGAL_CONFIG.serviceName} (${LEGAL_CONFIG.siteUrl})`)],
             [b("Support, Refunds, and Legal Inquiries: "), supportMail],
-            [b("USD and International Merchant of Record: "), t("Polar Software, Inc. (Polar.sh)")],
-            [b("NGN Payment Processor: "), t("Paystack")],
           ],
         },
       ],

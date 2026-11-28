@@ -59,9 +59,11 @@ describe("Legal policy documents, refund rules, and Polar.sh compliance", () => 
   it("encodes exact Collate refund eligibility rules and Polar.sh Merchant of Record terms in /terms", () => {
     const html = renderToStaticMarkup(<LegalDocumentView document={TERMS_POLICY} user={null} />);
     expect(html).toContain('id="refund-policy"');
-    expect(html).toContain("Polar.sh");
+    // Polar is named once, as the reseller its terms require us to disclose; nothing else is.
+    expect(html).toContain("Polar Software, Inc.");
     expect(html).toContain("Merchant of Record");
-    expect(html).toContain("Paystack");
+    expect(html).not.toMatch(/Paystack|Polar.sh/);
+    expect(html).toContain("payment provider");
     expect(html).toContain("unable to work on or support your research topic");
     expect(html).toContain("full cash refund");
     expect(html).toContain("no chapters have been made or delivered");
@@ -88,7 +90,8 @@ describe("Legal policy documents, refund rules, and Polar.sh compliance", () => 
     expect(aupHtml).toContain("Contract Cheating and Essay Mills");
     expect(aupHtml).toContain("Empirical Data Fabrication");
     expect(aupHtml).toContain("CSAM");
-    expect(aupHtml).toContain("Polar.sh");
+    expect(aupHtml).not.toMatch(/Polar|Paystack|Cloudflare/);
+    expect(aupHtml).toContain("payment provider");
 
     const cookieHtml = renderToStaticMarkup(
       <LegalDocumentView document={COOKIE_POLICY} user={null} />
@@ -98,7 +101,8 @@ describe("Legal policy documents, refund rules, and Polar.sh compliance", () => 
     expect(cookieHtml).toContain("Zero Advertising Cookies and Opt-In Analytics Only");
     expect(cookieHtml).toContain("Google Analytics 4");
     expect(cookieHtml).toContain("7 days");
-    expect(cookieHtml).toContain("Polar.sh");
+    expect(cookieHtml).not.toMatch(/Polar|Paystack/);
+    expect(cookieHtml).toContain("payment provider");
 
     const footerHtml = renderToStaticMarkup(<SiteFooter />);
     expect(footerHtml).toContain('href="/terms"');

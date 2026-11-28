@@ -10,7 +10,7 @@ export const LEGAL_CONFIG = {
   operatorName: "Collate",
   siteUrl: "https://collateresearch.app",
   effectiveDate: "November 24, 2026",
-  lastUpdated: "November 26, 2026",
+  lastUpdated: "November 28, 2026",
   supportEmail: "support@collateresearch.app",
   privacyEmail: "privacy@collateresearch.app",
   abuseEmail: "abuse@collateresearch.app",

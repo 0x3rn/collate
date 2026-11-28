@@ -530,7 +530,7 @@ export async function captureChapterReservation(
       entryType: "capture",
       creditsDelta: -debit,
       balanceAfter: newBalance,
-      note: "Captured credits for completed chapter after premature workflow-reset refund",
+      note: "Credits for completed chapter",
       createdAt: now,
     });
 

@@ -92,7 +92,7 @@ describe("refunds and disputes take credits back", () => {
     expect(p?.status).toBe("refunded");
     const [entry] = await db.select().from(creditLedger).where(eq(creditLedger.creditsDelta, -100));
     expect(entry?.entryType).toBe("manual_adjustment");
-    expect(entry?.note).toBe("Payment refund (paystack psk_1)");
+    expect(entry?.note).toBe("Payment refund (reference psk_1)");
     expect(alerts[0]).toContain("Payment refunded");
   });
 
